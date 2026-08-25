@@ -1,0 +1,304 @@
+---
+title: "EDA Analisis Exploratoro de Datos Estadistica Multidimensional"
+author: |
+  Juan Pablo Mosquera Marin   - 20221020026
+  Ana Laura Morcote Chacon    - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño     - 20221020057
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 6
+)
+```
+
+# Instalación de paquetes
+
+> Verificacion si los paquetas estan intalados, los que no esten se proceden a instalar.
+
+```{r instalacion, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl"
+)
+
+paquetes_faltantes <- paquetes[
+  !paquetes %in% rownames(installed.packages())
+]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+```
+
+# Carga de librerías y datos
+
+## Librerías iniciales
+
+```{r librerias-iniciales}
+library(readr)
+library(here)
+```
+
+## Wealth -\> Lectura del primer dataset opcionado
+
+Se ve que el dataset de wealth_accumulation_master.csv, tiene un total de 55.000 registros y 25 varables. Las cuales estan divididas por el momento en cuatro variables categoricas de tipo character y 21 variables de tipo numeric, con as su vez un total de cero nulos en todas las variables.
+
+```{r carga-datos}
+datos <- read_csv(here("DATASET", "wealth_accumulation_master.csv"))
+spec(datos)
+dim(datos)
+str(datos)
+colSums(is.na(datos))
+```
+
+## Wealth -\> Resumen estadístico
+
+De wealth_accumulation_master.csv
+
+```{r resumen-datos}
+summary(datos)
+```
+
+## Wealth -\> Exploración de variables categóricas
+
+De wealth_accumulation_master.csv
+
+```{r valores-unicos}
+unique(datos$education)
+unique(datos$parental_wealth_bracket)
+unique(datos$region_cost_of_living)
+```
+
+# Wealth -\> Traducción y recodificación de variables
+
+Se renombran las columnas al español y se recodifican las categorías de las variables `educacion`, `nivel_riqueza_parental` y `costo_vida_region`.
+
+```{r traduccion-datos}
+library(dplyr)
+
+datos_spa <- datos %>%
+  rename(
+    id_persona                    = person_id,
+    edad                          = age,
+    anios_trabajando              = years_working,
+    educacion                     = education,
+    ingreso_anual                 = annual_income,
+    nivel_riqueza_parental        = parental_wealth_bracket,
+    herencia_recibida             = inheritance_received,
+    propietario_vivienda          = homeowner,
+    costo_vida_region             = region_cost_of_living,
+    dependientes                  = dependents,
+    shock_salud                   = health_shock,
+    tasa_ahorro                   = savings_rate,
+    invierte_en_mercados          = invests_in_markets,
+    pct_portafolio_acciones       = portfolio_equity_pct,
+    puntaje_diversificacion       = diversification_score,
+    alfabetizacion_financiera     = financial_literacy,
+    consistencia_presupuesto      = budgeting_consistency,
+    gasto_impulsivo               = impulse_spending,
+    planificacion_futuro          = plans_ahead,
+    tiene_deuda_alto_interes      = carries_high_interest_debt,
+    cuenta_retiro                 = retirement_account,
+    edad_inicio_inversion         = started_investing_age,
+    anios_invirtiendo             = years_investing,
+    patrimonio_neto               = net_worth,
+    independiente_financieramente = financially_independent
+  ) %>%
+  mutate(
+    educacion = recode(educacion,
+                       "high_school"  = "secundaria",
+                       "some_college" = "universidad_incompleta",
+                       "bachelors"    = "licenciatura",
+                       "graduate"     = "posgrado"
+    ),
+    nivel_riqueza_parental = recode(nivel_riqueza_parental,
+                                    "bottom"    = "bajo",
+                                    "lower_mid" = "medio_bajo",
+                                    "middle"    = "medio",
+                                    "upper_mid" = "medio_alto",
+                                    "top"       = "alto"
+    ),
+    costo_vida_region = recode(costo_vida_region,
+                               "low"    = "bajo",
+                               "medium" = "medio",
+                               "high"   = "alto"
+    )
+  )
+```
+
+## Wealth -\> Verificación de la traducción
+
+Se verifica que la traduccion se haya hecho correctamente
+
+```{r verificacion-traduccion}
+str(datos_spa)
+colSums(is.na(datos_spa))
+unique(datos_spa$educacion)
+unique(datos_spa$nivel_riqueza_parental)
+unique(datos_spa$costo_vida_region)
+```
+
+# Wealth -\> Análisis de correlación — Dataset de riqueza
+
+Conversion de variables categoricas a numericas para la matriz de correlacion y eliminacion de la variable `id_persona`. debido a que no aporta al ser el identificador unico de cada registro
+
+```{r seleccion-numericas}
+library(dplyr)
+
+# Codificar las variables categóricas ordinales como numéricas
+datos_numericos <- datos_spa %>%
+  mutate(
+    educacion = recode(educacion,
+                       "secundaria"             = 1,
+                       "universidad_incompleta" = 2,
+                       "licenciatura"           = 3,
+                       "posgrado"               = 4
+    ),
+    nivel_riqueza_parental = recode(nivel_riqueza_parental,
+                                    "bajo"       = 1,
+                                    "medio_bajo" = 2,
+                                    "medio"      = 3,
+                                    "medio_alto" = 4,
+                                    "alto"       = 5
+    ),
+    costo_vida_region = recode(costo_vida_region,
+                               "bajo"  = 1,
+                               "medio" = 2,
+                               "alto"  = 3
+    )
+  ) %>%
+  select(-id_persona) %>%
+  select(where(is.numeric))
+
+# Verificar qué variables quedaron
+names(datos_numericos)
+dim(datos_numericos)
+```
+
+## Wealth -\> Matriz de correlación (completa)
+
+```{r matriz-correlacion}
+# Matriz de correlación
+matriz_cor <- cor(datos_numericos)
+round(matriz_cor, 2)
+```
+
+## Wealth -\> Visualización — Matriz de correlación completa
+
+Al tener l;a visualizacion de de la Matriz de correlación, se puede ver claramente que la gran mayoria de las varables del dataset wealth_accumulation_master.csv practicamente no tienen nula relacion entre si, a excepcion de algunas variables como: `edad` con `anios_trabajando` y `anios_invertiendo`, a su vez `invierte_en_mercados` con `pct_portafolio_acciones`.
+
+Por lo cual se excluiran las variables `anios_trabajando`, `anios_invirtiendo` y `pct_portafolio_acciones` para reducir redundancia entre variables altamente correlacionadas y ver si con este cambio habra un cambio en la correlacion de la variables por si eran estas tres las que se llevaban todo el peso de las demas.
+
+```{r plot-correlacion-completa, fig.cap="Matriz de correlación de todas las variables numéricas"}
+library(corrplot)
+
+corrplot(matriz_cor, 
+         method = "color", 
+         type = "upper", 
+         tl.col = "black", 
+         tl.srt = 45,
+         addCoef.col = "black",
+         number.cex = 0.6,
+         tl.cex = 0.7)
+```
+
+## Wealth -\> Matriz de correlación (variables filtradas)
+
+```{r matriz-correlacion-filtrada}
+library(dplyr)
+library(corrplot)
+
+# Nueva selección de variables numéricas, sin las 3 indicadas
+datos_numericos2 <- datos_numericos %>%
+  select(-anios_trabajando, -anios_invirtiendo, -pct_portafolio_acciones)
+
+# Verificar
+names(datos_numericos2)
+dim(datos_numericos2)
+
+# Nueva matriz de correlación
+matriz_cor2 <- cor(datos_numericos2)
+round(matriz_cor2, 2)
+```
+
+## Wealth -\> Visualización — Matriz de correlación filtrada
+
+Y como se puede ver en la siguiente matriz, la exclusion de las variables `anios_trabajando`, `anios_invirtiendo` y `pct_portafolio_acciones` lo unico que logro es que haya menos correlacion general entra las variables restantes, por lo cual se toma la decision de buscar un nuevo conjunto de datos el cual tenga una mejor correlacion entre sus variables para que asi se pueda usar y cumpla los requerimientos del curso de Estadistica Multidimensional.
+
+```{r plot-correlacion-filtrada, fig.cap="Matriz de correlación tras excluir variables redundantes"}
+corrplot(matriz_cor2, 
+         method = "color", 
+         type = "upper", 
+         tl.col = "black", 
+         tl.srt = 45,
+         addCoef.col = "black",
+         number.cex = 0.6,
+         tl.cex = 0.7)
+```
+
+# Credit -\> Análisis de correlación — Dataset de crédito
+
+## Carga del dataset de crédito
+
+```{r carga-credito}
+library(readxl)
+library(dplyr)
+library(corrplot)
+
+# Releer saltando la primera fila para que la fila de nombres reales sea el encabezado
+datos1 <- read_excel(here("DATASET", "credit.xls"), skip = 1)
+
+# Verificar
+str(datos1)
+names(datos1)
+```
+
+## Preparación de variables numéricas
+
+```{r preparacion-credito}
+datos1_num <- datos1 %>%
+  select(-ID) %>%
+  mutate(across(everything(), as.numeric))
+
+# Verificar
+str(datos1_num)
+colSums(is.na(datos1_num))
+
+# Matriz de correlación
+matriz_cor <- cor(datos1_num, use = "pairwise.complete.obs")
+round(matriz_cor, 2)
+```
+
+## Visualización — Matriz de correlación (crédito)
+
+```{r plot-correlacion-credito, fig.cap="Matriz de correlación del dataset de crédito"}
+corrplot(matriz_cor, 
+         method = "color", 
+         type = "upper", 
+         tl.col = "black", 
+         tl.srt = 45,
+         tl.cex = 0.6,
+         addCoef.col = "black",
+         number.cex = 0.4)
+```

@@ -1,0 +1,219 @@
+---
+title: "Estadística Multidimensional — Actividad en clase, semana 1"
+subtitle: "Primer contacto con la matriz de datos"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = "#>")
+```
+
+Juan Pablo Mosquera Marin 20221020026
+
+Ana Laura Morcote Chacon 20221020010
+
+Hana Sofia Pinilla Manrique 20221020092
+
+Juan David Amaya Patiño 20221020057
+
+Escriban las respuestas como comentarios (`#`) dentro del mismo script y
+guárdenlo como `S01_[código1]_[código2].R`. Al terminar la clase,
+súbanlo al aula virtual.
+
+> Objetivo: que al salir de esta sesión sepan abrir un conjunto de datos
+> que no construyeron ustedes y decir qué tiene adentro.
+
+------------------------------------------------------------------------
+
+# 1. El objeto y sus dimensiones
+
+`USArrests` viene incluido en R. Contiene estadísticas de arrestos en
+los 50 estados de EE. UU.
+
+```{r eval=FALSE}
+data(USArrests)
+class(USArrests)
+dim(USArrests)
+names(USArrests)
+str(USArrests)
+head(USArrests)
+```
+
+**Responder:**
+
+1.  ¿De qué clase es el objeto `USArrests`? data.frame
+2.  ¿Cuánto valen $n$ y $p$? 6 y 7
+3.  ¿Cómo se llaman las variables? Murder, Assault, UrbanPop, Rape
+4.  ¿De qué tipo es cada una? ¿Hay alguna que no sea numérica? <dbl>,
+    <int> , <int>, <dbl> Todas son numericas
+5.  En la notación del curso, ¿qué representa una **fila** y qué
+    representa una **columna**? un registro y una variable
+
+*Pistas:* `class()`, `dim()`, `names()`, `str()`, `head()`.
+
+------------------------------------------------------------------------
+
+# 2. Un vistazo a una variable (univariado)
+
+Tomen la variable `Murder`.
+
+1.  Calculen media, desviación estándar, mínimo y máximo.
+
+```{r}
+mean(USArrests[, "Murder"])
+sd(USArrests[, "Murder"])
+min(USArrests[, "Murder"])
+max(USArrests[, "Murder"])
+```
+
+2.  Hagan un histograma con título y etiquetas de eje en español.
+
+```{r}
+hist(
+  USArrests$Murder,
+  main = "Distribución de Asesinatos",
+  xlab = "Asesinatos",
+  ylab = "Frecuencia"
+)
+```
+
+3.  Escriban **una** frase describiendo la forma de la distribución.
+
+    Una distribucion sesgada a la izquierda
+
+------------------------------------------------------------------------
+
+# 3. Dos variables a la vez (bivariado)
+
+Ahora `Murder` y `Assault`.
+
+1.  Hagan un diagrama de dispersión de `Assault` (eje x) contra `Murder`
+    (eje y).
+
+```{r}
+
+library(ggplot2)
+
+ggplot(USArrests, aes(x = Assault, y = Murder)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Diagrama de dispersión",
+    x = "Asalto",
+    y = "Asesinato"
+  ) +
+  theme_minimal()
+```
+
+2.  Calculen la correlación entre las dos.
+
+```{r}
+cor(USArrests$Assault, USArrests$Murder)
+```
+
+3.  ¿El signo de la correlación coincide con lo que se ve en el gráfico?
+    Expliquen en una frase. El signo de la correlacion es positivo lo
+    que se puede ver en una correlacion ascendente, parece que cuando
+    aumentan los asaltos aumentan lo asesinatos
+    ------------------------------------------------------------------------
+
+# 4. Todas a la vez (multivariado)
+
+1.  Construyan `arrestos_num` con las **cuatro** variables numéricas de
+    `USArrests`.
+
+```{r}
+arrestos_num <- USArrests
+```
+
+2.  Calculen la media de cada variable con una sola instrucción.
+
+```{r}
+colMeans(arrestos_num)
+```
+
+3.  Calculen la matriz de correlación completa.
+
+```{r}
+library(corrplot)
+matriz_cor <- cor(arrestos_num, use = "pairwise.complete.obs")
+round(matriz_cor, 2)
+corrplot(matriz_cor, 
+         method = "color", 
+         type = "upper", 
+         tl.col = "black", 
+         tl.srt = 45,
+         tl.cex = 0.6,
+         addCoef.col = "black",
+         number.cex = 0.4)
+```
+
+4.  Hagan la matriz de dispersión con `pairs()`.
+
+```{r}
+pairs(
+  USArrests,
+  main = "Matriz de dispersión"
+)
+```
+
+**Responder:**
+
+5.  ¿Cuál es el par de variables **más** correlacionado? ¿Y el
+    **menos**? las mas asalto y asesinato, las menos urbanPop y
+    asesinato
+6.  La matriz de correlación de 4 variables tiene 16 celdas, pero sólo
+    unas pocas dan información nueva. ¿Cuántas son y por qué? El
+    triangulo inferior o el superior, ya que son los mismos datos solo
+    se necesita uno y la diagonal es cruzar la variable con sigo misma
+    asi qeu siempre sera 1
+7.  En una frase: ¿qué vieron en la matriz de correlación que **no**
+    podían ver mirando los histogramas de a uno? La matriz de
+    correlación permite ver la fuerza y dirección entre las variables,
+    algo que no se puede observar en los histogramas individuales.
+
+------------------------------------------------------------------------
+
+# 5. Pregunta extra (para quien vaya adelantado)
+
+`UrbanPop` es el porcentaje de población urbana; las otras tres son
+tasas de delito.
+
+1.  Usen `apply()` para obtener la desviación estándar de cada variable
+    de `arrestos_num`.
+
+```{r}
+apply(arrestos_num, 2, sd)
+```
+
+2.  Miren las cuatro desviaciones estándar. ¿Están las variables en
+    escalas comparables? Asalto esta en una escala mucho mayor que el
+    resto y parece que asesitanato en una algo menor que el resto
+3.  Si más adelante quisiéramos «combinar» las cuatro variables en una
+    sola medida resumen, ¿qué problema traería que estén en escalas tan
+    distintas? Sí lo seria, ya que están en escalas diferentes sería
+    necesario estandarizarlas antes de combinarlas si se quiere un
+    resultado optimo.
+
+> Esa pregunta es, literalmente, el motivo por el que en la unidad 6 el
+> PCA se hace **sobre la matriz de correlaciones** y no sobre la de
+> covarianzas. Guarden la respuesta.
+
+------------------------------------------------------------------------
+
+# Entrega
+
+Un solo archivo `.R` por pareja, subido a **Moodle**, con:
+
+- el código que usaron,
+- las respuestas como comentarios,
+- los nombres y códigos de ambos al inicio del archivo.
+
+Lo sube **una** de las dos personas; la otra queda registrada por los
+nombres del encabezado.
