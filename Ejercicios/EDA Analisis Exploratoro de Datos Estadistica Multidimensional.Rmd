@@ -62,10 +62,10 @@ library(here)
 
 ## Wealth -\> Lectura del primer dataset opcionado
 
-Se ve que el dataset de wealth_accumulation_master.csv, tiene un total de 55.000 registros y 25 varables. Las cuales estan divididas por el momento en cuatro variables categoricas de tipo character y 21 variables de tipo numeric, con as su vez un total de cero nulos en todas las variables.
+Se ve que el dataset de `wealth_accumulation_master.csv`, tiene un total de 55.000 registros y 25 varables. Las cuales estan divididas por el momento en cuatro variables categoricas de tipo character y 21 variables de tipo numeric, con as su vez un total de cero nulos en todas las variables.
 
 ```{r carga-datos}
-datos <- read_csv(here("DATASET", "wealth_accumulation_master.csv"))
+datos <- read_csv(here("DATASET", "`wealth_accumulation_master.csv`"))
 spec(datos)
 dim(datos)
 str(datos)
@@ -74,7 +74,7 @@ colSums(is.na(datos))
 
 ## Wealth -\> Resumen estadístico
 
-De wealth_accumulation_master.csv
+De `wealth_accumulation_master.csv`
 
 ```{r resumen-datos}
 summary(datos)
@@ -82,7 +82,7 @@ summary(datos)
 
 ## Wealth -\> Exploración de variables categóricas
 
-De wealth_accumulation_master.csv
+De `wealth_accumulation_master.csv`
 
 ```{r valores-unicos}
 unique(datos$education)
@@ -206,7 +206,7 @@ round(matriz_cor, 2)
 
 ## Wealth -\> Visualización — Matriz de correlación completa
 
-Al tener l;a visualizacion de de la Matriz de correlación, se puede ver claramente que la gran mayoria de las varables del dataset wealth_accumulation_master.csv practicamente no tienen nula relacion entre si, a excepcion de algunas variables como: `edad` con `anios_trabajando` y `anios_invertiendo`, a su vez `invierte_en_mercados` con `pct_portafolio_acciones`.
+Al tener l;a visualizacion de de la Matriz de correlación, se puede ver claramente que la gran mayoria de las varables del dataset `wealth_accumulation_master.csv` practicamente no tienen nula relacion entre si, a excepcion de algunas variables como: `edad` con `anios_trabajando` y `anios_invertiendo`, a su vez `invierte_en_mercados` con `pct_portafolio_acciones`.
 
 Por lo cual se excluiran las variables `anios_trabajando`, `anios_invirtiendo` y `pct_portafolio_acciones` para reducir redundancia entre variables altamente correlacionadas y ver si con este cambio habra un cambio en la correlacion de la variables por si eran estas tres las que se llevaban todo el peso de las demas.
 
@@ -261,12 +261,18 @@ corrplot(matriz_cor2,
 
 ## Carga del dataset de crédito
 
+Carga del dataset `credit.xls` un archivo de tipo Excel Spreadsheet recuperado del repositorio **UC Irvine Machine Learning Repository**.
+
+La página del conjunto de datos (dataset) se titula **"Default of Credit Card Clients"** en la URL <https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients>, en donde fue obtenido el archivo credit.xl el cual sera el utilizado de ahora en adelante
+
+Es la información de clientes de tarjetas de crédito en Taiwán (NT\$ = nuevo dólar taiwanés) usada típicamente para predecir impago al mes siguiente.
+
 ```{r carga-credito}
 library(readxl)
 library(dplyr)
 library(corrplot)
 
-# Releer saltando la primera fila para que la fila de nombres reales sea el encabezado
+# Releer saltando la primera fila para que la fila de nombres reales de las columnas, de lo contrario seria el nombre de la columnas base de excel.
 datos1 <- read_excel(here("DATASET", "credit.xls"), skip = 1)
 
 # Verificar
@@ -274,23 +280,125 @@ str(datos1)
 names(datos1)
 ```
 
-## Preparación de variables numéricas
+## Verificacion de los datos y Diccionario de Datos
+
+La estructura general del dataset credit.xls, tiene un total de 30.000 registros y 25 variables
+
+### Identificador
+
+- **`ID`** — Tipo: **Numeric** Identificador único de cada cliente.
+
+### Variables demográficas
+
+- **`LIMIT_BAL`** — Tipo: **Numeric**\
+  Monto de crédito otorgado, en NT\$ (nuevo dólar taiwanés). Incluye tanto el crédito individual del consumidor como el crédito familiar/suplementario.
+
+- **`SEX`** — Tipo: **Numeric**\
+  Género del cliente. 1 = Hombre, 2 = Mujer.
+
+- **`EDUCATION`** — Tipo: **Numeric**\
+  Nivel educativo. 1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros.
+
+- **`MARRIAGE`** — Tipo: **Numeric**\
+  Estado civil. 1 = Casado, 2 = Soltero, 3 = Otros.
+
+- **`AGE`** — Tipo: **Numeric**\
+  Edad del cliente, en años.
+
+### Variables de Historial de pagos (Repayment Status)
+
+Escala común para las siguientes 6 variables: -1 = Pagó puntualmente, 1 = Retraso de 1 mes, 2 = Retraso de 2 meses, ..., 9 = Retraso de 9 meses o más.
+
+Hay casos que también aparecen valores 0 y -2, no documentados oficialmente, asociados a "sin consumo" o "pago mínimo".
+
+- **`PAY_0`** — Tipo: **Numeric**\
+  Estado de pago en septiembre de 2005 (mes más reciente).
+
+- **`PAY_2`** — Tipo: **Numeric**\
+  Estado de pago en agosto de 2005.
+
+- **`PAY_3`** — Tipo: **Numeric**\
+  Estado de pago en julio de 2005.
+
+- **`PAY_4`** — Tipo: **Numeric**\
+  Estado de pago en junio de 2005.
+
+- **`PAY_5`** — Tipo: **Numeric**\
+  Estado de pago en mayo de 2005.
+
+- **`PAY_6`** — Tipo: **Numeric**\
+  Estado de pago en abril de 2005 (mes más antiguo).
+
+### Montos de facturación (Bill Statement Amount)
+
+Monto del estado de cuenta mensual, en NT\$. Puede ser negativo si el cliente tenía saldo a favor.
+
+- **`BILL_AMT1`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en septiembre de 2005.
+
+- **`BILL_AMT2`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en agosto de 2005.
+
+- **`BILL_AMT3`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en julio de 2005.
+
+- **`BILL_AMT4`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en junio de 2005.
+
+- **`BILL_AMT5`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en mayo de 2005.
+
+- **`BILL_AMT6`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en abril de 2005.
+
+### Montos de pagos previos (Previous Payment Amount)
+
+Monto efectivamente pagado por el cliente cada mes, en NT\$.
+
+- **`PAY_AMT1`** — Tipo: **Numeric**\
+  Monto pagado en septiembre de 2005.
+
+- **`PAY_AMT2`** — Tipo: **Numeric**\
+  Monto pagado en agosto de 2005.
+
+- **`PAY_AMT3`** — Tipo: **Numeric**\
+  Monto pagado en julio de 2005.
+
+- **`PAY_AMT4`** — Tipo: **Numeric**\
+  Monto pagado en junio de 2005.
+
+- **`PAY_AMT5`** — Tipo: **Numeric**\
+  Monto pagado en mayo de 2005.
+
+- **`PAY_AMT6`** — Tipo: **Numeric**\
+  Monto pagado en abril de 2005.
+
+### Variable Predictiva
+
+- **`default payment next month`** — Tipo: Binaria (0/1)\
+  Indica si el cliente incurrió en impago al mes siguiente. 1 = Sí (default), 0 = No.
+
+## Credit -\> Preparación de variables
+
+Eliminacion de la variable **`ID`** para hacer el analisis exploratorio de los datos con la matriz de correlacion.
 
 ```{r preparacion-credito}
-datos1_num <- datos1 %>%
-  select(-ID) %>%
-  mutate(across(everything(), as.numeric))
-
-# Verificar
-str(datos1_num)
-colSums(is.na(datos1_num))
+# Eliminar variable ID
+datos_credit <- datos1 %>%
+  select(-ID)
 
 # Matriz de correlación
-matriz_cor <- cor(datos1_num, use = "pairwise.complete.obs")
+matriz_cor <- cor(datos_credit, use = "pairwise.complete.obs")
 round(matriz_cor, 2)
 ```
 
-## Visualización — Matriz de correlación (crédito)
+## Credit -\> Visualización — Matriz de correlación
+
+Mientras que en `wealth_accumulation_master.csv` las correlaciones son en su gran mayoría cercanas a cero y relacion aparente, el dataset `credit.xls` presenta clusters de variables altamente correlacionadas como lo son (`PAY_*` y `BILL_AMT*`). Esta estructura de dependencia es justamente lo que se necesita para aplicar técnicas de estadística multidimensional, por lo que **`credit.xls` resulta el dataset más apropiado para cumplir con los requerimientos del curso**, en contraste con el dataset de riqueza, que fue descartado por su débil estructura de correlación general.
+
+- **Historial de pagos (`PAY_0` a `PAY_6`)**: correlaciones entre 0.47 y 0.82 — el atraso de un mes paarece fuertemente asociado al atraso del mes siguiente.
+- **Montos de facturación (`BILL_AMT1` a `BILL_AMT6`)**: correlaciones aún más altas, entre 0.80 y 0.95 — el monto de la deuda de un mes puede predecir casi linealmente el del mes siguiente.
+- **`LIMIT_BAL`** correlaciona de forma moderada y consistente con casi todas las variables `PAY_*` (entre -0.24 y -0.30) y con las `BILL_AMT*` (entre 0.28 y 0.30), mostrando un posible patrón: a mayor límite de crédito, menor probabilidad de atraso.
 
 ```{r plot-correlacion-credito, fig.cap="Matriz de correlación del dataset de crédito"}
 corrplot(matriz_cor, 
