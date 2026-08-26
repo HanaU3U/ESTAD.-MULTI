@@ -51,12 +51,89 @@ datos_credit_visu$PAY_6 <- as.factor(datos_credit_visu$PAY_6)
 ```
 #Diagramas de Caja y Bigotes
 
+
+##Comparación de todas las variables númericas
+
+###Sin estandarizar
+```{r cajas y bigotes de númericas}
+#solo de limit_bal
+boxplot(datos_credit_visu[, 1:1]/10000, las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL",
+        ylab = "N/$10000", col = "grey90")
+
+
+#solo de age
+boxplot(datos_credit_visu[, 5:5], las = 2, cex.axis = 0.7,
+        main = "AGE",
+        ylab = "Edad (años)", col = "grey90")
+
+
+#comparación de los de bill_amt
+boxplot(datos_credit_visu[, 12:17]/10000, las = 2, cex.axis = 0.7,
+        main = "BILL_AMT1 a BILL_AMT6",
+        ylab = "N/$10000", col = "grey90")
+
+
+#comparación de los de pay_amt
+boxplot(datos_credit_visu[, 17:23]/10000, las = 2, cex.axis = 0.7,
+        main = "PAY_AMT1 a PAY_AMT6",
+        ylab = "N/$10000", col = "grey90")
+
+
+#comparación de todos
+boxplot(datos_credit_visu[, c(1, c(5, 12:23))], las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6",
+        ylab = "Años y N/$", col = "grey90")
+
+```
+
+###Estandarizadas
+```{r cajas y bigotes de númericas estandarizadas}
+#solo de limit_bal
+boxplot(scale(datos_credit_visu[, 1:1]), las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL estandarizada",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#solo de age
+boxplot(scale(datos_credit_visu[, 5:5]), las = 2, cex.axis = 0.7,
+        main = "AGE estandarizada",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#comparación de los de bill_amt
+boxplot(scale(datos_credit_visu[, 12:17]), las = 2, cex.axis = 0.7,
+        main = "BILL_AMT1 a BILL_AMT6 estandarizadas",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#comparación de los de pay_amt
+boxplot(scale(datos_credit_visu[, 17:23]), las = 2, cex.axis = 0.7,
+        main = "PAY_AMT1 a PAY_AMT6 estandarizadas",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#comparación de todos
+boxplot(scale(datos_credit_visu[, c(1, c(5, 12:23))]), las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6 estandarizadas",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+```
+
 ##De "SEX"
 
 ```{r cajas y bigotes de sex y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ SEX, data = datos_credit_visu,
         main = "Monto de crédito otorgado por sexo ",
         xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de sex y AGE}
+boxplot(AGE ~ SEX, data = datos_credit_visu,
+        main = "Edad por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Edad (Años)",
         col = "grey90")
 ```
 
@@ -129,6 +206,13 @@ boxplot(PAY_AMT6/10000 ~ SEX, data = datos_credit_visu,
 boxplot(LIMIT_BAL/10000 ~ EDUCATION, data = datos_credit_visu, #CHICOS FAVOR MIRAR ESTE K SIGNIFICA 5 Y 6 Y 0 XDDD
         main = "Monto de crédito otorgado por nivel educativo",
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de education y AGE}
+boxplot(AGE ~ EDUCATION, data = datos_credit_visu,
+        main = "Edad por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Edad (Años)",
         col = "grey90")
 ```
 
@@ -205,6 +289,13 @@ boxplot(LIMIT_BAL/10000 ~ MARRIAGE, data = datos_credit_visu,
         col = "grey90")
 ```
 
+```{r cajas y bigotes de MARRIAGE y AGE}
+boxplot(AGE ~ MARRIAGE, data = datos_credit_visu,
+        main = "Edad por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
 ```{r cajas y bigotes de MARRIAGE y bill_amt}
 boxplot(BILL_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto del estado de cuenta en septiembre de 2005 por estado civil",
@@ -240,61 +331,113 @@ boxplot(BILL_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
 ```{r cajas y bigotes de MARRIAGE y pay_amt}
 boxplot(PAY_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado civil",
-        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado civil",
-        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado civil",
-        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado civil",
-        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado civil",
-        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado civil",
-        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
 
 ##De "default payment next month"
 
-##Comparación de todas las variables númericas
-```{r cajas y bigotes de númericas}
-#solo de limit_bal
-boxplot(scale(datos_credit_visu[, 1:1]), las = 2, cex.axis = 0.7,
-        main = "LIMIT_BAL estandarizada",
-        ylab = "desviaciones estándar", col = "grey90")
-abline(h = 0, lty = 3)
-
-#comparación de los de bill_amt
-boxplot(scale(datos_credit_visu[, 12:17]), las = 2, cex.axis = 0.7,
-        main = "BILL_AMT1 a BILL_AMT6 estandarizadas",
-        ylab = "desviaciones estándar", col = "grey90")
-abline(h = 0, lty = 3)
-
-#comparación de los de pay_amt
-boxplot(scale(datos_credit_visu[, 17:23]), las = 2, cex.axis = 0.7,
-        main = "PAY_AMT1 a PAY_AMT6 estandarizadas",
-        ylab = "desviaciones estándar", col = "grey90")
-abline(h = 0, lty = 3)
-
-#comparación de todos
-boxplot(scale(datos_credit_visu[, c(1, 12:23)]), las = 2, cex.axis = 0.7,
-        main = "LIMIT_BAL, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6 estandarizadas",
-        ylab = "desviaciones estándar", col = "grey90")
-abline(h = 0, lty = 3)
-
+```{r cajas y bigotes de default payment next month y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
 ```
+
+```{r cajas y bigotes de default payment next month y AGE}
+boxplot(AGE ~ `default payment next month`, data = datos_credit_visu,
+        main = "Edad por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de `default payment next month` y bill_amt}
+boxplot(BILL_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de `default payment next month` y pay_amt}
+boxplot(PAY_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+
