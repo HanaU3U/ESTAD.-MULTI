@@ -29,21 +29,39 @@ knitr::opts_chunk$set(
 ```
 
 
-## Tipos de dato del dataset de crédito (el que se decidió trabajar)
+# Tipos de dato del dataset de crédito (el que se decidió trabajar)
 
 En la exploración de datos, este fue uno de los datasets los cuales se auditó; y el que se usará. En dicha exploración, se notó como todas las columnas pertenecen a la categoría "numeric"; sin embargo el diccionario de datos indica que "SEX", "EDUCATION", "MARRIAGE", de "PAY_0" a "PAY_6" y "default payment next month" son en realidad variables categoricas.
 
 ```{r cambio de tipo de dato}
-datos_credit_visu_visu <- datos_credit_visu %>%
+datos_credit_visu <- datos_credit %>%
+  select_all()
 
-as.factor(datos_credit_visu$SEX)
-as.factor(datos_credit_visu$EDUCATION)
-as.factor(datos_credit_visu$MARRIAGE)
-as.factor(datos_credit_visu$`default payment next month`)
-#datos_credit_visu$PAY_0
-#datos_credit_visu$PAY_2
-#datos_credit_visu$PAY_3
-#datos_credit_visu$PAY_4
-#datos_credit_visu$PAY_5
-#datos_credit_visu$PAY_6
+datos_credit_visu$SEX <- as.factor(datos_credit_visu$SEX)
+datos_credit_visu$EDUCATION <- as.factor(datos_credit_visu$EDUCATION)
+datos_credit_visu$MARRIAGE <- as.factor(datos_credit_visu$MARRIAGE)
+datos_credit_visu$`default payment next month` <- as.factor(datos_credit_visu$`default payment next month`)
+datos_credit_visu$PAY_0 <- as.factor(datos_credit_visu$PAY_0)
+datos_credit_visu$PAY_2 <- as.factor(datos_credit_visu$PAY_2)
+datos_credit_visu$PAY_3 <- as.factor(datos_credit_visu$PAY_3)
+datos_credit_visu$PAY_4 <- as.factor(datos_credit_visu$PAY_4)
+datos_credit_visu$PAY_5 <- as.factor(datos_credit_visu$PAY_5)
+datos_credit_visu$PAY_6 <- as.factor(datos_credit_visu$PAY_6)
+
 ```
+#Diagramas de Caja y Bigotes
+
+##De "SEX"
+
+```{r cajas y bigotes de sex}
+boxplot(BILL_AMT1/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000))",
+        col = "grey90")
+```
+
+##DE "EDUCATION"
+
+##DE "MARRIAGE"
+
+##DE "default payment next month"
