@@ -53,10 +53,66 @@ datos_credit_visu$PAY_6 <- as.factor(datos_credit_visu$PAY_6)
 
 ##De "SEX"
 
-```{r cajas y bigotes de sex}
+```{r cajas y bigotes de sex y bill_amt}
 boxplot(BILL_AMT1/10000 ~ SEX, data = datos_credit_visu,
         main = "Monto del estado de cuenta en septiembre de 2005 por sexo ",
-        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000))",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+```{r cajas y bigotes de sex y bill_amt}
+boxplot(BILL_AMT1/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
 
