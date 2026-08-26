@@ -26,6 +26,8 @@ knitr::opts_chunk$set(
   fig.width = 8,
   fig.height = 6
 )
+
+library(dplyr)
 ```
 
 
@@ -440,4 +442,481 @@ boxplot(PAY_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
         col = "grey90")
 ```
 
+##De PAY_0
 
+```{r cajas y bigotes de PAY_0 y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de default payment next month y AGE}
+boxplot(AGE ~ PAY_0, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_0 y bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_0 y pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+##De PAY_2
+
+```{r cajas y bigotes de PAY_2 y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de default payment next month y AGE}
+boxplot(AGE ~ PAY_2, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_2 y bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_2 y pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+##De PAY_3
+
+```{r cajas y bigotes de PAY_3 y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de default payment next month y AGE}
+boxplot(AGE ~ PAY_3, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_3 y bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_3 y pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+##De PAY_4
+
+```{r cajas y bigotes de PAY_4 y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de default payment next month y AGE}
+boxplot(AGE ~ PAY_4, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_4 y bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_4 y pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+##De PAY_5
+
+```{r cajas y bigotes de PAY_0 y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de default payment next month y AGE}
+boxplot(AGE ~ PAY_0, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_0 y bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_0 y pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+##De PAY_6
+```{r cajas y bigotes de PAY_6 y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de default payment next month y AGE}
+boxplot(AGE ~ PAY_6, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_6 y bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de PAY_6 y pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso 5 meses, 6 = Retraso de 6 meses, 7 = Retraso de 7 meses, 8 = Retraso de 8 meses, 9 = Retraso de 9+ meses)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
