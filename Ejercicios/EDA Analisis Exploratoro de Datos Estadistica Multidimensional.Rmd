@@ -65,7 +65,7 @@ library(here)
 Se ve que el dataset de `wealth_accumulation_master.csv`, tiene un total de 55.000 registros y 25 varables. Las cuales estan divididas por el momento en cuatro variables categoricas de tipo character y 21 variables de tipo numeric, con as su vez un total de cero nulos en todas las variables.
 
 ```{r carga-datos}
-datos <- read_csv(here("DATASET", "`wealth_accumulation_master.csv`"))
+datos <- read_csv(here("DATASET", "wealth_accumulation_master.csv"))
 spec(datos)
 dim(datos)
 str(datos)
@@ -198,7 +198,7 @@ dim(datos_numericos)
 
 ## Wealth -\> Matriz de correlación (completa)
 
-```{r matriz-correlacion}
+```{r matriz-correlacion, include=FALSE}
 # Matriz de correlación
 matriz_cor <- cor(datos_numericos)
 round(matriz_cor, 2)
@@ -225,7 +225,7 @@ corrplot(matriz_cor,
 
 ## Wealth -\> Matriz de correlación (variables filtradas)
 
-```{r matriz-correlacion-filtrada}
+```{r matriz-correlacion-filtrada, include=FALSE}
 library(dplyr)
 library(corrplot)
 
@@ -382,7 +382,7 @@ Monto efectivamente pagado por el cliente cada mes, en NT\$.
 
 Eliminacion de la variable **`ID`** para hacer el analisis exploratorio de los datos con la matriz de correlacion.
 
-```{r preparacion-credito}
+```{r preparacion-credito, include=FALSE}
 # Eliminar variable ID
 datos_credit <- datos1 %>%
   select(-ID)
