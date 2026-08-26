@@ -198,6 +198,77 @@ boxplot(PAY_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
 
 ##De "MARRIAGE"
 
+```{r cajas y bigotes de MARRIAGE y LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de MARRIAGE y bill_amt}
+boxplot(BILL_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+```{r cajas y bigotes de MARRIAGE y pay_amt}
+boxplot(PAY_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado civil",
+        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado civil",
+        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado civil",
+        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado civil",
+        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado civil",
+        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado civil",
+        xlab = "estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
 ##De "default payment next month"
 
 ##Comparación de todas las variables númericas
