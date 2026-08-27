@@ -51,9 +51,23 @@ if (length(paquetes_faltantes) > 0) {
 invisible(lapply(paquetes, library, character.only = TRUE))
 ```
 
-# Tipos de dato del dataset de crédito (el que se decidió trabajar)
+# Tipos de dato del dataset de crédito
 
 En la exploración de datos, este fue uno de los datasets los cuales se auditó; y el que se usará. En dicha exploración, se notó como todas las columnas pertenecen a la categoría "numeric"; sin embargo el diccionario de datos indica que "SEX", "EDUCATION", "MARRIAGE", de "PAY_0" a "PAY_6" y "default payment next month" son en realidad variables categoricas.
+
+## Carga de los datos y corrección de tipos de variable
+
+En este chunk se realizan dos tareas principales:
+
+1.  **Carga de los datos**: se lee el archivo `datos_credit.csv` (ubicado en la carpeta `DATASET` del proyecto) y se guarda en el objeto `datos_credit`. A partir de él se crea una copia de trabajo llamada `datos_credit_visu`, que será la que se use en todas las visualizaciones del documento.
+2.  **Corrección de tipo de dato**: como se explicó arriba, aunque R interpreta todas las columnas del dataset como numéricas, varias de ellas en realidad representan **categorías codificadas con números** y no cantidades continuas. Por eso se convierten a `factor` las siguientes variables:
+    - `SEX`: sexo del cliente (codificado numéricamente).
+    - `EDUCATION`: nivel educativo (codificado numéricamente).
+    - `MARRIAGE`: estado civil (codificado numéricamente).
+    - `default payment next month`: variable de respuesta que indica si el cliente incurrió en impago al mes siguiente (0/1).
+    - `PAY_0`, `PAY_2`, `PAY_3`, `PAY_4`, `PAY_5`, `PAY_6`: estado de pago del cliente en cada uno de los meses anteriores (codificado con números que representan categorías de retraso, no cantidades).
+
+Esta corrección es necesaria porque, si estas variables se dejan como numéricas, cualquier análisis o gráfico posterior las trataría incorrectamente como cantidades continuas (por ejemplo, calculando promedios o desviaciones estándar sobre categorías), lo cual no tiene sentido estadístico ni interpretativo.
 
 ```{r cambio de tipo de dato}
 datos_credit <- read_csv(here("DATASET", "datos_credit.csv"))
@@ -73,11 +87,23 @@ datos_credit_visu$PAY_6 <- as.factor(datos_credit_visu$PAY_6)
 
 ```
 
-#Diagramas de Caja y Bigotes
+# Diagramas de Caja y Bigotes
 
-##Comparación de todas las variables númericas
+## Comparación de todas las variables númericas
 
-###Sin estandarizar
+Se comparan simultáneamente todas las variables **verdaderamente numéricas** del dataset (montos de crédito, edad, montos de estado de cuenta y montos pagados), primero en su escala original y luego estandarizadas, para poder compararlas entre sí sin que las diferencias de magnitud (por ejemplo, edad en años vs. montos en miles de dólares) distorsionen la lectura visual.
+
+### Sin estandarizar
+
+Este chunk genera cinco diagramas de caja y bigotes con las variables numéricas **en su escala original** (sin transformar estadísticamente), solo dividiendo los montos monetarios entre 10.000 para que los ejes sean más legibles:
+
+- `LIMIT_BAL` (monto de crédito otorgado) sola.
+- `AGE` (edad) sola.
+- `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de los últimos 6 meses) comparadas entre sí.
+- `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados en los últimos 6 meses) comparadas entre sí.
+- Todas las anteriores juntas (`LIMIT_BAL`, `AGE`, `BILL_AMT1:6`, `PAY_AMT1:6`) en un solo gráfico comparativo.
+
+No se cruza ninguna variable categórica en este chunk; el objetivo es únicamente observar la distribución y dispersión de cada variable numérica y detectar posibles valores atípicos.
 
 ```{r cajas y bigotes de númericas}
 #solo de limit_bal
@@ -111,7 +137,9 @@ boxplot(datos_credit_visu[, c(1, c(5, 12:23))], las = 2, cex.axis = 0.7,
 
 ```
 
-###Estandarizadas
+### Estandarizadas
+
+Este chunk repite exactamente las mismas cinco comparaciones del chunk anterior, pero aplicando la función `scale()` a cada conjunto de variables. `scale()` **estandariza** los datos, es decir, les resta su media y los divide entre su desviación estándar, dejándolos expresados en unidades de desviación estándar (con media 0). Esta transformación es necesaria porque variables como `AGE` (en años) y `BILL_AMT` (en miles de pesos taiwaneses) tienen escalas y unidades completamente distintas; al estandarizarlas, se pueden comparar visualmente su dispersión y valores atípicos en una misma escala común. La línea horizontal en 0 (`abline(h = 0, lty = 3)`) marca la media de cada variable tras la estandarización.
 
 ```{r cajas y bigotes de númericas estandarizadas}
 #solo de limit_bal
@@ -146,7 +174,11 @@ abline(h = 0, lty = 3)
 
 ```
 
-##De "SEX"
+## De "SEX"
+
+En esta sección se cruza la variable categórica `SEX` (sexo del cliente, convertida a factor en el chunk de preparación de datos) contra cada una de las variables numéricas relevantes, para observar si existen diferencias en su distribución según el sexo del cliente.
+
+El diagrama de caja y bigotes se cruza `LIMIT_BAL` (monto de crédito otorgado, dividido entre 10.000 para legibilidad) contra `SEX`, para comparar si el monto de crédito otorgado difiere entre hombres y mujeres.
 
 ```{r cajas y bigotes de sex y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ SEX, data = datos_credit_visu,
@@ -155,12 +187,16 @@ boxplot(LIMIT_BAL/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Aquí se cruza `AGE` (edad) contra `SEX`, para observar si la distribución de edades varía entre hombres y mujeres.
+
 ```{r cajas y bigotes de sex y AGE}
 boxplot(AGE ~ SEX, data = datos_credit_visu,
         main = "Edad por sexo ",
         xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Este chunk cruza cada una de las seis variables `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de septiembre a abril de 2005, divididos entre 10.000) contra `SEX`, generando un boxplot por cada mes para comparar el monto del estado de cuenta entre hombres y mujeres mes a mes.
 
 ```{r cajas y bigotes de sex y bill_amt}
 boxplot(BILL_AMT1/10000 ~ SEX, data = datos_credit_visu,
@@ -194,6 +230,8 @@ boxplot(BILL_AMT6/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Este chunk cruza las seis variables `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados por el cliente de septiembre a abril de 2005, divididos entre 10.000) contra `SEX`, para comparar cuánto pagaron efectivamente hombres y mujeres cada mes.
+
 ```{r cajas y bigotes de sex y pay_amt}
 boxplot(PAY_AMT1/10000 ~ SEX, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por sexo ",
@@ -226,7 +264,11 @@ boxplot(PAY_AMT6/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De "EDUCATION"
+## De "EDUCATION"
+
+En esta sección se cruza la variable categórica `EDUCATION` (nivel educativo del cliente, convertida a factor) contra las mismas variables numéricas utilizadas en la sección anterior, para observar si el nivel educativo se relaciona con diferencias en el crédito otorgado, la edad, los montos de estado de cuenta y los montos pagados.
+
+Se cruza `LIMIT_BAL` (monto de crédito otorgado, en unidades de 10.000) contra `EDUCATION`, para ver si el monto de crédito varía según el nivel educativo. Nótese el comentario original del equipo señalando la necesidad de revisar el significado de las categorías 0, 5 y 6 de `EDUCATION`, que no están claramente documentadas en el diccionario de datos.
 
 ```{r cajas y bigotes de education y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ EDUCATION, data = datos_credit_visu, #CHICOS FAVOR MIRAR ESTE K SIGNIFICA 5 Y 6 Y 0 XDDD
@@ -235,12 +277,16 @@ boxplot(LIMIT_BAL/10000 ~ EDUCATION, data = datos_credit_visu, #CHICOS FAVOR MIR
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `EDUCATION`, para observar cómo se distribuye la edad de los clientes según su nivel educativo.
+
 ```{r cajas y bigotes de education y AGE 2}
 boxplot(AGE ~ EDUCATION, data = datos_credit_visu,
         main = "Edad por nivel educativo",
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de septiembre a abril de 2005) contra `EDUCATION`, generando un boxplot por mes para comparar el monto del estado de cuenta según el nivel educativo del cliente.
 
 ```{r cajas y bigotes de education y bill_amt}
 boxplot(BILL_AMT1/10000 ~ EDUCATION, data = datos_credit_visu,
@@ -274,6 +320,8 @@ boxplot(BILL_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados de septiembre a abril de 2005) contra `EDUCATION`, para comparar cuánto pagaron efectivamente los clientes según su nivel educativo, mes a mes.
+
 ```{r cajas y bigotes de education y pay_amt}
 boxplot(PAY_AMT1/10000 ~ EDUCATION, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por nivel educativo",
@@ -306,7 +354,11 @@ boxplot(PAY_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De "MARRIAGE"
+## De "MARRIAGE"
+
+En esta sección se cruza la variable categórica `MARRIAGE` (estado civil del cliente, convertida a factor) contra las mismas variables numéricas, para explorar si el estado civil se asocia con diferencias en el crédito otorgado, la edad, los montos de estado de cuenta y los montos pagados.
+
+Se cruza `LIMIT_BAL` contra `MARRIAGE`, para comparar el monto de crédito otorgado según el estado civil del cliente.
 
 ```{r cajas y bigotes de MARRIAGE y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ MARRIAGE, data = datos_credit_visu,
@@ -315,12 +367,16 @@ boxplot(LIMIT_BAL/10000 ~ MARRIAGE, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `MARRIAGE`, para observar la distribución de edades según el estado civil.
+
 ```{r cajas y bigotes de MARRIAGE y AGE}
 boxplot(AGE ~ MARRIAGE, data = datos_credit_visu,
         main = "Edad por estado civil",
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `MARRIAGE`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado civil del cliente.
 
 ```{r cajas y bigotes de MARRIAGE y bill_amt}
 boxplot(BILL_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
@@ -354,6 +410,8 @@ boxplot(BILL_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `MARRIAGE`, para comparar cuánto pagaron efectivamente los clientes según su estado civil, mes a mes.
+
 ```{r cajas y bigotes de MARRIAGE y pay_amt}
 boxplot(PAY_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado civil",
@@ -386,7 +444,11 @@ boxplot(PAY_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De "default payment next month"
+## De "default payment next month"
+
+En esta sección se cruza la variable de respuesta `default payment next month` (indicador de si el cliente incurrió en impago al mes siguiente, convertida a factor) contra las mismas variables numéricas. Esta es la sección más importante desde el punto de vista analítico, ya que permite explorar visualmente qué variables podrían estar asociadas con el impago, lo cual es relevante de cara a un eventual modelo predictivo.
+
+Se cruza `LIMIT_BAL` contra `default payment next month`, para observar si los clientes que incurren en impago tienden a tener montos de crédito otorgado distintos a los que no incurren.
 
 ```{r cajas y bigotes de default payment next month y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ `default payment next month`, data = datos_credit_visu,
@@ -395,12 +457,16 @@ boxplot(LIMIT_BAL/10000 ~ `default payment next month`, data = datos_credit_visu
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `default payment next month`, para observar si la edad se relaciona con la incurrencia en impago.
+
 ```{r cajas y bigotes de default payment next month y AGE}
 boxplot(AGE ~ `default payment next month`, data = datos_credit_visu,
         main = "Edad por incurrencia de impago al mes siguiente",
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `default payment next month`, generando un boxplot por mes para comparar el monto del estado de cuenta entre quienes incurrieron en impago y quienes no.
 
 ```{r cajas y bigotes de `default payment next month` y bill_amt}
 boxplot(BILL_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
@@ -434,6 +500,8 @@ boxplot(BILL_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `default payment next month`, para comparar cuánto pagaron efectivamente los clientes que incurrieron en impago frente a los que no, mes a mes.
+
 ```{r cajas y bigotes de `default payment next month` y pay_amt}
 boxplot(PAY_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por incurrencia de impago al mes siguiente",
@@ -466,7 +534,11 @@ boxplot(PAY_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De PAY_0
+## De PAY_0
+
+En esta sección se cruza `PAY_0` (estado de pago del cliente en septiembre de 2005, convertida a factor) contra las mismas variables numéricas, para observar si el estado de pago más reciente se relaciona con el monto de crédito, la edad, los montos de estado de cuenta y los montos pagados.
+
+Se cruza `LIMIT_BAL` contra `PAY_0`, para comparar el monto de crédito otorgado según el estado de pago de septiembre de 2005.
 
 ```{r cajas y bigotes de PAY_0 y LIMIT_BAL 3}
 boxplot(LIMIT_BAL/10000 ~ PAY_0, data = datos_credit_visu,
@@ -475,12 +547,16 @@ boxplot(LIMIT_BAL/10000 ~ PAY_0, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `PAY_0`, para observar si la edad se relaciona con el estado de pago de septiembre de 2005.
+
 ```{r cajas y bigotes de default payment next month y AGE 1}
 boxplot(AGE ~ PAY_0, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_0`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de septiembre de 2005.
 
 ```{r cajas y bigotes de PAY_0 y bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
@@ -514,6 +590,8 @@ boxplot(BILL_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_0`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de septiembre de 2005, mes a mes.
+
 ```{r cajas y bigotes de PAY_0 y pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
@@ -546,7 +624,11 @@ boxplot(PAY_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De PAY_2
+## De PAY_2
+
+En esta sección se cruza `PAY_2` (estado de pago del cliente en agosto de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de la sección de `PAY_0`.
+
+Se cruza `LIMIT_BAL` contra `PAY_2`, para comparar el monto de crédito otorgado según el estado de pago de agosto de 2005.
 
 ```{r cajas y bigotes de PAY_2 y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_2, data = datos_credit_visu,
@@ -555,12 +637,16 @@ boxplot(LIMIT_BAL/10000 ~ PAY_2, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `PAY_2`, para observar si la edad se relaciona con el estado de pago de agosto de 2005.
+
 ```{r cajas y bigotes de default payment next month y AGE 3}
 boxplot(AGE ~ PAY_2, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_2`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de agosto de 2005.
 
 ```{r cajas y bigotes de PAY_2 y bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
@@ -594,6 +680,8 @@ boxplot(BILL_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_2`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de agosto de 2005, mes a mes.
+
 ```{r cajas y bigotes de PAY_2 y pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
@@ -626,7 +714,11 @@ boxplot(PAY_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De PAY_3
+## De PAY_3
+
+En esta sección se cruza `PAY_3` (estado de pago del cliente en julio de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de las secciones anteriores de `PAY`.
+
+Se cruza `LIMIT_BAL` contra `PAY_3`, para comparar el monto de crédito otorgado según el estado de pago de julio de 2005.
 
 ```{r cajas y bigotes de PAY_3 y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_3, data = datos_credit_visu,
@@ -635,12 +727,16 @@ boxplot(LIMIT_BAL/10000 ~ PAY_3, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `PAY_3`, para observar si la edad se relaciona con el estado de pago de julio de 2005.
+
 ```{r cajas y bigotes de default payment next month y AGE 4}
 boxplot(AGE ~ PAY_3, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_3`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de julio de 2005.
 
 ```{r cajas y bigotes de PAY_3 y bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
@@ -674,6 +770,8 @@ boxplot(BILL_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_3`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de julio de 2005, mes a mes.
+
 ```{r cajas y bigotes de PAY_3 y pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
@@ -706,7 +804,11 @@ boxplot(PAY_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De PAY_4
+## De PAY_4
+
+En esta sección se cruza `PAY_4` (estado de pago del cliente en junio de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de las secciones anteriores de `PAY`.
+
+Se cruza `LIMIT_BAL` contra `PAY_4`, para comparar el monto de crédito otorgado según el estado de pago de junio de 2005.
 
 ```{r cajas y bigotes de PAY_4 y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_4, data = datos_credit_visu,
@@ -715,12 +817,16 @@ boxplot(LIMIT_BAL/10000 ~ PAY_4, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `PAY_4`, para observar si la edad se relaciona con el estado de pago de junio de 2005.
+
 ```{r cajas y bigotes de default payment next month y AGE 5}
 boxplot(AGE ~ PAY_4, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_4`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de junio de 2005.
 
 ```{r cajas y bigotes de PAY_4 y bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
@@ -754,6 +860,8 @@ boxplot(BILL_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_4`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de junio de 2005, mes a mes.
+
 ```{r cajas y bigotes de PAY_4 y pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
@@ -786,7 +894,11 @@ boxplot(PAY_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De PAY_5
+## De PAY_5
+
+En esta sección se cruza `PAY_5` (estado de pago del cliente en mayo de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de las secciones anteriores de `PAY`.
+
+Se cruza `LIMIT_BAL` contra `PAY_5`, para comparar el monto de crédito otorgado según el estado de pago de mayo de 2005.
 
 ```{r cajas y bigotes de PAY_0 y LIMIT_BAL 2}
 boxplot(LIMIT_BAL/10000 ~ PAY_5, data = datos_credit_visu,
@@ -795,12 +907,16 @@ boxplot(LIMIT_BAL/10000 ~ PAY_5, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `PAY_5`, para observar si la edad se relaciona con el estado de pago de mayo de 2005.
+
 ```{r cajas y bigotes de default payment next month y AGE 6}
 boxplot(AGE ~ PAY_5, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_5`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de mayo de 2005.
 
 ```{r cajas y bigotes de PAY_0 y bill_amt 2}
 boxplot(BILL_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
@@ -834,6 +950,8 @@ boxplot(BILL_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_5`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de mayo de 2005, mes a mes.
+
 ```{r cajas y bigotes de PAY_0 y pay_amt 2}
 boxplot(PAY_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
@@ -866,7 +984,11 @@ boxplot(PAY_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
         col = "grey90")
 ```
 
-##De PAY_6
+## De PAY_6
+
+En esta sección se cruza `PAY_6` (estado de pago del cliente en abril de 2005, convertida a factor) contra las mismas variables numéricas, cerrando la serie de comparaciones con las seis variables de estado de pago mensual.
+
+Se cruza `LIMIT_BAL` contra `PAY_6`, para comparar el monto de crédito otorgado según el estado de pago de abril de 2005.
 
 ```{r cajas y bigotes de PAY_6 y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
@@ -875,12 +997,16 @@ boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Se cruza `AGE` contra `PAY_6`, para observar si la edad se relaciona con el estado de pago de abril de 2005.
+
 ```{r cajas y bigotes de default payment next month y AGE 2}
 boxplot(AGE ~ PAY_6, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_6`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de abril de 2005.
 
 ```{r cajas y bigotes de PAY_6 y bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
@@ -913,6 +1039,8 @@ boxplot(BILL_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_6`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de abril de 2005, mes a mes. Con este chunk finaliza el conjunto de diagramas de caja y bigotes cruzados contra las seis variables de estado de pago mensual.
 
 ```{r cajas y bigotes de PAY_6 y pay_amt 2}
 boxplot(PAY_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
