@@ -1,0 +1,153 @@
+---
+title: "Análisis exploratorio: Default de pago de tarjetas de crédito"
+subtitle: "Relaciones bivariadas entre variables financieras y de comportamiento de pago"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 6,
+  fig.height = 5
+)
+```
+
+```{r paquetes}
+paquetes <- c(
+  "readxl",
+  "here"
+)
+
+paquetes_faltantes <- paquetes[
+  !paquetes %in% rownames(installed.packages())
+]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+
+library(readxl)
+library(here)
+```
+
+```{r carga_datos}
+datos1 <- read_excel(here("DATASET", "credit.xls"), skip = 1)
+datos <- as.data.frame(datos1)
+names(datos) <- make.names(names(datos))
+```
+
+## Manipulación de datos
+
+Antes de generar los gráficos, el dataset original de clientes de tarjeta de crédito se sometió a las siguientes transformaciones:
+
+1. **Exclusión de variables de identificación y demográficas**: se excluyeron del análisis bivariado las columnas `ID`, `SEX`, `EDUCATION` y `MARRIAGE`. `ID` es solo un identificador sin valor analítico, y `SEX`, `EDUCATION` y `MARRIAGE` son variables categóricas nominales que no se incluyen en este set de gráficos de dispersión (pensadas para variables cuantitativas/ordinales).
+2. **Generación exhaustiva de pares sin repetición**: los pares de variables a graficar se generaron programáticamente con `combn(variables, 2)` sobre la lista de variables restantes, en el orden `LIMIT_BAL, AGE, PAY_0, PAY_2, ..., PAY_6, BILL_AMT1, ..., BILL_AMT6, PAY_AMT1, ..., PAY_AMT6, default payment next month`. Esto produce cada combinación una sola vez: `LIMIT_BAL` se grafica contra todas las demás, luego `AGE` contra todas las que quedan (omitiendo `LIMIT_BAL`, ya cubierta), y así sucesivamente.
+3. **Filtrado de valores no finitos**: para cada par `(x, y)` se eliminaron las filas donde `x` o `y` fueran `NA`, `NaN` o `Inf`, usando `is.finite()`. Cada gráfico puede así usar un subconjunto de filas ligeramente distinto.
+4. **Lectura del archivo Excel**: el dataset se lee con `read_excel()` (paquete `readxl`) desde `credit.xls`, usando `skip = 1` porque la primera fila del archivo original es una fila de encabezado auxiliar (`X1, X2, X3, ...`) y los nombres reales de las columnas están en la segunda fila. El resultado se convierte a `data.frame` estándar y se le aplica `make.names()` para que `default payment next month` (con espacios) se lea de forma consistente como `default.payment.next.month`.
+5. **No se modificó el dataset original** (`datos`): todas las transformaciones se aplicaron sobre copias locales (`datos_grafico`, `x_grafico`, `y_grafico`) dentro de cada iteración.
+6. **Unidades y escalas**: las variables `PAY_0` a `PAY_6` son categóricas ordinales (estado de pago, escala -1 a 9) y `default.payment.next.month` es binaria (0/1); se etiquetan como tal en los ejes en lugar de asumir una unidad monetaria o temporal.
+
+Las variables incluidas en el dataset original son:
+
+```{r nombres_variables, echo=TRUE}
+names(datos)
+```
+
+## Definición de variables, pares y unidades
+
+```{r pares_unidades}
+# Variables cuantitativas/ordinales a incluir en el análisis
+# (se excluyen ID, SEX, EDUCATION, MARRIAGE)
+variables <- c(
+  "LIMIT_BAL",
+  "AGE",
+  "PAY_0",
+  "PAY_2",
+  "PAY_3",
+  "PAY_4",
+  "PAY_5",
+  "PAY_6",
+  "BILL_AMT1",
+  "BILL_AMT2",
+  "BILL_AMT3",
+  "BILL_AMT4",
+  "BILL_AMT5",
+  "BILL_AMT6",
+  "PAY_AMT1",
+  "PAY_AMT2",
+  "PAY_AMT3",
+  "PAY_AMT4",
+  "PAY_AMT5",
+  "PAY_AMT6",
+  "default.payment.next.month"
+)
+
+# Todas las combinaciones únicas de a 2 (sin repetir pares), en el
+# orden: LIMIT_BAL vs. el resto, luego AGE vs. el resto restante, etc.
+pares_matriz <- combn(variables, 2)
+pares <- lapply(seq_len(ncol(pares_matriz)), function(i) pares_matriz[, i])
+
+unidades <- c(
+  LIMIT_BAL = "NT dólares",
+  AGE = "años",
+  PAY_0 = "categoría (mes de atraso)",
+  PAY_2 = "categoría (mes de atraso)",
+  PAY_3 = "categoría (mes de atraso)",
+  PAY_4 = "categoría (mes de atraso)",
+  PAY_5 = "categoría (mes de atraso)",
+  PAY_6 = "categoría (mes de atraso)",
+  BILL_AMT1 = "NT dólares",
+  BILL_AMT2 = "NT dólares",
+  BILL_AMT3 = "NT dólares",
+  BILL_AMT4 = "NT dólares",
+  BILL_AMT5 = "NT dólares",
+  BILL_AMT6 = "NT dólares",
+  PAY_AMT1 = "NT dólares",
+  PAY_AMT2 = "NT dólares",
+  PAY_AMT3 = "NT dólares",
+  PAY_AMT4 = "NT dólares",
+  PAY_AMT5 = "NT dólares",
+  PAY_AMT6 = "NT dólares",
+  default.payment.next.month = "binario (0 = no, 1 = sí)"
+)
+```
+
+## Gráficos de dispersión por par de variables
+
+A continuación se muestran los `r length(pares)` gráficos de dispersión (`combn(21, 2)` = 210 pares), uno por cada combinación única de las variables listadas arriba, excluyendo `ID`, `SEX`, `EDUCATION` y `MARRIAGE`. Cada gráfico aplica el filtrado de valores no finitos descrito en la sección de manipulación de datos.
+
+```{r graficos, results="asis"}
+for (par in pares) {
+
+  x <- par[1]
+  y <- par[2]
+
+  cat(paste0("\n### ", x, " vs. ", y, "\n"))
+
+  # Eliminar valores NA, NaN e Inf
+  datos_grafico <- datos[
+    is.finite(datos[[x]]) &
+      is.finite(datos[[y]]),
+  ]
+
+  x_grafico <- datos_grafico[[x]]
+  y_grafico <- datos_grafico[[y]]
+
+  plot(
+    x_grafico,
+    y_grafico,
+    pch = 19,
+    col = rgb(0, 0, 0, 0.45),
+    xlab = paste0(x, " (", unidades[x], ")"),
+    ylab = paste0(y, " (", unidades[y], ")"),
+    main = paste(x, "vs.", y)
+  )
+}
+```
