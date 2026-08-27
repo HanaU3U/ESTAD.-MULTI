@@ -380,7 +380,7 @@ Monto efectivamente pagado por el cliente cada mes, en NT\$.
 
 ## Credit -\> Preparación de variables
 
-Eliminacion de la variable **`ID`** para hacer el analisis exploratorio de los datos con la matriz de correlacion.
+Eliminacion de la variable **`ID`** para hacer el analisis exploratorio de los datos con la matriz de correlacion y exportacion del nuevo datos_credit.csv sin la columna **`ID`**
 
 ```{r preparacion-credito, include=FALSE}
 # Eliminar variable ID
@@ -390,6 +390,13 @@ datos_credit <- datos1 %>%
 # Matriz de correlación
 matriz_cor <- cor(datos_credit, use = "pairwise.complete.obs")
 round(matriz_cor, 2)
+
+# Exportar a CSV en la carpeta DATASET
+write.csv(
+  datos_credit,
+  here("DATASET", "datos_credit.csv"),
+  row.names = FALSE
+)
 ```
 
 ## Credit -\> Visualización — Matriz de correlación

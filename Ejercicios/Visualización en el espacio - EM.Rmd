@@ -28,14 +28,35 @@ knitr::opts_chunk$set(
 )
 
 library(dplyr)
+library(readxl)
 ```
 
+```{r paquetes, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl"
+)
+
+paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+
+# Esto es lo que faltaba: cargar los paquetes
+invisible(lapply(paquetes, library, character.only = TRUE))
+```
 
 # Tipos de dato del dataset de crédito (el que se decidió trabajar)
 
 En la exploración de datos, este fue uno de los datasets los cuales se auditó; y el que se usará. En dicha exploración, se notó como todas las columnas pertenecen a la categoría "numeric"; sin embargo el diccionario de datos indica que "SEX", "EDUCATION", "MARRIAGE", de "PAY_0" a "PAY_6" y "default payment next month" son en realidad variables categoricas.
 
 ```{r cambio de tipo de dato}
+datos_credit <- read_csv(here("DATASET", "datos_credit.csv"))
 datos_credit_visu <- datos_credit %>%
   select_all()
 
@@ -51,12 +72,13 @@ datos_credit_visu$PAY_5 <- as.factor(datos_credit_visu$PAY_5)
 datos_credit_visu$PAY_6 <- as.factor(datos_credit_visu$PAY_6)
 
 ```
-#Diagramas de Caja y Bigotes
 
+#Diagramas de Caja y Bigotes
 
 ##Comparación de todas las variables númericas
 
 ###Sin estandarizar
+
 ```{r cajas y bigotes de númericas}
 #solo de limit_bal
 boxplot(datos_credit_visu[, 1:1]/10000, las = 2, cex.axis = 0.7,
@@ -90,6 +112,7 @@ boxplot(datos_credit_visu[, c(1, c(5, 12:23))], las = 2, cex.axis = 0.7,
 ```
 
 ###Estandarizadas
+
 ```{r cajas y bigotes de númericas estandarizadas}
 #solo de limit_bal
 boxplot(scale(datos_credit_visu[, 1:1]), las = 2, cex.axis = 0.7,
@@ -170,6 +193,7 @@ boxplot(BILL_AMT6/10000 ~ SEX, data = datos_credit_visu,
         xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+
 ```{r cajas y bigotes de sex y pay_amt}
 boxplot(PAY_AMT1/10000 ~ SEX, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por sexo ",
@@ -211,7 +235,7 @@ boxplot(LIMIT_BAL/10000 ~ EDUCATION, data = datos_credit_visu, #CHICOS FAVOR MIR
         col = "grey90")
 ```
 
-```{r cajas y bigotes de education y AGE}
+```{r cajas y bigotes de education y AGE 2}
 boxplot(AGE ~ EDUCATION, data = datos_credit_visu,
         main = "Edad por nivel educativo",
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Edad (Años)",
@@ -249,6 +273,7 @@ boxplot(BILL_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+
 ```{r cajas y bigotes de education y pay_amt}
 boxplot(PAY_AMT1/10000 ~ EDUCATION, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por nivel educativo",
@@ -280,7 +305,6 @@ boxplot(PAY_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
-
 
 ##De "MARRIAGE"
 
@@ -444,14 +468,14 @@ boxplot(PAY_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
 
 ##De PAY_0
 
-```{r cajas y bigotes de PAY_0 y LIMIT_BAL}
+```{r cajas y bigotes de PAY_0 y LIMIT_BAL 3}
 boxplot(LIMIT_BAL/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
 
-```{r cajas y bigotes de default payment next month y AGE}
+```{r cajas y bigotes de default payment next month y AGE 1}
 boxplot(AGE ~ PAY_0, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
@@ -531,7 +555,7 @@ boxplot(LIMIT_BAL/10000 ~ PAY_2, data = datos_credit_visu,
         col = "grey90")
 ```
 
-```{r cajas y bigotes de default payment next month y AGE}
+```{r cajas y bigotes de default payment next month y AGE 3}
 boxplot(AGE ~ PAY_2, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
@@ -611,7 +635,7 @@ boxplot(LIMIT_BAL/10000 ~ PAY_3, data = datos_credit_visu,
         col = "grey90")
 ```
 
-```{r cajas y bigotes de default payment next month y AGE}
+```{r cajas y bigotes de default payment next month y AGE 4}
 boxplot(AGE ~ PAY_3, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
@@ -691,7 +715,7 @@ boxplot(LIMIT_BAL/10000 ~ PAY_4, data = datos_credit_visu,
         col = "grey90")
 ```
 
-```{r cajas y bigotes de default payment next month y AGE}
+```{r cajas y bigotes de default payment next month y AGE 5}
 boxplot(AGE ~ PAY_4, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
@@ -764,21 +788,21 @@ boxplot(PAY_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
 
 ##De PAY_5
 
-```{r cajas y bigotes de PAY_0 y LIMIT_BAL}
+```{r cajas y bigotes de PAY_0 y LIMIT_BAL 2}
 boxplot(LIMIT_BAL/10000 ~ PAY_5, data = datos_credit_visu,
         main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
 
-```{r cajas y bigotes de default payment next month y AGE}
+```{r cajas y bigotes de default payment next month y AGE 6}
 boxplot(AGE ~ PAY_5, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
 
-```{r cajas y bigotes de PAY_0 y bill_amt}
+```{r cajas y bigotes de PAY_0 y bill_amt 2}
 boxplot(BILL_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
         main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
@@ -810,7 +834,7 @@ boxplot(BILL_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
         col = "grey90")
 ```
 
-```{r cajas y bigotes de PAY_0 y pay_amt}
+```{r cajas y bigotes de PAY_0 y pay_amt 2}
 boxplot(PAY_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
@@ -843,6 +867,7 @@ boxplot(PAY_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
 ```
 
 ##De PAY_6
+
 ```{r cajas y bigotes de PAY_6 y LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
         main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
@@ -850,7 +875,7 @@ boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
         col = "grey90")
 ```
 
-```{r cajas y bigotes de default payment next month y AGE}
+```{r cajas y bigotes de default payment next month y AGE 2}
 boxplot(AGE ~ PAY_6, data = datos_credit_visu,
         main = "Edad por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
@@ -889,7 +914,7 @@ boxplot(BILL_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
         col = "grey90")
 ```
 
-```{r cajas y bigotes de PAY_6 y pay_amt}
+```{r cajas y bigotes de PAY_6 y pay_amt 2}
 boxplot(PAY_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
