@@ -278,11 +278,31 @@ datos1 <- read_excel(here("DATASET", "credit.xls"), skip = 1)
 # Verificar
 str(datos1)
 names(datos1)
+summary(datos1)
 ```
 
 ## Verificacion de los datos y Diccionario de Datos
 
 La estructura general del dataset credit.xls, tiene un total de 30.000 registros y 25 variables
+
+Las variables `EDUCATION` y `MARRIAGE` tienen categorías fuera de lo documentado oficialmente (0 en ambas, y además 5 y 6 en `EDUCATION`) — por lo cual se decidio recodificar estos valores no doucmentados como "otros/desconocido", ya que eliminarlos seria peor para los posteriores analisis, y debido a que igualmente estos casos estarian mas cubiertos bajo la etiqueta de otros ya definida por el diccionario de datos del dataset.
+
+```{r conversion de datos, include=FALSE}
+# Verificar frecuencias antes de la recodificación
+table(datos1$EDUCATION)
+table(datos1$MARRIAGE)
+
+# Recodificar categorías no documentadas como "otros"
+datos1 <- datos1 %>%
+  mutate(
+    EDUCATION = ifelse(EDUCATION %in% c(0, 5, 6), 4, EDUCATION),
+    MARRIAGE  = ifelse(MARRIAGE == 0, 3, MARRIAGE)
+  )
+
+# Verificar frecuencias después de la recodificación
+table(datos1$EDUCATION)
+table(datos1$MARRIAGE)
+```
 
 ### Identificador
 
@@ -310,6 +330,12 @@ La estructura general del dataset credit.xls, tiene un total de 30.000 registros
 Escala común para las siguientes 6 variables: -1 = Pagó puntualmente, 1 = Retraso de 1 mes, 2 = Retraso de 2 meses, ..., 9 = Retraso de 9 meses o más.
 
 Hay casos que también aparecen valores 0 y -2, no documentados oficialmente, asociados a "sin consumo" o "pago mínimo".
+
+| Valor | ¿Hubo deuda/consumo? | ¿Qué pasó con el pago?           |
+|-------|----------------------|----------------------------------|
+| -2    | No                   | No aplica — no hubo actividad    |
+| -1    | Sí                   | Pagó completo y a tiempo         |
+| 0     | Sí (o parcial)       | Pagó el mínimo, sin atraso pleno |
 
 - **`PAY_0`** — Tipo: **Numeric**\
   Estado de pago en septiembre de 2005 (mes más reciente).
