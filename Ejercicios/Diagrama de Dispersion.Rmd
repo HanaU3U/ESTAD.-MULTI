@@ -54,7 +54,7 @@ Antes de generar los gráficos, el dataset original de clientes de tarjeta de cr
 5. **Filtrado de valores no finitos**: para cada par `(x, y)` se eliminaron las filas donde `x` o `y` fueran `NA`, `NaN` o `Inf`, usando `is.finite()`. Cada gráfico puede así usar un subconjunto de filas ligeramente distinto.
 6. **No se modificó el dataset original** (`datos`): todas las transformaciones se aplicaron sobre copias locales (`datos_grafico`, `x_grafico`, `y_grafico`) dentro de cada iteración.
 
-Un diccionario de datos completo (significado de cada variable) está disponible en el archivo separado `diccionario_datos.md`.
+Un diccionario de datos completo (significado de cada variable) está disponible en el EDA Analisis Exploratoro de Datos Estadistica Multidimensional.Rmd
 
 ## Definición de variables, grupos y unidades
 
