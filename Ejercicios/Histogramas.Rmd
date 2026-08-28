@@ -1,0 +1,188 @@
+---
+title: "Análisis Exploratorio de Datos: Histogramas en Tarjetas de Crédito"
+subtitle: "Dataset: Default of Credit Card Clients (UCI)"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 11,
+  fig.height = 4,
+  fig.align = "center"
+)
+
+paquetes <- c("readr", "ggplot2", "patchwork", "scales", "dplyr", "here")
+
+paquetes_faltantes <- paquetes[
+  !paquetes %in% rownames(installed.packages())
+]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+
+# Cargar todas las librerías
+invisible(lapply(paquetes, library, character.only = TRUE))
+
+df <- read.csv(here("DATASET", "datos_credit.csv"))
+
+# Aseguramos que la variable objetivo sea un factor para las agrupaciones
+# 0 = Cliente al día / Sin incumplimiento, 1 = Cliente en mora / Incumplimiento
+if("default.payment.next.month" %in% names(df)){
+  df$default.payment.next.month <- as.factor(df$default.payment.next.month)
+}
+
+glimpse(df)
+
+```
+
+En este archivo de datos se ha omitido la columna ID, dado que corresponde a un índice sin valor analítico o predictivo para el estudio del comportamiento crediticio.
+
+Los histogramas se aplican exclusivamente sobre variables cuantitativas continuas o discretas de rango amplio para evaluar su distribución, asimetría y presencia de valores atípicos:
+
+- LIMIT_BAL (Monto del crédito otorgado): Permite observar la concentración de líneas de crédito y el sesgo hacia montos menores.
+
+- AGE (Edad): Permite describir la estructura demográfica de la cartera de clientes.
+
+- Historial de Facturación (BILL_AMT1, BILL_AMT2, BILL_AMT3, etc): Reflejan el nivel de endeudamiento mensual acumulado y permiten detectar saldos negativos (saldos a favor) o montos excesivos.
+
+- Historial de Pagos Anteriores (PAY_AMT1, PAY_AMT2, PAY_AMT3, etc): Evalúan la capacidad real de amortización del cliente. Tienen alta asimetría positiva con fuerte concentración en pagos mínimos o cero.
+
+## Histogramas univariados
+
+Se agrupan de 3 en 3 mediante la librería patchwork para facilitar la lectura visual y la comparación de magnitudes.
+
+- Por defecto ggplot usa bins en 30, es decir 30, el ancho y break se calcula a partir de ahi, todos los histogramas se manejan bajo estos 30 bins de ggplot
+
+```{r Perfil General}
+
+p1 <- ggplot(df, aes(x = LIMIT_BAL)) +
+  geom_histogram(bins = 30, fill = "#2b5c8f", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Cupo de Crédito", x = "LIMIT_BAL (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p2 <- ggplot(df, aes(x = AGE)) +
+  geom_histogram(bins = 25, fill = "#3b7a57", color = "white", alpha = 0.8) +
+  labs(title = "Edad", x = "Años", y = "Frecuencia") +
+  theme_minimal()
+
+p3 <- ggplot(df, aes(x = BILL_AMT1)) +
+  geom_histogram(bins = 30, fill = "#c0392b", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Septiembre", x = "BILL_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+# Visualización en bloque de 3
+p1 + p2 + p3
+
+```
+
+```{r Historial de Facturación Reciente}
+p4 <- ggplot(df, aes(x = BILL_AMT2)) +
+  geom_histogram(bins = 30, fill = "#d35400", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Agosto", x = "BILL_AMT2 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p5 <- ggplot(df, aes(x = BILL_AMT3)) +
+  geom_histogram(bins = 30, fill = "#e67e22", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Julio", x = "BILL_AMT3 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p6 <- ggplot(df, aes(x = BILL_AMT4)) +
+  geom_histogram(bins = 30, fill = "#f39c12", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Junio", x = "BILL_AMT4 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p4 + p5 + p6
+
+```
+
+```{r Montos Pagados con Escala Logarítmica}
+p7 <- ggplot(df, aes(x = PAY_AMT1 + 1)) +
+  geom_histogram(bins = 30, fill = "#16a085", color = "white", alpha = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Septiembre (Log)", x = "PAY_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p8 <- ggplot(df, aes(x = PAY_AMT2 + 1)) +
+  geom_histogram(bins = 30, fill = "#27ae60", color = "white", alpha = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Agosto (Log)", x = "PAY_AMT2 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p9 <- ggplot(df, aes(x = PAY_AMT3 + 1)) +
+  geom_histogram(bins = 30, fill = "#2ecc71", color = "white", alpha = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Julio (Log)", x = "PAY_AMT3 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p7 + p8 + p9
+```
+
+Dado que los pagos presentan un sesgo extremo a la derecha, se aplica transformación logarítmica ($\log_{10}(x + 1)$) para visualizar mejor la distribución, ya que cuando se hizo sin esto no se visualizaba ningun dato por la magnitud de los mismos, el + 1 se aplica para aquellos valores de 0 ya que el logaritmo de 0 no existe. 
+
+
+## Histogramas Segmentados por Comportamiento de Pago
+
+separamos el conjunto de datos en dos subgrupos independientes: clientes que cumplieron con su pago (`default = 0`) y clientes que entraron en mora (`default = 1`).
+
+```{r separar_grupos}
+# Dividimos el dataframe en dos subconjuntos simples
+df_no_mora <- subset(df, default.payment.next.month == 0)
+df_mora    <- subset(df, default.payment.next.month == 1)
+```
+
+```{r Clientes Sin Incumplimiento}
+h1_no <- ggplot(df_no_mora, aes(x = LIMIT_BAL)) +
+  geom_histogram(bins = 30, fill = "#2980b9", color = "white") +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Cupo (Sin Mora)", x = "LIMIT_BAL (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+h2_no <- ggplot(df_no_mora, aes(x = AGE)) +
+  geom_histogram(bins = 25, fill = "#2980b9", color = "white") +
+  labs(title = "Edad (Sin Mora)", x = "Años", y = "Frecuencia") +
+  theme_minimal()
+
+h3_no <- ggplot(df_no_mora, aes(x = PAY_AMT1 + 1)) +
+  geom_histogram(bins = 30, fill = "#2980b9", color = "white") +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Sept. Log (Sin Mora)", x = "PAY_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+# Mostrar bloque de 3
+h1_no + h2_no + h3_no
+```
+```{r Clientes Con Incumplimiento}
+h1_si <- ggplot(df_mora, aes(x = LIMIT_BAL)) +
+  geom_histogram(bins = 30, fill = "#c0392b", color = "white") +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Cupo (En Mora)", x = "LIMIT_BAL (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+h2_si <- ggplot(df_mora, aes(x = AGE)) +
+  geom_histogram(bins = 25, fill = "#c0392b", color = "white") +
+  labs(title = "Edad (En Mora)", x = "Años", y = "Frecuencia") +
+  theme_minimal()
+
+h3_si <- ggplot(df_mora, aes(x = PAY_AMT1 + 1)) +
+  geom_histogram(bins = 30, fill = "#c0392b", color = "white") +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Sept. Log (En Mora)", x = "PAY_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+# Mostrar bloque de 3
+h1_si + h2_si + h3_si
+```
