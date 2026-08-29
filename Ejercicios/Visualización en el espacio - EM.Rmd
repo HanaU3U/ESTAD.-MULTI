@@ -378,6 +378,8 @@ boxplot(BILL_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         col = "grey90")
 ```
 
+Los grupos 1, 2 y 3 son indistinguibles entre sí: medianas de 1 a 3, cajas de 0 a 6, bigotes superiores de 11 a 17. El nivel educativo no separa esta variable. El grupo 4 se ve distinto solo en apariencia: su caja es más ancha (llega a 11 en septiembre) y su bigote superior mucho más bajo (28 en septiembre, 20 en junio, 13 en abril), pero eso es efecto de tener pocas observaciones, no una diferencia real de comportamiento.
+
 Se cruzan `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados de septiembre a abril de 2005) contra `EDUCATION`, para comparar cuánto pagaron efectivamente los clientes según su nivel educativo, mes a mes.
 
 ```{r cajas y bigotes de education y pay_amt}
@@ -411,6 +413,9 @@ boxplot(PAY_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Todas las cajas colapsadas en cero en los cuatro grupos. Solo cambia la altura de la columna de atípicos: 1 y 2 llegan alto (168 y 122 en agosto, 90 en julio), 3 intermedio, 4 siempre el más bajo (21 en agosto, 12 en junio). Esa jerarquía refleja el número de observaciones de cada grupo, no la conducta de pago.
+
+**Finalmente, se concluye que el nivel educativo discrimina el cupo otorgado y la edad, pero no el saldo ni el pago.**
 
 ## De "MARRIAGE"
 
