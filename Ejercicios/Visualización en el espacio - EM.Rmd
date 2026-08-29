@@ -191,6 +191,14 @@ abline(h = 0, lty = 3)
 
 ```
 
+Tras la estandarización, las trece variables tienen ahora media 0 y desviación 1, así que las diferencias de magnitud absoluta que dominaban el gráfico anterior desaparecieron. Lo que queda visible es la **forma** de cada distribución: qué tan lejos se aleja cada variable de su propio centro, medida en sus propias unidades de dispersión.
+
+`LIMIT_BAL` y `AGE` son, en términos relativos, las variables mejor comportadas del conjunto: su dispersión total se explica bastante bien por su propia desviación estándar.
+
+Las seis variables `BILL_AMT` muestran cajas ya muy comprimidas contra el cero, con una nube densa de atípicos superiores que sube de forma continua hasta unas 10 desviaciones y máximos entre 13 y 15, salvo `BILL_AMT3`, que alcanza aproximadamente 23. A diferencia de las demás, estas sí presentan atípicos por debajo de la media (hasta cerca de -3 en varias y alrededor de -5 en `BILL_AMT6`), lo que corresponde a los saldos negativos que ya se veían en la escala original.
+
+Las seis `PAY_AMT` son el caso extremo y es aquí donde la estandarización revela algo que el gráfico sin transformar escondía. Sus cajas están literalmente colapsadas sobre la línea de cero, es decir, el 50 % central de las observaciones cabe en un intervalo mucho menor que una desviación estándar, mientras que los atípicos forman columnas verticales densas que llegan a 20 y 30 desviaciones y con puntos aislados. Un valor a 73 desviaciones de la media es un dato brutalmente extremo: significa que la desviación estándar de esa variable está siendo determinada casi por completo por un puñado de observaciones. También se nota que no hay nada por debajo de cero: como los pagos no pueden ser negativos y la media es pequeña, el piso de la distribución queda apenas unas décimas de desviación por debajo de la línea, y eso produce la franja recta que se ve en la base de las seis.
+
 ## De "SEX"
 
 En esta sección se cruza la variable categórica `SEX` (sexo del cliente, convertida a factor en el chunk de preparación de datos) contra cada una de las variables numéricas relevantes, para observar si existen diferencias en su distribución según el sexo del cliente.
@@ -204,7 +212,15 @@ boxplot(LIMIT_BAL/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
-Aquí se cruza `AGE` (edad) contra `SEX`, para observar si la distribución de edades varía entre hombres y mujeres.
+Lo primero que muestra el gráfico es que las dos distribuciones son muy parecidas entre sí. Ambas cajas ocupan prácticamente la misma franja del eje, ambos grupos parten de un mínimo cercano a 1 (NT$10.000) y los dos presentan la misma forma general: sesgo hacía la derecha, con la mediana desplazada hacia el borde inferior de la caja y una cola larga de valores atípicos por arriba. Es decir, el patrón de la variable `LIMIT_BAL` que ya se había descrito para el conjunto completo se reproduce casi idéntico dentro de cada categoría de sexo.
+
+Las diferencias que sí se aprecian son de posición y pequeñas. La mediana del grupo 1 (hombres) se ubica alrededor de 13 unidades de NT/$10.000, mientras que la del grupo 2 (mujeres) está cerca de 15. El primer cuartil también difiere: aproximadamente 5 en hombres frente a 7 en mujeres. El tercer cuartil, en cambio, es casi coincidente en ambos grupos, cerca de 24-25. El resultado es que el rango intercuartílico de las mujeres es levemente más estrecho (unas 18 unidades frente a 19-20 en hombres) y está desplazado un poco hacia arriba: **la mitad central de las clientas recibió cupos algo mayores que la mitad central de los clientes.**
+
+En los extremos la relación se invierte de forma leve. El bigote superior de los hombres alcanza aproximadamente 52 y el de las mujeres 49, y el máximo del conjunto de atípicos ordinarios está cerca de 80 en hombres y 78 en mujeres. Sin embargo, el punto extremo aislado en 100 (el cupo de NT$1.000.000, máximo de todo el conjunto de datos) pertenece al grupo de las mujeres. Ambos grupos tienen nubes densas de atípicos superiores de extensión comparable, y ninguno registra atípicos inferiores.
+
+La lectura de conjunto es que el solapamiento entre las dos distribuciones es casi total: la diferencia entre las medianas (unas 2 unidades, es decir NT$20.000) es muy pequeña frente al rango intercuartílico de cada grupo, que ronda las 19 unidades. Visualmente, el sexo no aparece como un factor que separe la distribución del cupo otorgado; lo que el gráfico muestra es un desplazamiento marginal hacia arriba en el grupo femenino, sobre todo en la mitad inferior de la distribución. _Hay que tener en cuenta que los tamaños de los dos grupos no son iguales en este conjunto de datos y el boxplot no los refleja._
+
+A continuación, se cruza `AGE` (edad) contra `SEX`, para observar si la distribución de edades varía entre hombres y mujeres.
 
 ```{r cajas y bigotes de sex y AGE}
 boxplot(AGE ~ SEX, data = datos_credit_visu,
