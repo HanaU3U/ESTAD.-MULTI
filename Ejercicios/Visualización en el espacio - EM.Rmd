@@ -145,14 +145,14 @@ boxplot(datos_credit_visu[, c(1, c(5, 12:23))], las = 2, cex.axis = 0.7,
 
 ```
 
-Aunque sea algo dificil apreciar detalles en estos boxplot, se pueden ver ciertos detalles interesantes. El primero de ellos es que **la media y la mediana son cercanas entre sí**; sin embargo, comparando con la información del **summary()**,los únicos casos en los que son cercanas es en LIMIT_BAL (relaticamente) y AGE, pudiendo significar que o los datos se distribuyen de manera simetrica (claramente no es el caso) o que los valores anomalos tiran la media.
+Aunque sea algo dificil apreciar detalles en estos boxplot, se pueden ver ciertos detalles interesantes. El primero de ellos es que **la media y la mediana son cercanas entre sí**; sin embargo, comparando con la información del **summary()**,los únicos casos en los que son cercanas es en LIMIT_BAL (relativamente) y AGE, y se ahondará en ello más adelante.
 Lo segundo es que **los campos BILL_AMT tienen comportamientos muy similares entre sí**; salvo un par de datos anomalos, entre otros detalles, el diagrama muestra que estas variables se comportan muy similar.
 Lo tercero es que en las variables **PAY_ATM, la media, la mediana, 1er y 3er se encuentran muy próximos entre sí y muy cerca del origen: la mayoría de los clientes realizó pagos de magnitud reducida en relación con el rango total de la variable**.
 Para finalizar, tomando el gráfico donde se comparan todas las variables juntas sin estandarizar y sin ´división entre 10000 aplicada, LIMIT_BAL es la única variable medianamente legible. AGE, por su parte, queda reducida a una línea plana sobre el eje.
 Del boxplot individual de estas últimas dos variables se pueden sacar ciertos detalles:
   1. La caja de LIMIT_BAL no es simétrica respecto de la mediana: la distancia entre Q1 y la mediana es menor que la distancia entre la mediana y Q3, y el bigote superior es considerablemente más extenso que el inferior. Esto configura un sesgo a la derecha.
   2. Al igual que en el caso de LIMIT_BAL, la distribución de AGE muestra un sesgo a la derecha, aunque de menor magnitud: la mediana se sitúa levemente por debajo del centro de la caja y el bigote superior es más largo que el inferior.
-_Cabe aclarar que todas estas variables a excepción de AGE manejan las mismas unidades base (NT/$), por lo que el siguiente paso se verá de una manera casi identica._
+_Cabe aclarar que todas estas variables a excepción de AGE manejan las mismas unidades base (NT/$), por lo que se esperaría que el output fuera casi identico._
 
 ### Estandarizadas
 
