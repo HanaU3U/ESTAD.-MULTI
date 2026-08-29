@@ -56,11 +56,23 @@ Los histogramas se aplican exclusivamente sobre variables cuantitativas continua
 
 - Historial de Pagos Anteriores (PAY_AMT1, PAY_AMT2, PAY_AMT3, etc): Evalúan la capacidad real de amortización del cliente. Tienen alta asimetría positiva con fuerte concentración en pagos mínimos o cero.
 
-## Histogramas univariados
+
+# Concluciones de los histogramas y kernels
+
+- en el limite de credito, tanto el histograma como la curva de densidad muestran una distribución con un fuerte sesgo a la derecha. La mayor masa de clientes se ubica en límites bajos (entre $20\text{k}$ y $100\text{k}\text{ NT\$}$).
+
+-  La mayor concentración de gente se encuentra entre los 25 y 35 años, a partir de los 40 años, la masa de clientes decae progresivamente hacia la cola derecha.
+
+- BILL_AMT1 a BILL_AMT4: un pico extremadamente alto muy cercano a 0NT$ y una cola derecha muy larga que se extiende hasta montos millonarios, Se observan valores ligeramente por debajo de cero, La mayoría de los clientes mantienen saldos de consumo bajos o liquidan su tarjeta dejándola en cero, los valores negativos podrian representar devoluciones de compras o saldos a favor por pagos superiores a la deuda.
+
+- PAY_AMT1 a PAY_AMT3: Una barra/cresta vertical muy alta que representa a miles de personas que realizaron un pago de 0NT en ese mes, una masa distribuida en forma centrada entre 1000 y 5000NT, con pequeñas caídas hacia pagos de más de 50000NT, sin la escala logarítmica, la distribución original colapsaba en una sola barra vertical, el logaritmo permitió separar dos poblaciones distintas los que no pagaron nada vs. la distribución real del valor pagado por quienes sí amortizaron deuda.
+
+# Histogramas univariados
 
 Se agrupan de 3 en 3 mediante la librería patchwork para facilitar la lectura visual y la comparación de magnitudes.
 
 - Por defecto ggplot usa bins en 30, es decir 30, el ancho y break se calcula a partir de ahi, todos los histogramas se manejan bajo estos 30 bins de ggplot
+- para para saber la amplitud h exacta es el rango sobre el bins
 
 ```{r Perfil General}
 
@@ -185,4 +197,79 @@ h3_si <- ggplot(df_mora, aes(x = PAY_AMT1 + 1)) +
 
 # Mostrar bloque de 3
 h1_si + h2_si + h3_si
+```
+
+# Densidad de kernel
+
+Variables Seleccionadas:
+- LIMIT_BAL (Monto del cupo crediticio): Variable continua monetaria. El kernel permite observar la forma suave de la masa monetaria asignada e identificar posibles concentraciones o picos en montos estándar
+- AGE (Edad): Variable cuantitativa con amplio recorrido de 21 a 79 años, la densidad muestra la curvatura demográfica.
+- BILL_AMT1 a BILL_AMT4 (Facturaciones mensuales): Variables continuas, la curva de densidad permite apreciar el comportamiento alrededor del cero
+- PAY_AMT1 a PAY_AMT3 (Montos amortizados): Variables monetarias continuas. Al aplicar una escala logarítmica ($\log_{10}(x+1)$), el kernel estima la distribución suave de los hábitos de pago
+
+Para el calculo del h ggplot usa automaticamente la regla de silverman
+
+``` {r perfil General}
+
+k1 <- ggplot(df, aes(x = LIMIT_BAL)) +
+  geom_density(fill = "#2b5c8f", color = "#1a365d", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Cupo de Crédito", x = "LIMIT_BAL (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k2 <- ggplot(df, aes(x = AGE)) +
+  geom_density(fill = "#3b7a57", color = "#1e4620", alpha = 0.5, linewidth = 0.8) +
+  labs(title = "Densidad: Edad", x = "Años", y = "Densidad") +
+  theme_minimal()
+
+k3 <- ggplot(df, aes(x = BILL_AMT1)) +
+  geom_density(fill = "#c0392b", color = "#78281f", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Sept.", x = "BILL_AMT1 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k1 + k2 + k3
+```
+
+``` {r historial de facturacion}
+k4 <- ggplot(df, aes(x = BILL_AMT2)) +
+  geom_density(fill = "#d35400", color = "#6e2c00", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Ago.", x = "BILL_AMT2 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k5 <- ggplot(df, aes(x = BILL_AMT3)) +
+  geom_density(fill = "#e67e22", color = "#7e4a15", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Jul.", x = "BILL_AMT3 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k6 <- ggplot(df, aes(x = BILL_AMT4)) +
+  geom_density(fill = "#f39c12", color = "#7d510c", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Jun.", x = "BILL_AMT4 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k4 + k5 + k6
+```
+``` {r Pagos con transformacion logaritmica}
+k7 <- ggplot(df, aes(x = PAY_AMT1 + 1)) +
+  geom_density(fill = "#16a085", color = "#0e6251", alpha = 0.5, linewidth = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Densidad: Pago Sept. (Log)", x = "PAY_AMT1 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k8 <- ggplot(df, aes(x = PAY_AMT2 + 1)) +
+  geom_density(fill = "#27ae60", color = "#145a32", alpha = 0.5, linewidth = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Densidad: Pago Ago. (Log)", x = "PAY_AMT2 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k9 <- ggplot(df, aes(x = PAY_AMT3 + 1)) +
+  geom_density(fill = "#2ecc71", color = "#196f3d", alpha = 0.5, linewidth = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Densidad: Pago Jul. (Log)", x = "PAY_AMT3 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k7 + k8 + k9
 ```

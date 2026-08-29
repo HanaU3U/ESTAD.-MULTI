@@ -1,6 +1,6 @@
 ---
 title: "Análisis exploratorio: Default de pago de tarjetas de crédito"
-subtitle: "Relaciones bivariadas agrupadas con interpretación"
+subtitle: "Relaciones bivariadas entre variables financieras y de comportamiento de pago"
 output:
   html_document:
     toc: true
@@ -47,24 +47,62 @@ names(datos) <- make.names(names(datos))
 
 Antes de generar los gráficos, el dataset original de clientes de tarjeta de crédito se sometió a las siguientes transformaciones:
 
-1. **Lectura del archivo Excel**: el dataset se lee con `read_excel()` (paquete `readxl`) desde `credit.xls`, usando `skip = 1` porque la primera fila del archivo original es una fila de encabezado auxiliar (`X1, X2, X3, ...`) y los nombres reales de las columnas están en la segunda fila. El resultado se convierte a `data.frame` estándar y se le aplica `make.names()` para que `default payment next month` (con espacios) se lea de forma consistente como `default.payment.next.month`.
-2. **Exclusión de variables de identificación y demográficas**: se excluyeron `ID`, `SEX`, `EDUCATION` y `MARRIAGE` del análisis bivariado. `ID` es solo un identificador, y `SEX`, `EDUCATION` y `MARRIAGE` son categóricas nominales sin orden natural.
-3. **Exclusión de las variables `PAY_` (estado de pago) y `default.payment.next.month`**: este análisis se enfoca en `LIMIT_BAL`, `AGE`, `BILL_AMT1-6` y `PAY_AMT1-6`.
-4. **Agrupación temática de pares**: los pares se organizaron en 8 grupos temáticos, cada uno con su interpretación correspondiente.
-5. **Filtrado de valores no finitos**: para cada par `(x, y)` se eliminaron las filas donde `x` o `y` fueran `NA`, `NaN` o `Inf`, usando `is.finite()`. Cada gráfico puede así usar un subconjunto de filas ligeramente distinto.
-6. **No se modificó el dataset original** (`datos`): todas las transformaciones se aplicaron sobre copias locales (`datos_grafico`, `x_grafico`, `y_grafico`) dentro de cada iteración.
+1.  **Exclusión de variables de identificación y demográficas**: se excluyeron del análisis bivariado las columnas `ID`, `SEX`, `EDUCATION` y `MARRIAGE`. `ID` es solo un identificador sin valor analítico, y `SEX`, `EDUCATION` y `MARRIAGE` son variables categóricas nominales que no se incluyen en este set de gráficos de dispersión (pensadas para variables cuantitativas/ordinales).
+2.  **Generación exhaustiva de pares sin repetición**: los pares de variables a graficar se generaron programáticamente con `combn(variables, 2)` sobre la lista de variables restantes, en el orden `LIMIT_BAL, AGE, PAY_0, PAY_2, ..., PAY_6, BILL_AMT1, ..., BILL_AMT6, PAY_AMT1, ..., PAY_AMT6, default payment next month`. Esto produce cada combinación una sola vez: `LIMIT_BAL` se grafica contra todas las demás, luego `AGE` contra todas las que quedan (omitiendo `LIMIT_BAL`, ya cubierta), y así sucesivamente.
+3.  **Filtrado de valores no finitos**: para cada par `(x, y)` se eliminaron las filas donde `x` o `y` fueran `NA`, `NaN` o `Inf`, usando `is.finite()`. Cada gráfico puede así usar un subconjunto de filas ligeramente distinto.
+4.  **Lectura del archivo Excel**: el dataset se lee con `read_excel()` (paquete `readxl`) desde `credit.xls`, usando `skip = 1` porque la primera fila del archivo original es una fila de encabezado auxiliar (`X1, X2, X3, ...`) y los nombres reales de las columnas están en la segunda fila. El resultado se convierte a `data.frame` estándar y se le aplica `make.names()` para que `default payment next month` (con espacios) se lea de forma consistente como `default.payment.next.month`.
+5.  **No se modificó el dataset original** (`datos`): todas las transformaciones se aplicaron sobre copias locales (`datos_grafico`, `x_grafico`, `y_grafico`) dentro de cada iteración.
+6.  **Unidades y escalas**: las variables `PAY_0` a `PAY_6` son categóricas ordinales (estado de pago, escala -1 a 9) y `default.payment.next.month` es binaria (0/1); se etiquetan como tal en los ejes en lugar de asumir una unidad monetaria o temporal.
 
-Un diccionario de datos completo (significado de cada variable) está disponible en el EDA Analisis Exploratoro de Datos Estadistica Multidimensional.Rmd
+Las variables incluidas en el dataset original son:
 
-## Definición de variables, grupos y unidades
+```{r nombres_variables, echo=TRUE}
+names(datos)
+```
 
-```{r variables_unidades}
-bill_vars <- c("BILL_AMT1", "BILL_AMT2", "BILL_AMT3", "BILL_AMT4", "BILL_AMT5", "BILL_AMT6")
-payamt_vars <- c("PAY_AMT1", "PAY_AMT2", "PAY_AMT3", "PAY_AMT4", "PAY_AMT5", "PAY_AMT6")
+## Definición de variables, pares y unidades
+
+```{r pares_unidades}
+# Variables cuantitativas/ordinales a incluir en el análisis
+# (se excluyen ID, SEX, EDUCATION, MARRIAGE)
+variables <- c(
+  "LIMIT_BAL",
+  "AGE",
+  "PAY_0",
+  "PAY_2",
+  "PAY_3",
+  "PAY_4",
+  "PAY_5",
+  "PAY_6",
+  "BILL_AMT1",
+  "BILL_AMT2",
+  "BILL_AMT3",
+  "BILL_AMT4",
+  "BILL_AMT5",
+  "BILL_AMT6",
+  "PAY_AMT1",
+  "PAY_AMT2",
+  "PAY_AMT3",
+  "PAY_AMT4",
+  "PAY_AMT5",
+  "PAY_AMT6",
+  "default.payment.next.month"
+)
+
+# Todas las combinaciones únicas de a 2 (sin repetir pares), en el
+# orden: LIMIT_BAL vs. el resto, luego AGE vs. el resto restante, etc.
+pares_matriz <- combn(variables, 2)
+pares <- lapply(seq_len(ncol(pares_matriz)), function(i) pares_matriz[, i])
 
 unidades <- c(
   LIMIT_BAL = "NT dólares",
   AGE = "años",
+  PAY_0 = "categoría (mes de atraso)",
+  PAY_2 = "categoría (mes de atraso)",
+  PAY_3 = "categoría (mes de atraso)",
+  PAY_4 = "categoría (mes de atraso)",
+  PAY_5 = "categoría (mes de atraso)",
+  PAY_6 = "categoría (mes de atraso)",
   BILL_AMT1 = "NT dólares",
   BILL_AMT2 = "NT dólares",
   BILL_AMT3 = "NT dólares",
@@ -76,205 +114,40 @@ unidades <- c(
   PAY_AMT3 = "NT dólares",
   PAY_AMT4 = "NT dólares",
   PAY_AMT5 = "NT dólares",
-  PAY_AMT6 = "NT dólares"
-)
-
-# --- Funciones auxiliares para armar los pares de cada grupo ---
-
-# Una variable fija contra todas las de una familia
-uno_contra_familia <- function(x, familia) {
-  lapply(familia, function(y) c(x, y))
-}
-
-# Producto cruzado completo entre dos familias distintas
-cruce_familias <- function(familia_x, familia_y) {
-  pares <- list()
-  for (x in familia_x) {
-    for (y in familia_y) {
-      pares[[length(pares) + 1]] <- c(x, y)
-    }
-  }
-  pares
-}
-
-# Todas las combinaciones únicas de a 2 dentro de una misma familia
-combinaciones_familia <- function(familia) {
-  m <- combn(familia, 2)
-  lapply(seq_len(ncol(m)), function(i) m[, i])
-}
-
-# Pares secuenciales tipo combn, pero solo arrancando en ciertas
-# posiciones de la familia (usado para partir BILL_AMT vs BILL_AMT
-# en dos grupos: 1-2 y 3-4-5)
-secuencial_desde <- function(familia, posiciones_inicio) {
-  pares <- list()
-  n <- length(familia)
-  for (i in posiciones_inicio) {
-    if (i < n) {
-      for (j in (i + 1):n) {
-        pares[[length(pares) + 1]] <- c(familia[i], familia[j])
-      }
-    }
-  }
-  pares
-}
-
-# --- Definición de los 8 grupos, con su interpretación ---
-
-grupos <- list(
-  list(
-    titulo = "LIMIT_BAL vs. AGE",
-    pares = list(c("LIMIT_BAL", "AGE")),
-    interpretacion = r"(El gráfico representa la relación entre el **límite de crédito otorgado (`LIMIT_BAL`)** y la **edad de los clientes (`AGE`)**.
-
-Se observa una ligera tendencia creciente del límite de crédito entre los 20 y 30 años. Entre aproximadamente los 30 y 40 años se presenta una mayor concentración de los valores, mientras que a partir de edades superiores se observa una menor presencia de límites de crédito elevados.
-
-La mayoría de las observaciones se encuentra por debajo de **NT$500.000**, mientras que los valores superiores a este monto presentan una menor frecuencia.
-
-También se identifican **franjas horizontales** en determinados valores de `LIMIT_BAL`, lo que evidencia que los límites de crédito se concentran en montos específicos y no se distribuyen de manera completamente continua.
-
-En términos generales, los valores de límite de crédito más elevados se concentran principalmente en los grupos de edad intermedios, aunque existe una amplia dispersión dentro de cada rango de edad.)"
-  ),
-  list(
-    titulo = "LIMIT_BAL vs. BILL_AMT",
-    pares = uno_contra_familia("LIMIT_BAL", bill_vars),
-    interpretacion = r"(### Montos de los estados de cuenta de septiembre a abril
-
-Este conjunto de gráficos representa la relación entre el **límite de crédito (`LIMIT_BAL`)** y los **montos de los estados de cuenta (`BILL_AMT`)** correspondientes a los diferentes meses.
-
-Los gráficos presentan un comportamiento generalmente **creciente**, observándose que los valores de `BILL_AMT` tienden a incrementarse a medida que aumenta `LIMIT_BAL`.
-
-La mayoría de los puntos se encuentra por debajo de la diagonal correspondiente a una relación **1:1**, lo que indica que los montos registrados en los estados de cuenta son, en la mayoría de las observaciones, inferiores al límite de crédito.
-
-También se observa una franja horizontal alrededor de **`BILL_AMT = 0`**, presente transversalmente para diferentes valores de `LIMIT_BAL`. Esto evidencia la existencia de observaciones con estados de cuenta de valor cero independientemente del límite de crédito.
-
-Por otra parte, alrededor de **NT$500.000** disminuye la concentración de observaciones, debido a la menor presencia de clientes con límites superiores a este valor. Sin embargo, las observaciones existentes por encima de dicho umbral mantienen el comportamiento general observado en el resto de los datos.)"
-  ),
-  list(
-    titulo = "LIMIT_BAL vs. PAY_AMT",
-    pares = uno_contra_familia("LIMIT_BAL", payamt_vars),
-    interpretacion = r"(### Pagos realizados de septiembre a abril
-
-Este conjunto de gráficos representa la relación entre el **límite de crédito (`LIMIT_BAL`)** y los **montos de los pagos realizados (`PAY_AMT`)** durante los diferentes meses.
-
-Se observa una alta dispersión de los valores de `PAY_AMT` para los diferentes niveles de `LIMIT_BAL`. Aunque los límites de crédito más elevados presentan algunos pagos de mayor magnitud, no se observa una relación creciente tan marcada como la identificada entre `LIMIT_BAL` y `BILL_AMT`.
-
-Una proporción considerable de las observaciones se concentra en valores bajos de `PAY_AMT`, incluyendo una importante cantidad de valores cercanos a cero.
-
-Al comparar estos gráficos con los correspondientes a `LIMIT_BAL` vs. `BILL_AMT`, se observa que los montos de pago presentan una distribución más concentrada en valores bajos, mientras que los montos de los estados de cuenta presentan una mayor dispersión.
-
-En general, los pagos presentan una relación menos pronunciada con el límite de crédito que los montos registrados en los estados de cuenta.)"
-  ),
-  list(
-    titulo = "AGE vs. PAY_AMT y BILL_AMT",
-    pares = c(
-      uno_contra_familia("AGE", payamt_vars),
-      uno_contra_familia("AGE", bill_vars)
-    ),
-    interpretacion = r"(Este grupo representa la relación entre la **edad de los clientes (`AGE`)** y los **montos de pago (`PAY_AMT`)**, así como entre la edad y los **montos de los estados de cuenta (`BILL_AMT`)**.
-
-En los gráficos de `AGE` vs. `PAY_AMT` se observa una alta concentración de los valores de pago en rangos bajos, con una cantidad relativamente reducida de observaciones en valores elevados.
-
-En los gráficos de `AGE` vs. `BILL_AMT` se presenta una mayor dispersión vertical y una presencia más significativa de valores elevados. La mayor concentración de estos valores se encuentra aproximadamente entre los 20 y 50 años, con una presencia notable de montos elevados alrededor de los 30 y 40 años.
-
-También se aprecia una diferencia importante entre las escalas de ambas variables. Los valores de `PAY_AMT` presentan una concentración mucho mayor alrededor de los valores bajos, mientras que `BILL_AMT` presenta una dispersión más amplia y valores máximos considerablemente superiores.
-
-En general, los gráficos muestran una mayor variabilidad en los montos de los estados de cuenta que en los montos de los pagos realizados.)"
-  ),
-  list(
-    titulo = "BILL_AMT1 y BILL_AMT2 vs. BILL_AMT",
-    pares = secuencial_desde(bill_vars, c(1, 2)),
-    interpretacion = r"(Este conjunto de gráficos representa la relación entre los estados de cuenta correspondientes a **septiembre (`BILL_AMT1`) y agosto (`BILL_AMT2`)** y los estados de cuenta registrados en los demás períodos.
-
-Los gráficos presentan un **comportamiento creciente**, evidenciando una asociación positiva entre los montos registrados en diferentes períodos.
-
-La mayor variación se concentra en los valores cercanos a cero, mientras que los valores más elevados presentan una distribución progresivamente creciente.
-
-En varios de los gráficos, la relación se encuentra por debajo de una correspondencia **1:1**, presentando una pendiente relativamente menor. Esto indica que los valores correspondientes a septiembre y agosto se encuentran, en general, por debajo de los valores de los períodos utilizados como comparación.
-
-En conjunto, se observa una relación consistente entre los montos de los estados de cuenta de los diferentes períodos, aunque existen diferencias en la magnitud de los valores registrados en cada mes.)"
-  ),
-  list(
-    titulo = "BILL_AMT3, BILL_AMT4 y BILL_AMT5 vs. BILL_AMT",
-    pares = secuencial_desde(bill_vars, c(3, 4, 5)),
-    interpretacion = r"(Este conjunto de gráficos representa la relación entre los estados de cuenta correspondientes a otros períodos del conjunto de datos, específicamente `BILL_AMT3`, `BILL_AMT4` y `BILL_AMT5`, y los valores registrados en los demás meses.
-
-Al igual que en el Grupo 5, se observa un **comportamiento creciente** entre los diferentes montos de los estados de cuenta.
-
-Sin embargo, en este grupo algunas relaciones presentan una pendiente más pronunciada y una distribución más cercana a una correspondencia proporcional entre los períodos comparados.
-
-También se observa una mayor concentración de los puntos alrededor de la tendencia creciente, especialmente al comparar períodos cercanos entre sí.
-
-Las comparaciones entre meses consecutivos muestran diferencias en la magnitud de los montos, aunque mantienen una tendencia general similar.
-
-En términos generales, los diferentes `BILL_AMT` presentan un comportamiento temporal consistente, caracterizado por asociaciones positivas entre los montos registrados en los distintos períodos.)"
-  ),
-  list(
-    titulo = "BILL_AMT vs. PAY_AMT",
-    pares = cruce_familias(bill_vars, payamt_vars),
-    interpretacion = r"(Este conjunto de gráficos representa la relación entre los **montos de los estados de cuenta (`BILL_AMT`)** y los **montos de los pagos realizados (`PAY_AMT`)** en los diferentes períodos.
-
-En general, los gráficos presentan una **alta dispersión** de los valores de `PAY_AMT` respecto a `BILL_AMT`. No se observa una correspondencia uniforme entre ambas variables, especialmente en los valores elevados de los estados de cuenta.
-
-En varias de las comparaciones, los pagos permanecen concentrados en valores relativamente bajos incluso cuando los montos de los estados de cuenta presentan valores considerablemente superiores.
-
-Se identifican algunas combinaciones, como `BILL_AMT2` vs. `PAY_AMT1`, `BILL_AMT3` vs. `PAY_AMT1`, `BILL_AMT4` vs. `PAY_AMT3`, `BILL_AMT5` vs. `PAY_AMT4`, `BILL_AMT5` vs. `PAY_AMT6` y `BILL_AMT3` vs. `PAY_AMT2`, en las que se aprecia una mayor proximidad entre los valores de ambas variables.
-
-Sin embargo, estas relaciones se presentan entre períodos diferentes, por lo que se observa una variación en la correspondencia entre el monto registrado en el estado de cuenta y el pago realizado.
-
-En general, los gráficos muestran una **mayor dispersión entre `BILL_AMT` y `PAY_AMT`** en comparación con la relación observada entre los diferentes períodos de `BILL_AMT`.)"
-  ),
-  list(
-    titulo = "PAY_AMT vs. PAY_AMT",
-    pares = combinaciones_familia(payamt_vars),
-    interpretacion = r"(Este conjunto de gráficos representa la comparación entre los **montos de pago (`PAY_AMT`) de diferentes períodos**, permitiendo observar su comportamiento entre meses.
-
-Los gráficos presentan una concentración considerable de observaciones en valores bajos y una menor cantidad de puntos en valores elevados.
-
-Entre algunos períodos se observa una mayor concentración alrededor de una tendencia definida, mientras que en otras comparaciones existe una dispersión más amplia.
-
-También se observan diferencias en la distribución de los pagos entre los distintos períodos, con algunos meses presentando una mayor presencia de valores elevados y otros concentrando sus observaciones cerca de cero.
-
-En general, las comparaciones entre los diferentes `PAY_AMT` muestran que existe una **variabilidad considerable en los montos de pago entre períodos**, aunque se mantienen patrones similares de concentración en los valores bajos.)"
-  )
+  PAY_AMT6 = "NT dólares",
+  default.payment.next.month = "binario (0 = no, 1 = sí)"
 )
 ```
 
-## Gráficos agrupados
+## Gráficos de dispersión por par de variables
 
-```{r graficos_agrupados, results="asis"}
-for (i in seq_along(grupos)) {
+A continuación se muestran los `r length(pares)` gráficos de dispersión (`combn(21, 2)` = 210 pares), uno por cada combinación única de las variables listadas arriba, excluyendo `ID`, `SEX`, `EDUCATION` y `MARRIAGE`. Cada gráfico aplica el filtrado de valores no finitos descrito en la sección de manipulación de datos.
 
-  grupo <- grupos[[i]]
+```{r graficos, results="asis"}
+for (par in pares) {
 
-  cat(paste0("\n## GRUPO ", i, ": ", grupo$titulo, "\n\n"))
+  x <- par[1]
+  y <- par[2]
 
-  for (par in grupo$pares) {
+  cat(paste0("\n### ", x, " vs. ", y, "\n"))
 
-    x <- par[1]
-    y <- par[2]
+  # Eliminar valores NA, NaN e Inf
+  datos_grafico <- datos[
+    is.finite(datos[[x]]) &
+      is.finite(datos[[y]]),
+  ]
 
-    datos_grafico <- datos[
-      is.finite(datos[[x]]) &
-        is.finite(datos[[y]]),
-    ]
+  x_grafico <- datos_grafico[[x]]
+  y_grafico <- datos_grafico[[y]]
 
-    x_grafico <- datos_grafico[[x]]
-    y_grafico <- datos_grafico[[y]]
-
-    plot(
-      x_grafico,
-      y_grafico,
-      pch = 19,
-      col = rgb(0, 0, 0, 0.45),
-      xlab = paste0(x, " (", unidades[x], ")"),
-      ylab = paste0(y, " (", unidades[y], ")"),
-      main = paste(x, "vs.", y)
-    )
-  }
-
-  cat("\n\n**Interpretación:**\n\n")
-  cat(grupo$interpretacion, "\n\n")
-  cat("\n\n---\n\n")
+  plot(
+    x_grafico,
+    y_grafico,
+    pch = 19,
+    col = rgb(0, 0, 0, 0.45),
+    xlab = paste0(x, " (", unidades[x], ")"),
+    ylab = paste0(y, " (", unidades[y], ")"),
+    main = paste(x, "vs.", y)
+  )
 }
 ```
