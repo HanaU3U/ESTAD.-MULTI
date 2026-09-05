@@ -1,0 +1,113 @@
+---
+title: "Preparacion clase 5 de Septiembre - EM"
+author: |
+  Juan Pablo Mosquera Marin   - 20221020026
+  Ana Laura Morcote Chacon    - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño     - 20221020057
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+---
+```{r paquetes, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl"
+)
+paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+invisible(lapply(paquetes, library, character.only = TRUE))
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 6
+)
+library(dplyr)
+library(readxl)
+```
+Las variables realmente numéricas son:
+- LIMIT_BAL
+- AGE
+- BILL_AMT1, BILL_AMT2, BILL_AMT3, BILL_AMT4, BILL_AMT5, BILL_AMT6
+- PAY_AMT1, PAY_AMT2, PAY_AMT3, PAY_AMT4, PAY_AMT5, PAY_AMT6
+
+```{r}
+datos_credit <- read_csv(here("DATASET", "datos_credit.csv"))
+
+variables_numericas <- c(
+  "LIMIT_BAL", "AGE",
+  paste0("BILL_AMT", 1:6),
+  paste0("PAY_AMT", 1:6)
+)
+
+datos_numericos <- datos_credit %>%
+  select(all_of(variables_numericas))
+```
+
+Se dejan fuera:
+- ID: es un identificador, no una medida numérica.
+- SEX, EDUCATION, MARRIAGE: categorías codificadas con números.
+- PAY_0, PAY_2, ..., PAY_6: variables categóricas ordinales de estado/retraso de pago; aunque sus valores sean números, representan niveles de atraso, no montos.
+- default payment next month: variable binaria/categórica.
+
+```{r}
+revisar <- function(d, quitar = character(0)) {
+  X <- d[, sapply(d, is.numeric), drop = FALSE]
+  X <- X[, !(names(X) %in% quitar), drop = FALSE]
+
+  n <- nrow(X); p <- ncol(X)
+
+  cat("===== Revisión del dataset =====\n")
+  cat("1. variables numéricas usadas:", p, "\n   ", paste(names(X), collapse = ", "), "\n\n")
+  cat("2. n =", n, "| p =", p, "| n/p =", round(n/p, 1),
+      ifelse(n/p >= 10, " OK", ifelse(n/p >= 5, " justo", " PROBLEMA")), "\n\n")
+  cat("3. faltantes:", round(100*mean(is.na(X)), 1), "% | filas completas:",
+      sum(complete.cases(X)), ifelse(sum(complete.cases(X)) >= 100, " OK", " PROBLEMA"), "\n\n")
+
+  R <- cor(X, use = "pairwise.complete.obs"); diag(R) <- NA
+  rmax <- max(abs(R), na.rm = TRUE)
+  cat("4. |r| máxima:", round(rmax, 2),
+      ifelse(rmax >= 0.5, " OK", ifelse(rmax >= 0.3, " justo", " PROBLEMA")), "\n")
+  cat("   pares con |r|>0.5:", sum(abs(R) > 0.5, na.rm = TRUE)/2, "\n\n")
+
+  S <- cov(X, use = "pairwise.complete.obs")
+  vp <- eigen(S)$values
+  cond <- max(vp)/min(vp)
+  cat("5. número de condición:", format(cond, digits = 3),
+      ifelse(cond < 1000, " OK", ifelse(cond < 1e5, " revisar", " REDUNDANCIA")), "\n")
+  if (cond >= 1000) {
+    R2 <- abs(cor(X, use = "pairwise.complete.obs")); diag(R2) <- 0
+    par <- which(R2 > 0.95, arr.ind = TRUE)
+    if (nrow(par) > 0) {
+      cat("   pares casi idénticos:\n")
+      for (i in seq_len(nrow(par))) if (par[i,1] < par[i,2])
+        cat("    ", names(X)[par[i,1]], "<->", names(X)[par[i,2]], "\n")
+    }
+  }
+  invisible(NULL)
+}
+
+revisar(datos_numericos)
+```
+
+
