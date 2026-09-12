@@ -1,0 +1,2138 @@
+---
+title: "RevisionCompleta"
+author: |
+  Juan Pablo Mosquera Marin   - 20221020026
+  Ana Laura Morcote Chacon    - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño     - 20221020057
+date: "2026-09-05"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+---
+
+```{r global-setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 6
+)
+```
+
+Este documento consolida, en un único archivo R Markdown, los cuatro análisis desarrollados para el curso de Estadística Multidimensional sobre el dataset *Default of Credit Card Clients* (UCI): la carga y análisis de correlación inicial, los histogramas y densidades, los diagramas de dispersión bivariados, y las visualizaciones en el espacio mediante diagramas de caja y bigotes.
+
+
+# 1. Análisis Exploratorio de Datos y Estadística Multidimensional (Carga y Correlación)
+
+```{r eda_setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 6
+)
+```
+
+## Instalación de paquetes
+
+> Verificacion si los paquetas estan intalados, los que no esten se proceden a instalar.
+
+```{r eda_instalacion, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl"
+)
+
+paquetes_faltantes <- paquetes[
+  !paquetes %in% rownames(installed.packages())
+]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+```
+
+## Carga de librerías y datos
+
+### Librerías iniciales
+
+```{r eda_librerias-iniciales}
+library(readr)
+library(here)
+```
+
+### Wealth -\> Lectura del primer dataset opcionado
+
+Se ve que el dataset de `wealth_accumulation_master.csv`, tiene un total de 55.000 registros y 25 varables. Las cuales estan divididas por el momento en cuatro variables categoricas de tipo character y 21 variables de tipo numeric, con as su vez un total de cero nulos en todas las variables.
+
+```{r eda_carga-datos}
+datos <- read_csv(here("DATASET", "wealth_accumulation_master.csv"))
+spec(datos)
+dim(datos)
+str(datos)
+colSums(is.na(datos))
+```
+
+### Wealth -\> Resumen estadístico
+
+De `wealth_accumulation_master.csv`
+
+```{r eda_resumen-datos}
+summary(datos)
+```
+
+### Wealth -\> Exploración de variables categóricas
+
+De `wealth_accumulation_master.csv`
+
+```{r eda_valores-unicos}
+unique(datos$education)
+unique(datos$parental_wealth_bracket)
+unique(datos$region_cost_of_living)
+```
+
+## Wealth -\> Traducción y recodificación de variables
+
+Se renombran las columnas al español y se recodifican las categorías de las variables `educacion`, `nivel_riqueza_parental` y `costo_vida_region`.
+
+```{r eda_traduccion-datos}
+library(dplyr)
+
+datos_spa <- datos %>%
+  rename(
+    id_persona                    = person_id,
+    edad                          = age,
+    anios_trabajando              = years_working,
+    educacion                     = education,
+    ingreso_anual                 = annual_income,
+    nivel_riqueza_parental        = parental_wealth_bracket,
+    herencia_recibida             = inheritance_received,
+    propietario_vivienda          = homeowner,
+    costo_vida_region             = region_cost_of_living,
+    dependientes                  = dependents,
+    shock_salud                   = health_shock,
+    tasa_ahorro                   = savings_rate,
+    invierte_en_mercados          = invests_in_markets,
+    pct_portafolio_acciones       = portfolio_equity_pct,
+    puntaje_diversificacion       = diversification_score,
+    alfabetizacion_financiera     = financial_literacy,
+    consistencia_presupuesto      = budgeting_consistency,
+    gasto_impulsivo               = impulse_spending,
+    planificacion_futuro          = plans_ahead,
+    tiene_deuda_alto_interes      = carries_high_interest_debt,
+    cuenta_retiro                 = retirement_account,
+    edad_inicio_inversion         = started_investing_age,
+    anios_invirtiendo             = years_investing,
+    patrimonio_neto               = net_worth,
+    independiente_financieramente = financially_independent
+  ) %>%
+  mutate(
+    educacion = recode(educacion,
+                       "high_school"  = "secundaria",
+                       "some_college" = "universidad_incompleta",
+                       "bachelors"    = "licenciatura",
+                       "graduate"     = "posgrado"
+    ),
+    nivel_riqueza_parental = recode(nivel_riqueza_parental,
+                                    "bottom"    = "bajo",
+                                    "lower_mid" = "medio_bajo",
+                                    "middle"    = "medio",
+                                    "upper_mid" = "medio_alto",
+                                    "top"       = "alto"
+    ),
+    costo_vida_region = recode(costo_vida_region,
+                               "low"    = "bajo",
+                               "medium" = "medio",
+                               "high"   = "alto"
+    )
+  )
+```
+
+### Wealth -\> Verificación de la traducción
+
+Se verifica que la traduccion se haya hecho correctamente
+
+```{r eda_verificacion-traduccion}
+str(datos_spa)
+colSums(is.na(datos_spa))
+unique(datos_spa$educacion)
+unique(datos_spa$nivel_riqueza_parental)
+unique(datos_spa$costo_vida_region)
+```
+
+## Wealth -\> Análisis de correlación — Dataset de riqueza
+
+Conversion de variables categoricas a numericas para la matriz de correlacion y eliminacion de la variable `id_persona`. debido a que no aporta al ser el identificador unico de cada registro
+
+```{r eda_seleccion-numericas}
+library(dplyr)
+
+# Codificar las variables categóricas ordinales como numéricas
+datos_numericos <- datos_spa %>%
+  mutate(
+    educacion = recode(educacion,
+                       "secundaria"             = 1,
+                       "universidad_incompleta" = 2,
+                       "licenciatura"           = 3,
+                       "posgrado"               = 4
+    ),
+    nivel_riqueza_parental = recode(nivel_riqueza_parental,
+                                    "bajo"       = 1,
+                                    "medio_bajo" = 2,
+                                    "medio"      = 3,
+                                    "medio_alto" = 4,
+                                    "alto"       = 5
+    ),
+    costo_vida_region = recode(costo_vida_region,
+                               "bajo"  = 1,
+                               "medio" = 2,
+                               "alto"  = 3
+    )
+  ) %>%
+  select(-id_persona) %>%
+  select(where(is.numeric))
+
+# Verificar qué variables quedaron
+names(datos_numericos)
+dim(datos_numericos)
+```
+
+### Wealth -\> Matriz de correlación (completa)
+
+```{r eda_matriz-correlacion, include=FALSE}
+# Matriz de correlación
+matriz_cor <- cor(datos_numericos)
+round(matriz_cor, 2)
+```
+
+### Wealth -\> Visualización — Matriz de correlación completa
+
+Al tener l;a visualizacion de de la Matriz de correlación, se puede ver claramente que la gran mayoria de las varables del dataset `wealth_accumulation_master.csv` practicamente no tienen nula relacion entre si, a excepcion de algunas variables como: `edad` con `anios_trabajando` y `anios_invertiendo`, a su vez `invierte_en_mercados` con `pct_portafolio_acciones`.
+
+Por lo cual se excluiran las variables `anios_trabajando`, `anios_invirtiendo` y `pct_portafolio_acciones` para reducir redundancia entre variables altamente correlacionadas y ver si con este cambio habra un cambio en la correlacion de la variables por si eran estas tres las que se llevaban todo el peso de las demas.
+
+```{r eda_plot-correlacion-completa, fig.cap="Matriz de correlación de todas las variables numéricas"}
+library(corrplot)
+
+corrplot(matriz_cor, 
+         method = "color", 
+         type = "upper", 
+         tl.col = "black", 
+         tl.srt = 45,
+         addCoef.col = "black",
+         number.cex = 0.6,
+         tl.cex = 0.7)
+```
+
+### Wealth -\> Matriz de correlación (variables filtradas)
+
+```{r eda_matriz-correlacion-filtrada, include=FALSE}
+library(dplyr)
+library(corrplot)
+
+# Nueva selección de variables numéricas, sin las 3 indicadas
+datos_numericos2 <- datos_numericos %>%
+  select(-anios_trabajando, -anios_invirtiendo, -pct_portafolio_acciones)
+
+# Verificar
+names(datos_numericos2)
+dim(datos_numericos2)
+
+# Nueva matriz de correlación
+matriz_cor2 <- cor(datos_numericos2)
+round(matriz_cor2, 2)
+```
+
+### Wealth -\> Visualización — Matriz de correlación filtrada
+
+Y como se puede ver en la siguiente matriz, la exclusion de las variables `anios_trabajando`, `anios_invirtiendo` y `pct_portafolio_acciones` lo unico que logro es que haya menos correlacion general entra las variables restantes, por lo cual se toma la decision de buscar un nuevo conjunto de datos el cual tenga una mejor correlacion entre sus variables para que asi se pueda usar y cumpla los requerimientos del curso de Estadistica Multidimensional.
+
+```{r eda_plot-correlacion-filtrada, fig.cap="Matriz de correlación tras excluir variables redundantes"}
+corrplot(matriz_cor2, 
+         method = "color", 
+         type = "upper", 
+         tl.col = "black", 
+         tl.srt = 45,
+         addCoef.col = "black",
+         number.cex = 0.6,
+         tl.cex = 0.7)
+```
+
+## Credit -\> Análisis de correlación — Dataset de crédito
+
+### Carga del dataset de crédito
+
+Carga del dataset `credit.xls` un archivo de tipo Excel Spreadsheet recuperado del repositorio **UC Irvine Machine Learning Repository**.
+
+La página del conjunto de datos (dataset) se titula **"Default of Credit Card Clients"** en la URL <https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients>, en donde fue obtenido el archivo credit.xl el cual sera el utilizado de ahora en adelante
+
+Es la información de clientes de tarjetas de crédito en Taiwán (NT\$ = nuevo dólar taiwanés) usada típicamente para predecir impago al mes siguiente.
+
+```{r eda_carga-credito}
+library(readxl)
+library(dplyr)
+library(corrplot)
+
+# Releer saltando la primera fila para que la fila de nombres reales de las columnas, de lo contrario seria el nombre de la columnas base de excel.
+datos1 <- read_excel(here("DATASET", "credit.xls"), skip = 1)
+
+# Verificar
+str(datos1)
+names(datos1)
+summary(datos1)
+```
+
+### Verificacion de los datos y Diccionario de Datos
+
+La estructura general del dataset credit.xls, tiene un total de 30.000 registros y 25 variables
+
+Las variables `EDUCATION` y `MARRIAGE` tienen categorías fuera de lo documentado oficialmente (0 en ambas, y además 5 y 6 en `EDUCATION`) — por lo cual se decidio recodificar estos valores no doucmentados como "otros/desconocido", ya que eliminarlos seria peor para los posteriores analisis, y debido a que igualmente estos casos estarian mas cubiertos bajo la etiqueta de otros ya definida por el diccionario de datos del dataset.
+
+```{r eda_conversion_de_datos, include=FALSE}
+# Verificar frecuencias antes de la recodificación
+table(datos1$EDUCATION)
+table(datos1$MARRIAGE)
+
+# Recodificar categorías no documentadas como "otros"
+datos1 <- datos1 %>%
+  mutate(
+    EDUCATION = ifelse(EDUCATION %in% c(0, 5, 6), 4, EDUCATION),
+    MARRIAGE  = ifelse(MARRIAGE == 0, 3, MARRIAGE)
+  )
+
+# Verificar frecuencias después de la recodificación
+table(datos1$EDUCATION)
+table(datos1$MARRIAGE)
+```
+
+#### Identificador
+
+- **`ID`** — Tipo: **Numeric** Identificador único de cada cliente.
+
+#### Variables demográficas
+
+- **`LIMIT_BAL`** — Tipo: **Numeric**\
+  Monto de crédito otorgado, en NT\$ (nuevo dólar taiwanés). Incluye tanto el crédito individual del consumidor como el crédito familiar/suplementario.
+
+- **`SEX`** — Tipo: **Numeric**\
+  Género del cliente. 1 = Hombre, 2 = Mujer.
+
+- **`EDUCATION`** — Tipo: **Numeric**\
+  Nivel educativo. 1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros.
+
+- **`MARRIAGE`** — Tipo: **Numeric**\
+  Estado civil. 1 = Casado, 2 = Soltero, 3 = Otros.
+
+- **`AGE`** — Tipo: **Numeric**\
+  Edad del cliente, en años.
+
+#### Variables de Historial de pagos (Repayment Status)
+
+Escala común para las siguientes 6 variables: -1 = Pagó puntualmente, 1 = Retraso de 1 mes, 2 = Retraso de 2 meses, ..., 9 = Retraso de 9 meses o más.
+
+Hay casos que también aparecen valores 0 y -2, no documentados oficialmente, asociados a "sin consumo" o "pago mínimo".
+
+| Valor | ¿Hubo deuda/consumo? | ¿Qué pasó con el pago?           |
+|-------|----------------------|----------------------------------|
+| -2    | No                   | No aplica — no hubo actividad    |
+| -1    | Sí                   | Pagó completo y a tiempo         |
+| 0     | Sí (o parcial)       | Pagó el mínimo, sin atraso pleno |
+
+- **`PAY_0`** — Tipo: **Numeric**\
+  Estado de pago en septiembre de 2005 (mes más reciente).
+
+- **`PAY_2`** — Tipo: **Numeric**\
+  Estado de pago en agosto de 2005.
+
+- **`PAY_3`** — Tipo: **Numeric**\
+  Estado de pago en julio de 2005.
+
+- **`PAY_4`** — Tipo: **Numeric**\
+  Estado de pago en junio de 2005.
+
+- **`PAY_5`** — Tipo: **Numeric**\
+  Estado de pago en mayo de 2005.
+
+- **`PAY_6`** — Tipo: **Numeric**\
+  Estado de pago en abril de 2005 (mes más antiguo).
+
+#### Montos de facturación (Bill Statement Amount)
+
+Monto del estado de cuenta mensual, en NT\$. Puede ser negativo si el cliente tenía saldo a favor.
+
+- **`BILL_AMT1`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en septiembre de 2005.
+
+- **`BILL_AMT2`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en agosto de 2005.
+
+- **`BILL_AMT3`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en julio de 2005.
+
+- **`BILL_AMT4`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en junio de 2005.
+
+- **`BILL_AMT5`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en mayo de 2005.
+
+- **`BILL_AMT6`** — Tipo: **Numeric**\
+  Monto del estado de cuenta en abril de 2005.
+
+#### Montos de pagos previos (Previous Payment Amount)
+
+Monto efectivamente pagado por el cliente cada mes, en NT\$.
+
+- **`PAY_AMT1`** — Tipo: **Numeric**\
+  Monto pagado en septiembre de 2005.
+
+- **`PAY_AMT2`** — Tipo: **Numeric**\
+  Monto pagado en agosto de 2005.
+
+- **`PAY_AMT3`** — Tipo: **Numeric**\
+  Monto pagado en julio de 2005.
+
+- **`PAY_AMT4`** — Tipo: **Numeric**\
+  Monto pagado en junio de 2005.
+
+- **`PAY_AMT5`** — Tipo: **Numeric**\
+  Monto pagado en mayo de 2005.
+
+- **`PAY_AMT6`** — Tipo: **Numeric**\
+  Monto pagado en abril de 2005.
+
+#### Variable Predictiva
+
+- **`default payment next month`** — Tipo: Binaria (0/1)\
+  Indica si el cliente incurrió en impago al mes siguiente. 1 = Sí (default), 0 = No.
+
+### Credit -\> Preparación de variables
+
+Eliminacion de la variable **`ID`** para hacer el analisis exploratorio de los datos con la matriz de correlacion y exportacion del nuevo datos_credit.csv sin la columna **`ID`**
+
+```{r eda_preparacion-credito, include=FALSE}
+# Eliminar variable ID
+datos_credit <- datos1 %>%
+  select(-ID)
+
+# Matriz de correlación
+matriz_cor <- cor(datos_credit, use = "pairwise.complete.obs")
+round(matriz_cor, 2)
+
+# Exportar a CSV en la carpeta DATASET
+write.csv(
+  datos_credit,
+  here("DATASET", "datos_credit.csv"),
+  row.names = FALSE
+)
+```
+
+### Credit -\> Visualización — Matriz de correlación
+
+Mientras que en `wealth_accumulation_master.csv` las correlaciones son en su gran mayoría cercanas a cero y relacion aparente, el dataset `credit.xls` presenta clusters de variables altamente correlacionadas como lo son (`PAY_*` y `BILL_AMT*`). Esta estructura de dependencia es justamente lo que se necesita para aplicar técnicas de estadística multidimensional, por lo que **`credit.xls` resulta el dataset más apropiado para cumplir con los requerimientos del curso**, en contraste con el dataset de riqueza, que fue descartado por su débil estructura de correlación general.
+
+- **Historial de pagos (`PAY_0` a `PAY_6`)**: correlaciones entre 0.47 y 0.82 — el atraso de un mes paarece fuertemente asociado al atraso del mes siguiente.
+- **Montos de facturación (`BILL_AMT1` a `BILL_AMT6`)**: correlaciones aún más altas, entre 0.80 y 0.95 — el monto de la deuda de un mes puede predecir casi linealmente el del mes siguiente.
+- **`LIMIT_BAL`** correlaciona de forma moderada y consistente con casi todas las variables `PAY_*` (entre -0.24 y -0.30) y con las `BILL_AMT*` (entre 0.28 y 0.30), mostrando un posible patrón: a mayor límite de crédito, menor probabilidad de atraso.
+
+```{r eda_plot-correlacion-credito, fig.cap="Matriz de correlación del dataset de crédito"}
+corrplot(matriz_cor, 
+         method = "color", 
+         type = "upper", 
+         tl.col = "black", 
+         tl.srt = 45,
+         tl.cex = 0.6,
+         addCoef.col = "black",
+         number.cex = 0.4)
+```
+
+
+# 2. Histogramas y Densidades
+
+```{r hist_setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 11,
+  fig.height = 4,
+  fig.align = "center"
+)
+
+paquetes <- c("readr", "ggplot2", "patchwork", "scales", "dplyr", "here")
+
+paquetes_faltantes <- paquetes[
+  !paquetes %in% rownames(installed.packages())
+]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+
+# Cargar todas las librerías
+invisible(lapply(paquetes, library, character.only = TRUE))
+
+df <- read.csv(here("DATASET", "datos_credit.csv"))
+
+# Aseguramos que la variable objetivo sea un factor para las agrupaciones
+# 0 = Cliente al día / Sin incumplimiento, 1 = Cliente en mora / Incumplimiento
+if("default.payment.next.month" %in% names(df)){
+  df$default.payment.next.month <- as.factor(df$default.payment.next.month)
+}
+
+glimpse(df)
+
+```
+
+En este archivo de datos se ha omitido la columna ID, dado que corresponde a un índice sin valor analítico o predictivo para el estudio del comportamiento crediticio.
+
+Los histogramas se aplican exclusivamente sobre variables cuantitativas continuas o discretas de rango amplio para evaluar su distribución, asimetría y presencia de valores atípicos:
+
+- LIMIT_BAL (Monto del crédito otorgado): Permite observar la concentración de líneas de crédito y el sesgo hacia montos menores.
+
+- AGE (Edad): Permite describir la estructura demográfica de la cartera de clientes.
+
+- Historial de Facturación (BILL_AMT1, BILL_AMT2, BILL_AMT3, etc): Reflejan el nivel de endeudamiento mensual acumulado y permiten detectar saldos negativos (saldos a favor) o montos excesivos.
+
+- Historial de Pagos Anteriores (PAY_AMT1, PAY_AMT2, PAY_AMT3, etc): Evalúan la capacidad real de amortización del cliente. Tienen alta asimetría positiva con fuerte concentración en pagos mínimos o cero.
+
+
+## Concluciones de los histogramas y kernels
+
+- en el limite de credito, tanto el histograma como la curva de densidad muestran una distribución con un fuerte sesgo a la derecha. La mayor masa de clientes se ubica en límites bajos (entre $20\text{k}$ y $100\text{k}\text{ NT\$}$).
+
+-  La mayor concentración de gente se encuentra entre los 25 y 35 años, a partir de los 40 años, la masa de clientes decae progresivamente hacia la cola derecha.
+
+- BILL_AMT1 a BILL_AMT4: un pico extremadamente alto muy cercano a 0NT$ y una cola derecha muy larga que se extiende hasta montos millonarios, Se observan valores ligeramente por debajo de cero, La mayoría de los clientes mantienen saldos de consumo bajos o liquidan su tarjeta dejándola en cero, los valores negativos podrian representar devoluciones de compras o saldos a favor por pagos superiores a la deuda.
+
+- PAY_AMT1 a PAY_AMT3: Una barra/cresta vertical muy alta que representa a miles de personas que realizaron un pago de 0NT en ese mes, una masa distribuida en forma centrada entre 1000 y 5000NT, con pequeñas caídas hacia pagos de más de 50000NT, sin la escala logarítmica, la distribución original colapsaba en una sola barra vertical, el logaritmo permitió separar dos poblaciones distintas los que no pagaron nada vs. la distribución real del valor pagado por quienes sí amortizaron deuda.
+
+## Histogramas univariados
+
+Se agrupan de 3 en 3 mediante la librería patchwork para facilitar la lectura visual y la comparación de magnitudes.
+
+- Por defecto ggplot usa bins en 30, es decir 30, el ancho y break se calcula a partir de ahi, todos los histogramas se manejan bajo estos 30 bins de ggplot
+- para para saber la amplitud h exacta es el rango sobre el bins
+
+```{r hist_Perfil_General}
+
+p1 <- ggplot(df, aes(x = LIMIT_BAL)) +
+  geom_histogram(bins = 30, fill = "#2b5c8f", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Cupo de Crédito", x = "LIMIT_BAL (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p2 <- ggplot(df, aes(x = AGE)) +
+  geom_histogram(bins = 25, fill = "#3b7a57", color = "white", alpha = 0.8) +
+  labs(title = "Edad", x = "Años", y = "Frecuencia") +
+  theme_minimal()
+
+p3 <- ggplot(df, aes(x = BILL_AMT1)) +
+  geom_histogram(bins = 30, fill = "#c0392b", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Septiembre", x = "BILL_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+# Visualización en bloque de 3
+p1 + p2 + p3
+
+```
+
+```{r hist_Historial_de_Facturación_Reciente}
+p4 <- ggplot(df, aes(x = BILL_AMT2)) +
+  geom_histogram(bins = 30, fill = "#d35400", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Agosto", x = "BILL_AMT2 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p5 <- ggplot(df, aes(x = BILL_AMT3)) +
+  geom_histogram(bins = 30, fill = "#e67e22", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Julio", x = "BILL_AMT3 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p6 <- ggplot(df, aes(x = BILL_AMT4)) +
+  geom_histogram(bins = 30, fill = "#f39c12", color = "white", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Facturación Junio", x = "BILL_AMT4 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p4 + p5 + p6
+
+```
+
+```{r hist_Montos_Pagados_con_Escala_Logarítmica}
+p7 <- ggplot(df, aes(x = PAY_AMT1 + 1)) +
+  geom_histogram(bins = 30, fill = "#16a085", color = "white", alpha = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Septiembre (Log)", x = "PAY_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p8 <- ggplot(df, aes(x = PAY_AMT2 + 1)) +
+  geom_histogram(bins = 30, fill = "#27ae60", color = "white", alpha = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Agosto (Log)", x = "PAY_AMT2 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p9 <- ggplot(df, aes(x = PAY_AMT3 + 1)) +
+  geom_histogram(bins = 30, fill = "#2ecc71", color = "white", alpha = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Julio (Log)", x = "PAY_AMT3 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+p7 + p8 + p9
+```
+
+Dado que los pagos presentan un sesgo extremo a la derecha, se aplica transformación logarítmica ($\log_{10}(x + 1)$) para visualizar mejor la distribución, ya que cuando se hizo sin esto no se visualizaba ningun dato por la magnitud de los mismos, el + 1 se aplica para aquellos valores de 0 ya que el logaritmo de 0 no existe. 
+
+
+### Histogramas Segmentados por Comportamiento de Pago
+
+separamos el conjunto de datos en dos subgrupos independientes: clientes que cumplieron con su pago (`default = 0`) y clientes que entraron en mora (`default = 1`).
+
+```{r hist_separar_grupos}
+# Dividimos el dataframe en dos subconjuntos simples
+df_no_mora <- subset(df, default.payment.next.month == 0)
+df_mora    <- subset(df, default.payment.next.month == 1)
+```
+
+```{r hist_Clientes_Sin_Incumplimiento}
+h1_no <- ggplot(df_no_mora, aes(x = LIMIT_BAL)) +
+  geom_histogram(bins = 30, fill = "#2980b9", color = "white") +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Cupo (Sin Mora)", x = "LIMIT_BAL (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+h2_no <- ggplot(df_no_mora, aes(x = AGE)) +
+  geom_histogram(bins = 25, fill = "#2980b9", color = "white") +
+  labs(title = "Edad (Sin Mora)", x = "Años", y = "Frecuencia") +
+  theme_minimal()
+
+h3_no <- ggplot(df_no_mora, aes(x = PAY_AMT1 + 1)) +
+  geom_histogram(bins = 30, fill = "#2980b9", color = "white") +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Sept. Log (Sin Mora)", x = "PAY_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+# Mostrar bloque de 3
+h1_no + h2_no + h3_no
+```
+```{r hist_Clientes_Con_Incumplimiento}
+h1_si <- ggplot(df_mora, aes(x = LIMIT_BAL)) +
+  geom_histogram(bins = 30, fill = "#c0392b", color = "white") +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Cupo (En Mora)", x = "LIMIT_BAL (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+h2_si <- ggplot(df_mora, aes(x = AGE)) +
+  geom_histogram(bins = 25, fill = "#c0392b", color = "white") +
+  labs(title = "Edad (En Mora)", x = "Años", y = "Frecuencia") +
+  theme_minimal()
+
+h3_si <- ggplot(df_mora, aes(x = PAY_AMT1 + 1)) +
+  geom_histogram(bins = 30, fill = "#c0392b", color = "white") +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Pago Sept. Log (En Mora)", x = "PAY_AMT1 (NT$)", y = "Frecuencia") +
+  theme_minimal()
+
+# Mostrar bloque de 3
+h1_si + h2_si + h3_si
+```
+
+## Densidad de kernel
+
+Variables Seleccionadas:
+- LIMIT_BAL (Monto del cupo crediticio): Variable continua monetaria. El kernel permite observar la forma suave de la masa monetaria asignada e identificar posibles concentraciones o picos en montos estándar
+- AGE (Edad): Variable cuantitativa con amplio recorrido de 21 a 79 años, la densidad muestra la curvatura demográfica.
+- BILL_AMT1 a BILL_AMT4 (Facturaciones mensuales): Variables continuas, la curva de densidad permite apreciar el comportamiento alrededor del cero
+- PAY_AMT1 a PAY_AMT3 (Montos amortizados): Variables monetarias continuas. Al aplicar una escala logarítmica ($\log_{10}(x+1)$), el kernel estima la distribución suave de los hábitos de pago
+
+Para el calculo del h ggplot usa automaticamente la regla de silverman
+
+``` {r perfil General}
+
+k1 <- ggplot(df, aes(x = LIMIT_BAL)) +
+  geom_density(fill = "#2b5c8f", color = "#1a365d", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Cupo de Crédito", x = "LIMIT_BAL (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k2 <- ggplot(df, aes(x = AGE)) +
+  geom_density(fill = "#3b7a57", color = "#1e4620", alpha = 0.5, linewidth = 0.8) +
+  labs(title = "Densidad: Edad", x = "Años", y = "Densidad") +
+  theme_minimal()
+
+k3 <- ggplot(df, aes(x = BILL_AMT1)) +
+  geom_density(fill = "#c0392b", color = "#78281f", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Sept.", x = "BILL_AMT1 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k1 + k2 + k3
+```
+
+``` {r historial de facturacion}
+k4 <- ggplot(df, aes(x = BILL_AMT2)) +
+  geom_density(fill = "#d35400", color = "#6e2c00", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Ago.", x = "BILL_AMT2 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k5 <- ggplot(df, aes(x = BILL_AMT3)) +
+  geom_density(fill = "#e67e22", color = "#7e4a15", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Jul.", x = "BILL_AMT3 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k6 <- ggplot(df, aes(x = BILL_AMT4)) +
+  geom_density(fill = "#f39c12", color = "#7d510c", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(title = "Densidad: Facturación Jun.", x = "BILL_AMT4 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k4 + k5 + k6
+```
+``` {r Pagos con transformacion logaritmica}
+k7 <- ggplot(df, aes(x = PAY_AMT1 + 1)) +
+  geom_density(fill = "#16a085", color = "#0e6251", alpha = 0.5, linewidth = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Densidad: Pago Sept. (Log)", x = "PAY_AMT1 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k8 <- ggplot(df, aes(x = PAY_AMT2 + 1)) +
+  geom_density(fill = "#27ae60", color = "#145a32", alpha = 0.5, linewidth = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Densidad: Pago Ago. (Log)", x = "PAY_AMT2 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k9 <- ggplot(df, aes(x = PAY_AMT3 + 1)) +
+  geom_density(fill = "#2ecc71", color = "#196f3d", alpha = 0.5, linewidth = 0.8) +
+  scale_x_log10(labels = label_number()) +
+  labs(title = "Densidad: Pago Jul. (Log)", x = "PAY_AMT3 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k7 + k8 + k9
+```
+
+
+# 3. Diagramas de Dispersión
+
+```{r disp_setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 6,
+  fig.height = 5
+)
+```
+
+```{r disp_paquetes}
+paquetes <- c(
+  "readxl",
+  "here"
+)
+
+paquetes_faltantes <- paquetes[
+  !paquetes %in% rownames(installed.packages())
+]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+
+library(readxl)
+library(here)
+```
+
+```{r disp_carga_datos}
+datos1 <- read_excel(here("DATASET", "credit.xls"), skip = 1)
+datos <- as.data.frame(datos1)
+names(datos) <- make.names(names(datos))
+```
+
+### Manipulación de datos
+
+Antes de generar los gráficos, el dataset original de clientes de tarjeta de crédito se sometió a las siguientes transformaciones:
+
+1. **Lectura del archivo Excel**: el dataset se lee con `read_excel()` (paquete `readxl`) desde `credit.xls`, usando `skip = 1` porque la primera fila del archivo original es una fila de encabezado auxiliar (`X1, X2, X3, ...`) y los nombres reales de las columnas están en la segunda fila. El resultado se convierte a `data.frame` estándar y se le aplica `make.names()` para que `default payment next month` (con espacios) se lea de forma consistente como `default.payment.next.month`.
+2. **Exclusión de variables de identificación y demográficas**: se excluyeron `ID`, `SEX`, `EDUCATION` y `MARRIAGE` del análisis bivariado. `ID` es solo un identificador, y `SEX`, `EDUCATION` y `MARRIAGE` son categóricas nominales sin orden natural.
+3. **Exclusión de las variables `PAY_` (estado de pago) y `default.payment.next.month`**: este análisis se enfoca en `LIMIT_BAL`, `AGE`, `BILL_AMT1-6` y `PAY_AMT1-6`.
+4. **Agrupación temática de pares**: los pares se organizaron en 8 grupos temáticos, cada uno con su interpretación correspondiente.
+5. **Filtrado de valores no finitos**: para cada par `(x, y)` se eliminaron las filas donde `x` o `y` fueran `NA`, `NaN` o `Inf`, usando `is.finite()`. Cada gráfico puede así usar un subconjunto de filas ligeramente distinto.
+6. **No se modificó el dataset original** (`datos`): todas las transformaciones se aplicaron sobre copias locales (`datos_grafico`, `x_grafico`, `y_grafico`) dentro de cada iteración.
+
+Un diccionario de datos completo (significado de cada variable) está disponible en el archivo separado `diccionario_datos.md`.
+
+### Definición de variables, grupos y unidades
+
+```{r disp_variables_unidades}
+bill_vars <- c("BILL_AMT1", "BILL_AMT2", "BILL_AMT3", "BILL_AMT4", "BILL_AMT5", "BILL_AMT6")
+payamt_vars <- c("PAY_AMT1", "PAY_AMT2", "PAY_AMT3", "PAY_AMT4", "PAY_AMT5", "PAY_AMT6")
+
+unidades <- c(
+  LIMIT_BAL = "NT dólares",
+  AGE = "años",
+  BILL_AMT1 = "NT dólares",
+  BILL_AMT2 = "NT dólares",
+  BILL_AMT3 = "NT dólares",
+  BILL_AMT4 = "NT dólares",
+  BILL_AMT5 = "NT dólares",
+  BILL_AMT6 = "NT dólares",
+  PAY_AMT1 = "NT dólares",
+  PAY_AMT2 = "NT dólares",
+  PAY_AMT3 = "NT dólares",
+  PAY_AMT4 = "NT dólares",
+  PAY_AMT5 = "NT dólares",
+  PAY_AMT6 = "NT dólares"
+)
+
+# --- Funciones auxiliares para armar los pares de cada grupo ---
+
+# Una variable fija contra todas las de una familia
+uno_contra_familia <- function(x, familia) {
+  lapply(familia, function(y) c(x, y))
+}
+
+# Producto cruzado completo entre dos familias distintas
+cruce_familias <- function(familia_x, familia_y) {
+  pares <- list()
+  for (x in familia_x) {
+    for (y in familia_y) {
+      pares[[length(pares) + 1]] <- c(x, y)
+    }
+  }
+  pares
+}
+
+# Todas las combinaciones únicas de a 2 dentro de una misma familia
+combinaciones_familia <- function(familia) {
+  m <- combn(familia, 2)
+  lapply(seq_len(ncol(m)), function(i) m[, i])
+}
+
+# Pares secuenciales tipo combn, pero solo arrancando en ciertas
+# posiciones de la familia (usado para partir BILL_AMT vs BILL_AMT
+# en dos grupos: 1-2 y 3-4-5)
+secuencial_desde <- function(familia, posiciones_inicio) {
+  pares <- list()
+  n <- length(familia)
+  for (i in posiciones_inicio) {
+    if (i < n) {
+      for (j in (i + 1):n) {
+        pares[[length(pares) + 1]] <- c(familia[i], familia[j])
+      }
+    }
+  }
+  pares
+}
+
+# --- Definición de los 8 grupos, con su interpretación ---
+
+grupos <- list(
+  list(
+    titulo = "LIMIT_BAL vs. AGE",
+    pares = list(c("LIMIT_BAL", "AGE")),
+    interpretacion = r"(El gráfico representa la relación entre el **límite de crédito otorgado (`LIMIT_BAL`)** y la **edad de los clientes (`AGE`)**.
+
+Se observa una ligera tendencia creciente del límite de crédito entre los 20 y 30 años. Entre aproximadamente los 30 y 40 años se presenta una mayor concentración de los valores, mientras que a partir de edades superiores se observa una menor presencia de límites de crédito elevados.
+
+La mayoría de las observaciones se encuentra por debajo de **NT$500.000**, mientras que los valores superiores a este monto presentan una menor frecuencia.
+
+También se identifican **franjas horizontales** en determinados valores de `LIMIT_BAL`, lo que evidencia que los límites de crédito se concentran en montos específicos y no se distribuyen de manera completamente continua.
+
+En términos generales, los valores de límite de crédito más elevados se concentran principalmente en los grupos de edad intermedios, aunque existe una amplia dispersión dentro de cada rango de edad.)"
+  ),
+  list(
+    titulo = "LIMIT_BAL vs. BILL_AMT",
+    pares = uno_contra_familia("LIMIT_BAL", bill_vars),
+    interpretacion = r"(### Montos de los estados de cuenta de septiembre a abril
+
+Este conjunto de gráficos representa la relación entre el **límite de crédito (`LIMIT_BAL`)** y los **montos de los estados de cuenta (`BILL_AMT`)** correspondientes a los diferentes meses.
+
+Los gráficos presentan un comportamiento generalmente **creciente**, observándose que los valores de `BILL_AMT` tienden a incrementarse a medida que aumenta `LIMIT_BAL`.
+
+La mayoría de los puntos se encuentra por debajo de la diagonal correspondiente a una relación **1:1**, lo que indica que los montos registrados en los estados de cuenta son, en la mayoría de las observaciones, inferiores al límite de crédito.
+
+También se observa una franja horizontal alrededor de **`BILL_AMT = 0`**, presente transversalmente para diferentes valores de `LIMIT_BAL`. Esto evidencia la existencia de observaciones con estados de cuenta de valor cero independientemente del límite de crédito.
+
+Por otra parte, alrededor de **NT$500.000** disminuye la concentración de observaciones, debido a la menor presencia de clientes con límites superiores a este valor. Sin embargo, las observaciones existentes por encima de dicho umbral mantienen el comportamiento general observado en el resto de los datos.)"
+  ),
+  list(
+    titulo = "LIMIT_BAL vs. PAY_AMT",
+    pares = uno_contra_familia("LIMIT_BAL", payamt_vars),
+    interpretacion = r"(### Pagos realizados de septiembre a abril
+
+Este conjunto de gráficos representa la relación entre el **límite de crédito (`LIMIT_BAL`)** y los **montos de los pagos realizados (`PAY_AMT`)** durante los diferentes meses.
+
+Se observa una alta dispersión de los valores de `PAY_AMT` para los diferentes niveles de `LIMIT_BAL`. Aunque los límites de crédito más elevados presentan algunos pagos de mayor magnitud, no se observa una relación creciente tan marcada como la identificada entre `LIMIT_BAL` y `BILL_AMT`.
+
+Una proporción considerable de las observaciones se concentra en valores bajos de `PAY_AMT`, incluyendo una importante cantidad de valores cercanos a cero.
+
+Al comparar estos gráficos con los correspondientes a `LIMIT_BAL` vs. `BILL_AMT`, se observa que los montos de pago presentan una distribución más concentrada en valores bajos, mientras que los montos de los estados de cuenta presentan una mayor dispersión.
+
+En general, los pagos presentan una relación menos pronunciada con el límite de crédito que los montos registrados en los estados de cuenta.)"
+  ),
+  list(
+    titulo = "AGE vs. PAY_AMT y BILL_AMT",
+    pares = c(
+      uno_contra_familia("AGE", payamt_vars),
+      uno_contra_familia("AGE", bill_vars)
+    ),
+    interpretacion = r"(Este grupo representa la relación entre la **edad de los clientes (`AGE`)** y los **montos de pago (`PAY_AMT`)**, así como entre la edad y los **montos de los estados de cuenta (`BILL_AMT`)**.
+
+En los gráficos de `AGE` vs. `PAY_AMT` se observa una alta concentración de los valores de pago en rangos bajos, con una cantidad relativamente reducida de observaciones en valores elevados.
+
+En los gráficos de `AGE` vs. `BILL_AMT` se presenta una mayor dispersión vertical y una presencia más significativa de valores elevados. La mayor concentración de estos valores se encuentra aproximadamente entre los 20 y 50 años, con una presencia notable de montos elevados alrededor de los 30 y 40 años.
+
+También se aprecia una diferencia importante entre las escalas de ambas variables. Los valores de `PAY_AMT` presentan una concentración mucho mayor alrededor de los valores bajos, mientras que `BILL_AMT` presenta una dispersión más amplia y valores máximos considerablemente superiores.
+
+En general, los gráficos muestran una mayor variabilidad en los montos de los estados de cuenta que en los montos de los pagos realizados.)"
+  ),
+  list(
+    titulo = "BILL_AMT1 y BILL_AMT2 vs. BILL_AMT",
+    pares = secuencial_desde(bill_vars, c(1, 2)),
+    interpretacion = r"(Este conjunto de gráficos representa la relación entre los estados de cuenta correspondientes a **septiembre (`BILL_AMT1`) y agosto (`BILL_AMT2`)** y los estados de cuenta registrados en los demás períodos.
+
+Los gráficos presentan un **comportamiento creciente**, evidenciando una asociación positiva entre los montos registrados en diferentes períodos.
+
+La mayor variación se concentra en los valores cercanos a cero, mientras que los valores más elevados presentan una distribución progresivamente creciente.
+
+En varios de los gráficos, la relación se encuentra por debajo de una correspondencia **1:1**, presentando una pendiente relativamente menor. Esto indica que los valores correspondientes a septiembre y agosto se encuentran, en general, por debajo de los valores de los períodos utilizados como comparación.
+
+En conjunto, se observa una relación consistente entre los montos de los estados de cuenta de los diferentes períodos, aunque existen diferencias en la magnitud de los valores registrados en cada mes.)"
+  ),
+  list(
+    titulo = "BILL_AMT3, BILL_AMT4 y BILL_AMT5 vs. BILL_AMT",
+    pares = secuencial_desde(bill_vars, c(3, 4, 5)),
+    interpretacion = r"(Este conjunto de gráficos representa la relación entre los estados de cuenta correspondientes a otros períodos del conjunto de datos, específicamente `BILL_AMT3`, `BILL_AMT4` y `BILL_AMT5`, y los valores registrados en los demás meses.
+
+Al igual que en el Grupo 5, se observa un **comportamiento creciente** entre los diferentes montos de los estados de cuenta.
+
+Sin embargo, en este grupo algunas relaciones presentan una pendiente más pronunciada y una distribución más cercana a una correspondencia proporcional entre los períodos comparados.
+
+También se observa una mayor concentración de los puntos alrededor de la tendencia creciente, especialmente al comparar períodos cercanos entre sí.
+
+Las comparaciones entre meses consecutivos muestran diferencias en la magnitud de los montos, aunque mantienen una tendencia general similar.
+
+En términos generales, los diferentes `BILL_AMT` presentan un comportamiento temporal consistente, caracterizado por asociaciones positivas entre los montos registrados en los distintos períodos.)"
+  ),
+  list(
+    titulo = "BILL_AMT vs. PAY_AMT",
+    pares = cruce_familias(bill_vars, payamt_vars),
+    interpretacion = r"(Este conjunto de gráficos representa la relación entre los **montos de los estados de cuenta (`BILL_AMT`)** y los **montos de los pagos realizados (`PAY_AMT`)** en los diferentes períodos.
+
+En general, los gráficos presentan una **alta dispersión** de los valores de `PAY_AMT` respecto a `BILL_AMT`. No se observa una correspondencia uniforme entre ambas variables, especialmente en los valores elevados de los estados de cuenta.
+
+En varias de las comparaciones, los pagos permanecen concentrados en valores relativamente bajos incluso cuando los montos de los estados de cuenta presentan valores considerablemente superiores.
+
+Se identifican algunas combinaciones, como `BILL_AMT2` vs. `PAY_AMT1`, `BILL_AMT3` vs. `PAY_AMT1`, `BILL_AMT4` vs. `PAY_AMT3`, `BILL_AMT5` vs. `PAY_AMT4`, `BILL_AMT5` vs. `PAY_AMT6` y `BILL_AMT3` vs. `PAY_AMT2`, en las que se aprecia una mayor proximidad entre los valores de ambas variables.
+
+Sin embargo, estas relaciones se presentan entre períodos diferentes, por lo que se observa una variación en la correspondencia entre el monto registrado en el estado de cuenta y el pago realizado.
+
+En general, los gráficos muestran una **mayor dispersión entre `BILL_AMT` y `PAY_AMT`** en comparación con la relación observada entre los diferentes períodos de `BILL_AMT`.)"
+  ),
+  list(
+    titulo = "PAY_AMT vs. PAY_AMT",
+    pares = combinaciones_familia(payamt_vars),
+    interpretacion = r"(Este conjunto de gráficos representa la comparación entre los **montos de pago (`PAY_AMT`) de diferentes períodos**, permitiendo observar su comportamiento entre meses.
+
+Los gráficos presentan una concentración considerable de observaciones en valores bajos y una menor cantidad de puntos en valores elevados.
+
+Entre algunos períodos se observa una mayor concentración alrededor de una tendencia definida, mientras que en otras comparaciones existe una dispersión más amplia.
+
+También se observan diferencias en la distribución de los pagos entre los distintos períodos, con algunos meses presentando una mayor presencia de valores elevados y otros concentrando sus observaciones cerca de cero.
+
+En general, las comparaciones entre los diferentes `PAY_AMT` muestran que existe una **variabilidad considerable en los montos de pago entre períodos**, aunque se mantienen patrones similares de concentración en los valores bajos.)"
+  )
+)
+```
+
+### Gráficos agrupados
+
+```{r disp_graficos_agrupados, results="asis"}
+for (i in seq_along(grupos)) {
+
+  grupo <- grupos[[i]]
+
+  cat(paste0("
+## GRUPO ", i, ": ", grupo$titulo, "
+
+"))
+
+  for (par in grupo$pares) {
+
+    x <- par[1]
+    y <- par[2]
+
+    datos_grafico <- datos[
+      is.finite(datos[[x]]) &
+        is.finite(datos[[y]]),
+    ]
+
+    x_grafico <- datos_grafico[[x]]
+    y_grafico <- datos_grafico[[y]]
+
+    plot(
+      x_grafico,
+      y_grafico,
+      pch = 19,
+      col = rgb(0, 0, 0, 0.45),
+      xlab = paste0(x, " (", unidades[x], ")"),
+      ylab = paste0(y, " (", unidades[y], ")"),
+      main = paste(x, "vs.", y)
+    )
+  }
+
+  cat("
+
+**Interpretación:**
+
+")
+  cat(grupo$interpretacion, "
+
+")
+  cat("
+
+---
+
+")
+}
+```
+
+# 4. Visualización en el Espacio (Diagramas de Caja y Bigotes)
+
+```{r visu_setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 6
+)
+
+library(dplyr)
+library(readxl)
+```
+
+```{r visu_paquetes, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl"
+)
+
+paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+
+# Esto es lo que faltaba: cargar los paquetes
+invisible(lapply(paquetes, library, character.only = TRUE))
+```
+
+## Tipos de dato del dataset de crédito
+
+En la exploración de datos, este fue uno de los datasets los cuales se auditó; y el que se usará. En dicha exploración, se notó como todas las columnas pertenecen a la categoría "numeric"; sin embargo el diccionario de datos indica que "SEX", "EDUCATION", "MARRIAGE", de "PAY_0" a "PAY_6" y "default payment next month" son en realidad variables categoricas.
+
+### Carga de los datos y corrección de tipos de variable
+
+En este chunk se realizan dos tareas principales:
+
+1.  **Carga de los datos**: se lee el archivo `datos_credit.csv` (ubicado en la carpeta `DATASET` del proyecto) y se guarda en el objeto `datos_credit`. A partir de él se crea una copia de trabajo llamada `datos_credit_visu`, que será la que se use en todas las visualizaciones del documento.
+2.  **Corrección de tipo de dato**: como se explicó arriba, aunque R interpreta todas las columnas del dataset como numéricas, varias de ellas en realidad representan **categorías codificadas con números** y no cantidades continuas. Por eso se convierten a `factor` las siguientes variables:
+    - `SEX`: sexo del cliente (codificado numéricamente).
+    - `EDUCATION`: nivel educativo (codificado numéricamente).
+    - `MARRIAGE`: estado civil (codificado numéricamente).
+    - `default payment next month`: variable de respuesta que indica si el cliente incurrió en impago al mes siguiente (0/1).
+    - `PAY_0`, `PAY_2`, `PAY_3`, `PAY_4`, `PAY_5`, `PAY_6`: estado de pago del cliente en cada uno de los meses anteriores (codificado con números que representan categorías de retraso, no cantidades).
+
+Esta corrección es necesaria porque, si estas variables se dejan como numéricas, cualquier análisis o gráfico posterior las trataría incorrectamente como cantidades continuas (por ejemplo, calculando promedios o desviaciones estándar sobre categorías), lo cual no tiene sentido estadístico ni interpretativo.
+
+```{r visu_cambio_de_tipo_de_dato}
+datos_credit <- read_csv(here("DATASET", "datos_credit.csv"))
+datos_credit_visu <- datos_credit %>%
+  select_all()
+
+datos_credit_visu$SEX <- as.factor(datos_credit_visu$SEX)
+datos_credit_visu$EDUCATION <- as.factor(datos_credit_visu$EDUCATION)
+datos_credit_visu$MARRIAGE <- as.factor(datos_credit_visu$MARRIAGE)
+datos_credit_visu$`default payment next month` <- as.factor(datos_credit_visu$`default payment next month`)
+datos_credit_visu$PAY_0 <- as.factor(datos_credit_visu$PAY_0)
+datos_credit_visu$PAY_2 <- as.factor(datos_credit_visu$PAY_2)
+datos_credit_visu$PAY_3 <- as.factor(datos_credit_visu$PAY_3)
+datos_credit_visu$PAY_4 <- as.factor(datos_credit_visu$PAY_4)
+datos_credit_visu$PAY_5 <- as.factor(datos_credit_visu$PAY_5)
+datos_credit_visu$PAY_6 <- as.factor(datos_credit_visu$PAY_6)
+
+```
+
+#Resumen de los datos tras la transformación a categorica de ciertas columnas
+
+```{r visu_summary}
+#resumen
+summary(datos_credit_visu)
+
+```
+
+## Diagramas de Caja y Bigotes
+
+### Comparación de todas las variables númericas
+
+Se comparan simultáneamente todas las variables **verdaderamente numéricas** del dataset (montos de crédito, edad, montos de estado de cuenta y montos pagados), primero en su escala original y luego estandarizadas, para poder compararlas entre sí sin que las diferencias de magnitud (por ejemplo, edad en años vs. montos en miles de dólares) distorsionen la lectura visual.
+
+#### Sin estandarizar
+
+Este chunk genera cinco diagramas de caja y bigotes con las variables numéricas **en su escala original** (sin transformar estadísticamente), solo dividiendo los montos monetarios entre 10.000 para que los ejes sean más legibles:
+
+- `LIMIT_BAL` (monto de crédito otorgado) sola.
+- `AGE` (edad) sola.
+- `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de los últimos 6 meses) comparadas entre sí.
+- `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados en los últimos 6 meses) comparadas entre sí.
+- Todas las anteriores juntas (`LIMIT_BAL`, `AGE`, `BILL_AMT1:6`, `PAY_AMT1:6`) en un solo gráfico comparativo.
+
+No se cruza ninguna variable categórica en este chunk; el objetivo es únicamente observar la distribución y dispersión de cada variable numérica y detectar posibles valores atípicos.
+
+```{r visu_cajas_y_bigotes_de_númericas}
+#solo de limit_bal
+boxplot(datos_credit_visu[, 1:1]/10000, las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL",
+        ylab = "N/$10000", col = "grey90")
+
+
+#solo de age
+boxplot(datos_credit_visu[, 5:5], las = 2, cex.axis = 0.7,
+        main = "AGE",
+        ylab = "Edad (años)", col = "grey90")
+
+
+#comparación de los de bill_amt
+boxplot(datos_credit_visu[, 12:17]/10000, las = 2, cex.axis = 0.7,
+        main = "BILL_AMT1 a BILL_AMT6",
+        ylab = "N/$10000", col = "grey90")
+
+
+#comparación de los de pay_amt
+boxplot(datos_credit_visu[, 18:23]/10000, las = 2, cex.axis = 0.7,
+        main = "PAY_AMT1 a PAY_AMT6",
+        ylab = "N/$10000", col = "grey90")
+
+
+#comparación de todos
+boxplot(datos_credit_visu[, c(1, c(5, 12:23))], las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6",
+        ylab = "Años y N/$", col = "grey90")
+
+```
+
+Aunque sea algo dificil apreciar detalles en estos boxplot, se pueden ver ciertos detalles interesantes. El primero de ellos es que **la media y la mediana son cercanas entre sí**; sin embargo, comparando con la información del **summary()**,los únicos casos en los que son cercanas es en LIMIT_BAL (relativamente) y AGE, y se ahondará en ello más adelante.
+Lo segundo es que **los campos BILL_AMT tienen comportamientos muy similares entre sí**; salvo un par de datos anomalos, entre otros detalles, el diagrama muestra que estas variables se comportan muy similar.
+Lo tercero es que en las variables **PAY_ATM, la media, la mediana, 1er y 3er se encuentran muy próximos entre sí y muy cerca del origen: la mayoría de los clientes realizó pagos de magnitud reducida en relación con el rango total de la variable**.
+Para finalizar, tomando el gráfico donde se comparan todas las variables juntas sin estandarizar y sin ´división entre 10000 aplicada, LIMIT_BAL es la única variable medianamente legible. AGE, por su parte, queda reducida a una línea plana sobre el eje.
+Del boxplot individual de estas últimas dos variables se pueden sacar ciertos detalles:
+  1. La caja de LIMIT_BAL no es simétrica respecto de la mediana: la distancia entre Q1 y la mediana es menor que la distancia entre la mediana y Q3, y el bigote superior es considerablemente más extenso que el inferior. Esto configura un sesgo a la derecha.
+  2. Al igual que en el caso de LIMIT_BAL, la distribución de AGE muestra un sesgo a la derecha, aunque de menor magnitud: la mediana se sitúa levemente por debajo del centro de la caja y el bigote superior es más largo que el inferior.
+_Cabe aclarar que todas estas variables a excepción de AGE manejan las mismas unidades base (NT/$), por lo que se esperaría que el output fuera casi identico._
+
+#### Estandarizadas
+
+Este chunk repite exactamente las mismas cinco comparaciones del chunk anterior, pero aplicando la función `scale()` a cada conjunto de variables. `scale()` **estandariza** los datos, es decir, les resta su media y los divide entre su desviación estándar, dejándolos expresados en unidades de desviación estándar (con media 0). Esta transformación es necesaria porque variables como `AGE` (en años) y `BILL_AMT` (en miles de pesos taiwaneses) tienen escalas y unidades completamente distintas; al estandarizarlas, se pueden comparar visualmente su dispersión y valores atípicos en una misma escala común. La línea horizontal en 0 (`abline(h = 0, lty = 3)`) marca la media de cada variable tras la estandarización.
+
+```{r visu_cajas_y_bigotes_de_númericas_estandarizadas}
+#solo de limit_bal
+boxplot(scale(datos_credit_visu[, 1:1]), las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL estandarizada",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#solo de age
+boxplot(scale(datos_credit_visu[, 5:5]), las = 2, cex.axis = 0.7,
+        main = "AGE estandarizada",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#comparación de los de bill_amt
+boxplot(scale(datos_credit_visu[, 12:17]), las = 2, cex.axis = 0.7,
+        main = "BILL_AMT1 a BILL_AMT6 estandarizadas",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#comparación de los de pay_amt
+boxplot(scale(datos_credit_visu[, 18:23]), las = 2, cex.axis = 0.7,
+        main = "PAY_AMT1 a PAY_AMT6 estandarizadas",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+#comparación de todos
+boxplot(scale(datos_credit_visu[, c(1, c(5, 12:23))]), las = 2, cex.axis = 0.7,
+        main = "LIMIT_BAL, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6 estandarizadas",
+        ylab = "desviación estándar", col = "grey90")
+abline(h = 0, lty = 3)
+
+```
+
+Tras la estandarización, las trece variables tienen ahora media 0 y desviación 1, así que las diferencias de magnitud absoluta que dominaban el gráfico anterior desaparecieron. Lo que queda visible es la **forma** de cada distribución: qué tan lejos se aleja cada variable de su propio centro, medida en sus propias unidades de dispersión.
+
+`LIMIT_BAL` y `AGE` son, en términos relativos, las variables mejor comportadas del conjunto: su dispersión total se explica bastante bien por su propia desviación estándar.
+
+Las seis variables `BILL_AMT` muestran cajas ya muy comprimidas contra el cero, con una nube densa de atípicos superiores que sube de forma continua hasta unas 10 desviaciones y máximos entre 13 y 15, salvo `BILL_AMT3`, que alcanza aproximadamente 23. A diferencia de las demás, estas sí presentan atípicos por debajo de la media (hasta cerca de -3 en varias y alrededor de -5 en `BILL_AMT6`), lo que corresponde a los saldos negativos que ya se veían en la escala original.
+
+Las seis `PAY_AMT` son el caso extremo y es aquí donde la estandarización revela algo que el gráfico sin transformar escondía. Sus cajas están literalmente colapsadas sobre la línea de cero, es decir, el 50 % central de las observaciones cabe en un intervalo mucho menor que una desviación estándar, mientras que los atípicos forman columnas verticales densas que llegan a 20 y 30 desviaciones y con puntos aislados. Un valor a 73 desviaciones de la media es un dato brutalmente extremo: significa que la desviación estándar de esa variable está siendo determinada casi por completo por un puñado de observaciones. También se nota que no hay nada por debajo de cero: como los pagos no pueden ser negativos y la media es pequeña, el piso de la distribución queda apenas unas décimas de desviación por debajo de la línea, y eso produce la franja recta que se ve en la base de las seis.
+
+### De "SEX"
+
+En esta sección se cruza la variable categórica `SEX` (sexo del cliente, convertida a factor en el chunk de preparación de datos) contra cada una de las variables numéricas relevantes, para observar si existen diferencias en su distribución según el sexo del cliente.
+
+El diagrama de caja y bigotes se cruza `LIMIT_BAL` (monto de crédito otorgado, dividido entre 10.000 para legibilidad) contra `SEX`, para comparar si el monto de crédito otorgado difiere entre hombres y mujeres.
+
+```{r visu_cajas_y_bigotes_de_sex_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Lo primero que muestra el gráfico es que las dos distribuciones son muy parecidas entre sí. Ambas cajas ocupan prácticamente la misma franja del eje, ambos grupos parten de un mínimo cercano a 1 (NT$10.000) y los dos presentan la misma forma general: sesgo hacía la derecha, con la mediana desplazada hacia el borde inferior de la caja y una cola larga de valores atípicos por arriba. Es decir, el patrón de la variable `LIMIT_BAL` que ya se había descrito para el conjunto completo se reproduce casi idéntico dentro de cada categoría de sexo.
+
+Las diferencias que sí se aprecian son de posición y pequeñas. La mediana del grupo 1 (hombres) se ubica alrededor de 13 unidades de NT/$10.000, mientras que la del grupo 2 (mujeres) está cerca de 15. El primer cuartil también difiere: aproximadamente 5 en hombres frente a 7 en mujeres. El tercer cuartil, en cambio, es casi coincidente en ambos grupos, cerca de 24-25. El resultado es que el rango intercuartílico de las mujeres es levemente más estrecho (unas 18 unidades frente a 19-20 en hombres) y está desplazado un poco hacia arriba: **la mitad central de las clientas recibió cupos algo mayores que la mitad central de los clientes.**
+
+En los extremos la relación se invierte de forma leve. El bigote superior de los hombres alcanza aproximadamente 52 y el de las mujeres 49, y el máximo del conjunto de atípicos ordinarios está cerca de 80 en hombres y 78 en mujeres. Sin embargo, el punto extremo aislado en 100 (el cupo de NT$1.000.000, máximo de todo el conjunto de datos) pertenece al grupo de las mujeres. Ambos grupos tienen nubes densas de atípicos superiores de extensión comparable, y ninguno registra atípicos inferiores.
+
+La lectura de conjunto es que el solapamiento entre las dos distribuciones es casi total: la diferencia entre las medianas (unas 2 unidades, es decir NT$20.000) es muy pequeña frente al rango intercuartílico de cada grupo, que ronda las 19 unidades. Visualmente, el sexo no aparece como un factor que separe la distribución del cupo otorgado; lo que el gráfico muestra es un desplazamiento marginal hacia arriba en el grupo femenino, sobre todo en la mitad inferior de la distribución. _Hay que tener en cuenta que los tamaños de los dos grupos no son iguales en este conjunto de datos y el boxplot no los refleja._
+
+A continuación, se cruza `AGE` (edad) contra `SEX`, para observar si la distribución de edades varía entre hombres y mujeres.
+
+```{r visu_cajas_y_bigotes_de_sex_y_AGE}
+boxplot(AGE ~ SEX, data = datos_credit_visu,
+        main = "Edad por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+El solapamiento entre ambas distribuciones es casi completo y la diferencia de aproximadamente dos años entre las medianas es muy pequeña frente a un rango intercuartílico de unos trece o catorce años. Lo que el gráfico permite afirmar de manera descriptiva es que los clientes hombres de este conjunto tienden a ser marginalmente mayores que las clientas, y que la edad máxima registrada corresponde al grupo masculino, pero no que el sexo separe la distribución etaria de forma sustantiva. Vale la pena recordar, como en el gráfico anterior, que el diagrama de caja no informa sobre el tamaño de cada grupo, lo cual conviene reportar aparte si estas comparaciones se van a incluir en el informe.
+
+Prosiguiendo, este chunk cruza cada una de las seis variables `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de septiembre a abril de 2005, divididos entre 10.000) contra `SEX`, generando un boxplot por cada mes para comparar el monto del estado de cuenta entre hombres y mujeres mes a mes.
+
+```{r visu_cajas_y_bigotes_de_sex_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Los seis meses muestran lo mismo: hombres y mujeres tienen distribuciones prácticamente idénticas. Medianas cercanas a 2 unidades de NT/$10.000 en ambos grupos, cajas que van de 0 a 6 aproximadamente, y bigotes superiores que coinciden entre los dos sexos en cada mes. El sexo no separa esta variable.
+
+Ojo con las escalas: cada panel tiene un eje vertical distinto (julio llega a 150, junio a 80), así que comparar meses a simple vista engaña.
+
+En los seis casos la forma es la misma: asimetría positiva fuerte, mediana pegada al borde inferior de la caja, y una columna densa y continua de atípicos hasta 50-60 unidades.
+
+El máximo siempre está en el grupo 2. Julio es el caso extremo: 166 en mujeres frente a 70 en hombres. Pero las mujeres son el grupo más numeroso del dataset, y a más observaciones, más probabilidad de extremos; el boxplot no muestra ese tamaño, así que el patrón puede ser solo eso.
+
+Hay valores negativos en ambos grupos todos los meses. El más profundo es aproximadamente -34 en hombres en abril.
+
+Ahora, este chunk cruza las seis variables `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados por el cliente de septiembre a abril de 2005, divididos entre 10.000) contra `SEX`, para comparar cuánto pagaron efectivamente hombres y mujeres cada mes.
+
+```{r visu_cajas_y_bigotes_de_sex_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ SEX, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por sexo ",
+        xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+Las cajas están colapsadas sobre cero en los dos grupos y en los seis meses. No se distingue mediana ni cuartiles: todo el rango intercuartílico cabe en menos de 1 unidad de NT/$10.000. El bigote superior llega a cerca de 1 unidad (NT$10.000). Sexo y mes son irrelevantes para esto: las doce cajas se ven iguales.
+
+Toda la información está en los atípicos. Forman una columna vertical densa desde cero hasta unas 20-25 unidades, y encima puntos sueltos.
+
+Cinco de seis meses tienen el máximo en mujeres. Agosto es el caso extremo: 168 frente a 40, con cuatro puntos aislados en el grupo 2 (168, 122, 102, 58) que no tienen contraparte en hombres.
+
+Ojo con las escalas: cada panel tiene eje propio (agosto llega a 150, mayo a 40). La columna de atípicos de mayo parece más alta que la de agosto solo por eso.
+
+Comparado con BILL_AMT: allí las cajas eran visibles y había negativos. Aquí no. La asimetría de PAY_AMT es mucho más severa.
+
+### De "EDUCATION"
+
+En esta sección se cruza la variable categórica `EDUCATION` (nivel educativo del cliente, convertida a factor) contra las mismas variables numéricas utilizadas en la sección anterior, para observar si el nivel educativo se relaciona con diferencias en el crédito otorgado, la edad, los montos de estado de cuenta y los montos pagados.
+
+Se cruza `LIMIT_BAL` (monto de crédito otorgado, en unidades de 10.000) contra `EDUCATION`, para ver si el monto de crédito varía según el nivel educativo. Nótese el comentario original del equipo señalando la necesidad de revisar el significado de las categorías 0, 5 y 6 de `EDUCATION`, que no están claramente documentadas en el diccionario de datos.
+
+```{r visu_cajas_y_bigotes_de_education_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ EDUCATION, data = datos_credit_visu, #CHICOS FAVOR MIRAR ESTE K SIGNIFICA 5 Y 6 Y 0 XDDD
+        main = "Monto de crédito otorgado por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Gráfico con diferencias claras. Medianas: 20 (posgrado), 11 (universidad), 8 (secundaria), 17 (otros). Cajas: 10-30, 5-21, 5-18, 9-24. Hay gradiente descendente 1→2→3: a menor nivel educativo, menor cupo. El grupo 4 se ubica entre 1 y 2. Los bigotes superiores siguen el mismo orden: 60, 45, 37, 46.
+
+Se cruza `AGE` contra `EDUCATION`, para observar cómo se distribuye la edad de los clientes según su nivel educativo.
+
+```{r visu_cajas_y_bigotes_de_education_y_AGE_2}
+boxplot(AGE ~ EDUCATION, data = datos_credit_visu,
+        main = "Edad por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Diferencia visible en sentido inverso. Medianas: 32, 33, 40, 35. El grupo 3 es claramente mayor y más disperso (caja 32-48, contra 28-39 en el grupo 1). Ojo: esto se cruza con LIMIT_BAL, el grupo con menor cupo es también el de más edad.
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de septiembre a abril de 2005) contra `EDUCATION`, generando un boxplot por mes para comparar el monto del estado de cuenta según el nivel educativo del cliente.
+
+```{r visu_cajas_y_bigotes_de_education_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Los grupos 1, 2 y 3 son indistinguibles entre sí: medianas de 1 a 3, cajas de 0 a 6, bigotes superiores de 11 a 17. El nivel educativo no separa esta variable. El grupo 4 se ve distinto solo en apariencia: su caja es más ancha (llega a 11 en septiembre) y su bigote superior mucho más bajo (28 en septiembre, 20 en junio, 13 en abril), pero eso es efecto de tener pocas observaciones, no una diferencia real de comportamiento.
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados de septiembre a abril de 2005) contra `EDUCATION`, para comparar cuánto pagaron efectivamente los clientes según su nivel educativo, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_education_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por nivel educativo",
+        xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+Todas las cajas colapsadas en cero en los cuatro grupos. Solo cambia la altura de la columna de atípicos: 1 y 2 llegan alto (168 y 122 en agosto, 90 en julio), 3 intermedio, 4 siempre el más bajo (21 en agosto, 12 en junio). Esa jerarquía refleja el número de observaciones de cada grupo, no la conducta de pago.
+
+**Finalmente, se concluye que el nivel educativo discrimina el cupo otorgado y la edad, pero no el saldo ni el pago.**
+
+### De "MARRIAGE"
+
+En esta sección se cruza la variable categórica `MARRIAGE` (estado civil del cliente, convertida a factor) contra las mismas variables numéricas, para explorar si el estado civil se asocia con diferencias en el crédito otorgado, la edad, los montos de estado de cuenta y los montos pagados.
+
+Se cruza `LIMIT_BAL` contra `MARRIAGE`, para comparar el monto de crédito otorgado según el estado civil del cliente.
+
+```{r visu_cajas_y_bigotes_de_MARRIAGE_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `MARRIAGE`, para observar la distribución de edades según el estado civil.
+
+```{r visu_cajas_y_bigotes_de_MARRIAGE_y_AGE}
+boxplot(AGE ~ MARRIAGE, data = datos_credit_visu,
+        main = "Edad por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `MARRIAGE`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado civil del cliente.
+
+```{r visu_cajas_y_bigotes_de_MARRIAGE_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `MARRIAGE`, para comparar cuánto pagaron efectivamente los clientes según su estado civil, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_MARRIAGE_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado civil",
+        xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
+### De "default payment next month"
+
+En esta sección se cruza la variable de respuesta `default payment next month` (indicador de si el cliente incurrió en impago al mes siguiente, convertida a factor) contra las mismas variables numéricas. Esta es la sección más importante desde el punto de vista analítico, ya que permite explorar visualmente qué variables podrían estar asociadas con el impago, lo cual es relevante de cara a un eventual modelo predictivo.
+
+Se cruza `LIMIT_BAL` contra `default payment next month`, para observar si los clientes que incurren en impago tienden a tener montos de crédito otorgado distintos a los que no incurren.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `default payment next month`, para observar si la edad se relaciona con la incurrencia en impago.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE}
+boxplot(AGE ~ `default payment next month`, data = datos_credit_visu,
+        main = "Edad por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `default payment next month`, generando un boxplot por mes para comparar el monto del estado de cuenta entre quienes incurrieron en impago y quienes no.
+
+```{r visu_cajas_y_bigotes_de_`default_payment_next_month`_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `default payment next month`, para comparar cuánto pagaron efectivamente los clientes que incurrieron en impago frente a los que no, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_`default_payment_next_month`_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por incurrencia de impago al mes siguiente",
+        xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
+### De PAY_0
+
+En esta sección se cruza `PAY_0` (estado de pago del cliente en septiembre de 2005, convertida a factor) contra las mismas variables numéricas, para observar si el estado de pago más reciente se relaciona con el monto de crédito, la edad, los montos de estado de cuenta y los montos pagados.
+
+Se cruza `LIMIT_BAL` contra `PAY_0`, para comparar el monto de crédito otorgado según el estado de pago de septiembre de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_0_y_LIMIT_BAL_3}
+boxplot(LIMIT_BAL/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `PAY_0`, para observar si la edad se relaciona con el estado de pago de septiembre de 2005.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_1}
+boxplot(AGE ~ PAY_0, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_0`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de septiembre de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_0_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_0`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de septiembre de 2005, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_PAY_0_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
+### De PAY_2
+
+En esta sección se cruza `PAY_2` (estado de pago del cliente en agosto de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de la sección de `PAY_0`.
+
+Se cruza `LIMIT_BAL` contra `PAY_2`, para comparar el monto de crédito otorgado según el estado de pago de agosto de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_2_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `PAY_2`, para observar si la edad se relaciona con el estado de pago de agosto de 2005.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_3}
+boxplot(AGE ~ PAY_2, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_2`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de agosto de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_2_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_2`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de agosto de 2005, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_PAY_2_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
+### De PAY_3
+
+En esta sección se cruza `PAY_3` (estado de pago del cliente en julio de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de las secciones anteriores de `PAY`.
+
+Se cruza `LIMIT_BAL` contra `PAY_3`, para comparar el monto de crédito otorgado según el estado de pago de julio de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_3_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `PAY_3`, para observar si la edad se relaciona con el estado de pago de julio de 2005.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_4}
+boxplot(AGE ~ PAY_3, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_3`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de julio de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_3_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_3`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de julio de 2005, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_PAY_3_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
+### De PAY_4
+
+En esta sección se cruza `PAY_4` (estado de pago del cliente en junio de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de las secciones anteriores de `PAY`.
+
+Se cruza `LIMIT_BAL` contra `PAY_4`, para comparar el monto de crédito otorgado según el estado de pago de junio de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_4_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `PAY_4`, para observar si la edad se relaciona con el estado de pago de junio de 2005.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_5}
+boxplot(AGE ~ PAY_4, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_4`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de junio de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_4_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_4`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de junio de 2005, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_PAY_4_y_pay_amt}
+boxplot(PAY_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
+### De PAY_5
+
+En esta sección se cruza `PAY_5` (estado de pago del cliente en mayo de 2005, convertida a factor) contra las mismas variables numéricas, siguiendo la misma lógica de las secciones anteriores de `PAY`.
+
+Se cruza `LIMIT_BAL` contra `PAY_5`, para comparar el monto de crédito otorgado según el estado de pago de mayo de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_0_y_LIMIT_BAL_2}
+boxplot(LIMIT_BAL/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `PAY_5`, para observar si la edad se relaciona con el estado de pago de mayo de 2005.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_6}
+boxplot(AGE ~ PAY_5, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_5`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de mayo de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_0_y_bill_amt_2}
+boxplot(BILL_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_5`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de mayo de 2005, mes a mes.
+
+```{r visu_cajas_y_bigotes_de_PAY_0_y_pay_amt_2}
+boxplot(PAY_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
+### De PAY_6
+
+En esta sección se cruza `PAY_6` (estado de pago del cliente en abril de 2005, convertida a factor) contra las mismas variables numéricas, cerrando la serie de comparaciones con las seis variables de estado de pago mensual.
+
+Se cruza `LIMIT_BAL` contra `PAY_6`, para comparar el monto de crédito otorgado según el estado de pago de abril de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_6_y_LIMIT_BAL}
+boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruza `AGE` contra `PAY_6`, para observar si la edad se relaciona con el estado de pago de abril de 2005.
+
+```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_2}
+boxplot(AGE ~ PAY_6, data = datos_credit_visu,
+        main = "Edad por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
+        col = "grey90")
+```
+
+Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_6`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de abril de 2005.
+
+```{r visu_cajas_y_bigotes_de_PAY_6_y_bill_amt}
+boxplot(BILL_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+
+boxplot(BILL_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
+        col = "grey90")
+```
+
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_6`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de abril de 2005, mes a mes. Con este chunk finaliza el conjunto de diagramas de caja y bigotes cruzados contra las seis variables de estado de pago mensual.
+
+```{r visu_cajas_y_bigotes_de_PAY_6_y_pay_amt_2}
+boxplot(PAY_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+
+boxplot(PAY_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
+        col = "grey90")
+```
+
