@@ -775,6 +775,7 @@ Antes de generar los gráficos, el dataset original de clientes de tarjeta de cr
 4. **Agrupación temática de pares**: los pares se organizaron en 8 grupos temáticos, cada uno con su interpretación correspondiente.
 5. **Filtrado de valores no finitos**: para cada par `(x, y)` se eliminaron las filas donde `x` o `y` fueran `NA`, `NaN` o `Inf`, usando `is.finite()`. Cada gráfico puede así usar un subconjunto de filas ligeramente distinto.
 6. **No se modificó el dataset original** (`datos`): todas las transformaciones se aplicaron sobre copias locales (`datos_grafico`, `x_grafico`, `y_grafico`) dentro de cada iteración.
+7. **Normalización logarítmica de las variables monetarias**: siguiendo el mismo criterio aplicado en los histogramas y las densidades de kernel (Sección 2), las variables monetarias (`LIMIT_BAL`, `BILL_AMT1-6` y `PAY_AMT1-6`) presentan un fuerte sesgo a la derecha, por lo que antes de graficarlas se les aplica la transformación $\log_{10}(x + 1)$. La variable `AGE` no se transforma, ya que no es monetaria y no presenta ese sesgo extremo. El `+ 1` evita el problema de $\log_{10}(0)$, indefinido, para las observaciones en cero (y se usa `+ abs(min(x)) + 1` cuando la variable tiene valores negativos, como ocurre en `BILL_AMT`).
 
 Un diccionario de datos completo (significado de cada variable) está disponible en el archivo separado `diccionario_datos.md`.
 
@@ -783,6 +784,10 @@ Un diccionario de datos completo (significado de cada variable) está disponible
 ```{r disp_variables_unidades}
 bill_vars <- c("BILL_AMT1", "BILL_AMT2", "BILL_AMT3", "BILL_AMT4", "BILL_AMT5", "BILL_AMT6")
 payamt_vars <- c("PAY_AMT1", "PAY_AMT2", "PAY_AMT3", "PAY_AMT4", "PAY_AMT5", "PAY_AMT6")
+
+# Variables monetarias que se graficarán en escala logarítmica (log10(x + 1)),
+# igual que en los histogramas y las densidades de kernel de la Sección 2
+vars_log <- c("LIMIT_BAL", bill_vars, payamt_vars)
 
 unidades <- c(
   LIMIT_BAL = "NT dólares",
@@ -839,6 +844,19 @@ secuencial_desde <- function(familia, posiciones_inicio) {
     }
   }
   pares
+}
+
+# Transforma un vector a log10(x + desplazamiento) cuando la variable
+# está marcada como monetaria en vars_log; deja el resto sin cambios.
+# El desplazamiento cubre tanto ceros (log10(0) no existe) como los
+# saldos negativos que aparecen en BILL_AMT.
+transformar_log <- function(valor, nombre_var) {
+  if (nombre_var %in% vars_log) {
+    desplazamiento <- 1 - min(0, min(valor))
+    log10(valor + desplazamiento)
+  } else {
+    valor
+  }
 }
 
 # --- Definición de los 8 grupos, con su interpretación ---
@@ -984,16 +1002,19 @@ for (i in seq_along(grupos)) {
         is.finite(datos[[y]]),
     ]
 
-    x_grafico <- datos_grafico[[x]]
-    y_grafico <- datos_grafico[[y]]
+    x_grafico <- transformar_log(datos_grafico[[x]], x)
+    y_grafico <- transformar_log(datos_grafico[[y]], y)
+
+    x_log <- x %in% vars_log
+    y_log <- y %in% vars_log
 
     plot(
       x_grafico,
       y_grafico,
       pch = 19,
       col = rgb(0, 0, 0, 0.45),
-      xlab = paste0(x, " (", unidades[x], ")"),
-      ylab = paste0(y, " (", unidades[y], ")"),
+      xlab = paste0(x, if (x_log) " (log10, " else " (", unidades[x], ")"),
+      ylab = paste0(y, if (y_log) " (log10, " else " (", unidades[y], ")"),
       main = paste(x, "vs.", y)
     )
   }
@@ -2135,4 +2156,3 @@ boxplot(PAY_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
-
