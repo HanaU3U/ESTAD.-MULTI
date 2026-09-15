@@ -2041,7 +2041,7 @@ Se cruza `AGE` contra `PAY_4`, para observar si la edad se relaciona con el esta
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_5}
 boxplot(AGE ~ PAY_4, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en junio de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
@@ -2050,32 +2050,50 @@ Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_4`, generando un boxplot por mes
 
 ```{r visu_cajas_y_bigotes_de_PAY_4_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
@@ -2084,32 +2102,50 @@ Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_4`, para comparar cuánto pagaron 
 
 ```{r visu_cajas_y_bigotes_de_PAY_4_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
@@ -2122,7 +2158,7 @@ Se cruza `LIMIT_BAL` contra `PAY_5`, para comparar el monto de crédito otorgado
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_LIMIT_BAL_2}
 boxplot(LIMIT_BAL/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        main = "Monto de crédito otorgado por estado de pago en mayo de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
@@ -2131,7 +2167,7 @@ Se cruza `AGE` contra `PAY_5`, para observar si la edad se relaciona con el esta
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_6}
 boxplot(AGE ~ PAY_5, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en mayo de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
@@ -2140,32 +2176,50 @@ Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_5`, generando un boxplot por mes
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_bill_amt_2}
 boxplot(BILL_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
@@ -2174,32 +2228,50 @@ Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_5`, para comparar cuánto pagaron 
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_pay_amt_2}
 boxplot(PAY_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
@@ -2212,7 +2284,7 @@ Se cruza `LIMIT_BAL` contra `PAY_6`, para comparar el monto de crédito otorgado
 
 ```{r visu_cajas_y_bigotes_de_PAY_6_y_LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        main = "Monto de crédito otorgado por estado de pago en abril de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
@@ -2221,7 +2293,7 @@ Se cruza `AGE` contra `PAY_6`, para observar si la edad se relaciona con el esta
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_2}
 boxplot(AGE ~ PAY_6, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en abril de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
@@ -2230,32 +2302,50 @@ Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_6`, generando un boxplot por mes
 
 ```{r visu_cajas_y_bigotes_de_PAY_6_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
@@ -2265,32 +2355,50 @@ Con este chunk finaliza el conjunto de diagramas de caja y bigotes cruzados cont
 
 ```{r visu_cajas_y_bigotes_de_PAY_6_y_pay_amt_2}
 boxplot(PAY_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
