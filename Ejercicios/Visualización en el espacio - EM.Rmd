@@ -145,14 +145,7 @@ boxplot(datos_credit_visu[, c(1, c(5, 12:23))], las = 2, cex.axis = 0.7,
 
 ```
 
-Aunque sea algo dificil apreciar detalles en estos boxplot, se pueden ver ciertos detalles interesantes. El primero de ellos es que **la media y la mediana son cercanas entre sí**; sin embargo, comparando con la información del **summary()**,los únicos casos en los que son cercanas es en LIMIT_BAL (relativamente) y AGE, y se ahondará en ello más adelante.
-Lo segundo es que **los campos BILL_AMT tienen comportamientos muy similares entre sí**; salvo un par de datos anomalos, entre otros detalles, el diagrama muestra que estas variables se comportan muy similar.
-Lo tercero es que en las variables **PAY_ATM, la media, la mediana, 1er y 3er se encuentran muy próximos entre sí y muy cerca del origen: la mayoría de los clientes realizó pagos de magnitud reducida en relación con el rango total de la variable**.
-Para finalizar, tomando el gráfico donde se comparan todas las variables juntas sin estandarizar y sin ´división entre 10000 aplicada, LIMIT_BAL es la única variable medianamente legible. AGE, por su parte, queda reducida a una línea plana sobre el eje.
-Del boxplot individual de estas últimas dos variables se pueden sacar ciertos detalles:
-  1. La caja de LIMIT_BAL no es simétrica respecto de la mediana: la distancia entre Q1 y la mediana es menor que la distancia entre la mediana y Q3, y el bigote superior es considerablemente más extenso que el inferior. Esto configura un sesgo a la derecha.
-  2. Al igual que en el caso de LIMIT_BAL, la distribución de AGE muestra un sesgo a la derecha, aunque de menor magnitud: la mediana se sitúa levemente por debajo del centro de la caja y el bigote superior es más largo que el inferior.
-_Cabe aclarar que todas estas variables a excepción de AGE manejan las mismas unidades base (NT/$), por lo que se esperaría que el output fuera casi identico._
+Aunque sea algo dificil apreciar detalles en estos boxplot, se pueden ver ciertos detalles interesantes. El primero de ellos es que **la media y la mediana son cercanas entre sí**; sin embargo, comparando con la información del **summary()**,los únicos casos en los que son cercanas es en LIMIT_BAL (relativamente) y AGE, y se ahondará en ello más adelante. Lo segundo es que **los campos BILL_AMT tienen comportamientos muy similares entre sí**; salvo un par de datos anomalos, entre otros detalles, el diagrama muestra que estas variables se comportan muy similar. Lo tercero es que en las variables **PAY_ATM, la media, la mediana, 1er y 3er se encuentran muy próximos entre sí y muy cerca del origen: la mayoría de los clientes realizó pagos de magnitud reducida en relación con el rango total de la variable**. Para finalizar, tomando el gráfico donde se comparan todas las variables juntas sin estandarizar y sin ´división entre 10000 aplicada, LIMIT_BAL es la única variable medianamente legible. AGE, por su parte, queda reducida a una línea plana sobre el eje. Del boxplot individual de estas últimas dos variables se pueden sacar ciertos detalles: 1. La caja de LIMIT_BAL no es simétrica respecto de la mediana: la distancia entre Q1 y la mediana es menor que la distancia entre la mediana y Q3, y el bigote superior es considerablemente más extenso que el inferior. Esto configura un sesgo a la derecha. 2. Al igual que en el caso de LIMIT_BAL, la distribución de AGE muestra un sesgo a la derecha, aunque de menor magnitud: la mediana se sitúa levemente por debajo del centro de la caja y el bigote superior es más largo que el inferior. *Cabe aclarar que todas estas variables a excepción de AGE manejan las mismas unidades base (NT/\$), por lo que se esperaría que el output fuera casi identico.*
 
 ### Estandarizadas
 
@@ -212,13 +205,13 @@ boxplot(LIMIT_BAL/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
-Lo primero que muestra el gráfico es que las dos distribuciones son muy parecidas entre sí. Ambas cajas ocupan prácticamente la misma franja del eje, ambos grupos parten de un mínimo cercano a 1 (NT$10.000) y los dos presentan la misma forma general: sesgo hacía la derecha, con la mediana desplazada hacia el borde inferior de la caja y una cola larga de valores atípicos por arriba. Es decir, el patrón de la variable `LIMIT_BAL` que ya se había descrito para el conjunto completo se reproduce casi idéntico dentro de cada categoría de sexo.
+Lo primero que muestra el gráfico es que las dos distribuciones son muy parecidas entre sí. Ambas cajas ocupan prácticamente la misma franja del eje, ambos grupos parten de un mínimo cercano a 1 (NT\$10.000) y los dos presentan la misma forma general: sesgo hacía la derecha, con la mediana desplazada hacia el borde inferior de la caja y una cola larga de valores atípicos por arriba. Es decir, el patrón de la variable `LIMIT_BAL` que ya se había descrito para el conjunto completo se reproduce casi idéntico dentro de cada categoría de sexo.
 
-Las diferencias que sí se aprecian son de posición y pequeñas. La mediana del grupo 1 (hombres) se ubica alrededor de 13 unidades de NT/$10.000, mientras que la del grupo 2 (mujeres) está cerca de 15. El primer cuartil también difiere: aproximadamente 5 en hombres frente a 7 en mujeres. El tercer cuartil, en cambio, es casi coincidente en ambos grupos, cerca de 24-25. El resultado es que el rango intercuartílico de las mujeres es levemente más estrecho (unas 18 unidades frente a 19-20 en hombres) y está desplazado un poco hacia arriba: **la mitad central de las clientas recibió cupos algo mayores que la mitad central de los clientes.**
+Las diferencias que sí se aprecian son de posición y pequeñas. La mediana del grupo 1 (hombres) se ubica alrededor de 13 unidades de NT/\$10.000, mientras que la del grupo 2 (mujeres) está cerca de 15. El primer cuartil también difiere: aproximadamente 5 en hombres frente a 7 en mujeres. El tercer cuartil, en cambio, es casi coincidente en ambos grupos, cerca de 24-25. El resultado es que el rango intercuartílico de las mujeres es levemente más estrecho (unas 18 unidades frente a 19-20 en hombres) y está desplazado un poco hacia arriba: **la mitad central de las clientas recibió cupos algo mayores que la mitad central de los clientes.**
 
-En los extremos la relación se invierte de forma leve. El bigote superior de los hombres alcanza aproximadamente 52 y el de las mujeres 49, y el máximo del conjunto de atípicos ordinarios está cerca de 80 en hombres y 78 en mujeres. Sin embargo, el punto extremo aislado en 100 (el cupo de NT$1.000.000, máximo de todo el conjunto de datos) pertenece al grupo de las mujeres. Ambos grupos tienen nubes densas de atípicos superiores de extensión comparable, y ninguno registra atípicos inferiores.
+En los extremos la relación se invierte de forma leve. El bigote superior de los hombres alcanza aproximadamente 52 y el de las mujeres 49, y el máximo del conjunto de atípicos ordinarios está cerca de 80 en hombres y 78 en mujeres. Sin embargo, el punto extremo aislado en 100 (el cupo de NT\$1.000.000, máximo de todo el conjunto de datos) pertenece al grupo de las mujeres. Ambos grupos tienen nubes densas de atípicos superiores de extensión comparable, y ninguno registra atípicos inferiores.
 
-La lectura de conjunto es que el solapamiento entre las dos distribuciones es casi total: la diferencia entre las medianas (unas 2 unidades, es decir NT$20.000) es muy pequeña frente al rango intercuartílico de cada grupo, que ronda las 19 unidades. Visualmente, el sexo no aparece como un factor que separe la distribución del cupo otorgado; lo que el gráfico muestra es un desplazamiento marginal hacia arriba en el grupo femenino, sobre todo en la mitad inferior de la distribución. _Hay que tener en cuenta que los tamaños de los dos grupos no son iguales en este conjunto de datos y el boxplot no los refleja._
+La lectura de conjunto es que el solapamiento entre las dos distribuciones es casi total: la diferencia entre las medianas (unas 2 unidades, es decir NT\$20.000) es muy pequeña frente al rango intercuartílico de cada grupo, que ronda las 19 unidades. Visualmente, el sexo no aparece como un factor que separe la distribución del cupo otorgado; lo que el gráfico muestra es un desplazamiento marginal hacia arriba en el grupo femenino, sobre todo en la mitad inferior de la distribución. *Hay que tener en cuenta que los tamaños de los dos grupos no son iguales en este conjunto de datos y el boxplot no los refleja.*
 
 A continuación, se cruza `AGE` (edad) contra `SEX`, para observar si la distribución de edades varía entre hombres y mujeres.
 
@@ -265,7 +258,7 @@ boxplot(BILL_AMT6/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
-Los seis meses muestran lo mismo: hombres y mujeres tienen distribuciones prácticamente idénticas. Medianas cercanas a 2 unidades de NT/$10.000 en ambos grupos, cajas que van de 0 a 6 aproximadamente, y bigotes superiores que coinciden entre los dos sexos en cada mes. El sexo no separa esta variable.
+Los seis meses muestran lo mismo: hombres y mujeres tienen distribuciones prácticamente idénticas. Medianas cercanas a 2 unidades de NT/\$10.000 en ambos grupos, cajas que van de 0 a 6 aproximadamente, y bigotes superiores que coinciden entre los dos sexos en cada mes. El sexo no separa esta variable.
 
 Ojo con las escalas: cada panel tiene un eje vertical distinto (julio llega a 150, junio a 80), así que comparar meses a simple vista engaña.
 
@@ -308,7 +301,8 @@ boxplot(PAY_AMT6/10000 ~ SEX, data = datos_credit_visu,
         xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
-Las cajas están colapsadas sobre cero en los dos grupos y en los seis meses. No se distingue mediana ni cuartiles: todo el rango intercuartílico cabe en menos de 1 unidad de NT/$10.000. El bigote superior llega a cerca de 1 unidad (NT$10.000). Sexo y mes son irrelevantes para esto: las doce cajas se ven iguales.
+
+Las cajas están colapsadas sobre cero en los dos grupos y en los seis meses. No se distingue mediana ni cuartiles: todo el rango intercuartílico cabe en menos de 1 unidad de NT/\$10.000. El bigote superior llega a cerca de 1 unidad (NT\$10.000). Sexo y mes son irrelevantes para esto: las doce cajas se ven iguales.
 
 Toda la información está en los atípicos. Forman una columna vertical densa desde cero hasta unas 20-25 unidades, y encima puntos sueltos.
 
@@ -413,6 +407,7 @@ boxplot(PAY_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+
 Todas las cajas colapsadas en cero en los cuatro grupos. Solo cambia la altura de la columna de atípicos: 1 y 2 llegan alto (168 y 122 en agosto, 90 en julio), 3 intermedio, 4 siempre el más bajo (21 en agosto, 12 en junio). Esa jerarquía refleja el número de observaciones de cada grupo, no la conducta de pago.
 
 **Finalmente, se concluye que el nivel educativo discrimina el cupo otorgado y la edad, pero no el saldo ni el pago.**

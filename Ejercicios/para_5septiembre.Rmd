@@ -23,7 +23,8 @@ paquetes <- c(
   "dplyr",
   "rlang",
   "here",
-  "readxl"
+  "readxl",
+  "ragg"
 )
 paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
 
