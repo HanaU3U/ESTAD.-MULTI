@@ -275,6 +275,34 @@ Monto efectivamente pagado por el cliente cada mes, en NT\$.
 
 Eliminacion de la variable **`ID`** para hacer el analisis exploratorio de los datos con la matriz de correlacion y exportacion del nuevo datos_credit.csv sin la columna **`ID`**
 
+Aquí tienes el texto explicativo para agregar al `.Rmd`, que argumenta por qué estas variables, aunque se almacenan como `numeric`/entero, son en realidad categóricas:
+
+------------------------------------------------------------------------
+
+### Consideraciones sobre el tipo de dato real de las variables
+
+Aunque el dataset `credit.xls` almacena todas sus columnas como tipo `numeric` (entero), esto no significa que todas las variables sean numéricas en realidad.
+Es fundamental distinguir entre el **tipo de dato original** (cómo R interpreta la columna al cargarla) y el **tipo de dato real**, ya que tratar una variable categórica como si fuera numérica puede llevar a interpretaciones erróneas, especialmente en el cálculo de correlaciones y en cualquier análisis multivariado posterior.
+
+Las siguientes variables, si bien están codificadas con números, corresponden en realidad a **variables categóricas**:
+
+**`SEX` (X2)** Los valores 1 y 2 son simplemente etiquetas que distinguen dos grupos (hombre/mujer).
+No existe una relación de orden ni de distancia entre "1" y "2": la diferencia entre ambos no es "una unidad" en ningún sentido cuantitativo.
+Es una **variable categórica nominal**.
+
+**`EDUCATION` (X3)** Los valores 1 a 4 representan niveles de escolaridad (posgrado, pregrado, bachillerato, otros), la categoría "Otros" (4) rompe esa escala, ya que agrupa situaciones heterogéneas (incluyendo los valores no documentados 0, 5 y 6 que fueron reasignadas).
+Por esta razón se trata como **variable categórica ordinal**.
+
+**`MARRIAGE` (X4)** Los valores 1, 2 y 3 (casado, soltero, otros) no tienen una relación de orden ni de magnitud entre sí — no existe un sentido en el que "soltero" sea "más" o "menos" que "casado".
+Es una **variable categórica nominal**.
+
+**`PAY_0` a `PAY_6` (X6–X11)** Aunque a primera vista parecen numéricas (representan "meses de atraso"), su codificación mezcla dos tipos de información distinta en una sola escala: por un lado, valores que indican **ausencia de actividad o cumplimiento** (-2, -1, 0), y por otro, valores que indican **magnitud del atraso** (1 a 9, representando meses).
+Esto quiere decir que la variable no es estrictamente continua ni tiene una escala de intervalos iguales entre todos sus valores — el salto conceptual entre -2 ("sin consumo") y -1 ("pagó puntual") no es comparable al salto entre 3 y 4 meses de atraso.
+Por esto se consideran **variables categóricas ordinales**, donde el orden importa (más atraso es "peor"), pero no debe asumirse que la distancia numérica entre categorías es uniforme.
+
+**`default payment next month` (Y)** Es una variable **binaria/categórica** por definición: solo toma dos valores (0 y 1) que representan la ausencia o presencia de un evento, no una cantidad.
+Es el tipo de variable típico para modelos de clasificación, no de regresión.
+
 ```{r eda_preparacion-credito, include=FALSE}
 # Eliminar variable ID
 datos_credit <- datos1 %>%
@@ -311,6 +339,11 @@ corrplot(matriz_cor,
          addCoef.col = "black",
          number.cex = 0.4)
 ```
+
+**Implicación para el análisis de correlación**
+
+El hecho de que estas variables sean categóricas y no numéricas continuas tiene una consecuencia directa sobre la interpretación de la matriz de correlación de Pearson calculada anteriormente: los coeficientes obtenidos para `SEX`, `EDUCATION`, `MARRIAGE` y las variables `PAY_*` deben leerse con cautela, ya que Pearson asume relaciones lineales entre variables de intervalo o razón.
+Para un tratamiento estadístico más riguroso de estas variables, sería recomendable complementar el análisis con coeficientes de correlación no paramétricos (como Spearman o Kendall) o con medidas de asociación específicas para variables categóricas.
 
 # 2. Histogramas y Densidades
 
