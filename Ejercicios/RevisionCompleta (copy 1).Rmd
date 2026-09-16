@@ -1926,7 +1926,7 @@ boxplot(LIMIT_BAL/10000 ~ PAY_3, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
-
+Se mantiene la tendencia: -2 y -1 tienen los cupos más altos, la 0 baja pero conserva muchos cupos altos, y los retrasos se asocian con cupos menores. La categoría 1 aparece anómalamente alta, igual que la 5, pero ambas tienen muy pocos casos, así que no son interpretables.
 
 Se cruza `AGE` contra `PAY_3`, para observar si la edad se relaciona con el estado de pago de julio de 2005.
 
@@ -1936,6 +1936,7 @@ boxplot(AGE ~ PAY_3, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+Sigue sin haber relación. Las diferencias en los retrasos altos se deben al tamaño reducido de esos grupos.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_3`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de julio de 2005.
 
@@ -1988,7 +1989,7 @@ boxplot(BILL_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
-
+El patrón es el mismo que en PAY_0 y PAY_2. En -2 y -1 los saldos están pegados a cero, con algunos negativos (saldo a favor). La 0 es el grupo con más deuda y más dispersión. Los retrasos tienen saldos moderados. Hay dos rarezas de grupos pequeños: la 1 se ve elevada y la 7 queda casi en cero, quizá por cuentas castigadas o de monto muy bajo. El comportamiento es estable en los seis meses.
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_3`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de julio de 2005, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_PAY_3_y_pay_amt}
@@ -2040,6 +2041,10 @@ boxplot(PAY_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Los abonos siguen concentrados en -2, -1 y 0. La 2 conserva una cola de pagos notable, lo que sugiere clientes que se ponen al día. Desde el tercer mes de retraso los pagos desaparecen. La caja amplia de la categoría 1 en abril es poco confiable por su bajo número de casos.
+
+
+De lo que se ha observado hasta el momento, si se retrocede en el tiempo (septiembre -> agosto -> julio), los patrones son prácticamente idénticos, confirmando la fuerte persistencia del comportamiento de pago que ya había mostrado la correlación entre PAY_0 y PAY_6.
 
 ### De PAY_4
 
