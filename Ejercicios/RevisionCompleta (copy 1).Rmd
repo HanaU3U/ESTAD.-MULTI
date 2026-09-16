@@ -1199,7 +1199,7 @@ Los seis meses muestran lo mismo: hombres y mujeres tienen distribuciones práct
 Medianas cercanas a 2 unidades de NT/\$10.000 en ambos grupos, cajas que van de 0 a 6 aproximadamente, y bigotes superiores que coinciden entre los dos sexos en cada mes.
 El sexo no separa esta variable.
 
-Ojo con las escalas: cada panel tiene un eje vertical distinto (julio llega a 150, junio a 80), así que comparar meses a simple vista engaña.
+Cada panel tiene un eje vertical distinto (julio llega a 150, junio a 80), así que comparar meses a simple vista engaña.
 
 En los seis casos la forma es la misma: asimetría positiva fuerte, mediana pegada al borde inferior de la caja, y una columna densa y continua de atípicos hasta 50-60 unidades.
 
@@ -1405,6 +1405,7 @@ boxplot(LIMIT_BAL/10000 ~ MARRIAGE, data = datos_credit_visu,
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+En este boxplot se puede apreciar una posible relación entre el monto de crédito que recibe una persona y su estado civil. Las personas casadas son las que tienen mayor cupo, los solteros quedan apenas por debajo, y el grupo "Otros" (posiblemente separados, viudos, etc) está notoriamente más abajo y con menos dispersión.
 
 Se cruza `AGE` contra `MARRIAGE`, para observar la distribución de edades según el estado civil.
 
@@ -1414,6 +1415,7 @@ boxplot(AGE ~ MARRIAGE, data = datos_credit_visu,
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+Los solteros son claramente el grupo más joven y más compacto; casados y "Otros" están desplazados hacia edades mayores, siendo "Otros" el de mediana más alta y el más disperso; se asemeja algo a una distribución normal.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `MARRIAGE`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado civil del cliente.
 
@@ -1466,6 +1468,7 @@ boxplot(BILL_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+Casados y solteros son indistinguibles entre sí en los seis paneles: misma posición, mismo tamaño de caja, misma nube densa de atípicos. "Otros" se ve más recogido, con menos alcance hacia arriba, lo cual responde a su menor número de observaciones más que a un comportamiento distinto. El patrón se repite idéntico mes a mes.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `MARRIAGE`, para comparar cuánto pagaron efectivamente los clientes según su estado civil, mes a mes.
 
@@ -1518,6 +1521,7 @@ boxplot(PAY_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Cajas colapsadas en cero en los tres grupos, sin diferencias apreciables. Solo cambia la densidad y el alcance de la columna de atípicos: alta en casados y solteros, escasa en "Otros", otra vez por tamaño de grupo. Adicionalmente, el grupo "Otros" está condicionado por su tamaño, al ser una muestra menor (377 de 30000 registros, aproximadamente el 1.26%).
 
 ### De "default payment next month"
 
