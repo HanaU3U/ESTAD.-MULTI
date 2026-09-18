@@ -15,6 +15,9 @@ output:
     theme: cosmo
     highlight: tango
     df_print: paged
+editor_options: 
+  markdown: 
+    wrap: sentence
 ---
 
 ```{r global-setup, include=FALSE}
@@ -33,10 +36,10 @@ knitr::opts_chunk$set(
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 ```
 
-Este documento reúne, en un solo archivo R Markdown, el análisis exploratorio del dataset *Default of Credit Card Clients* del repositorio UCI. El recorrido se organiza en cuatro partes: preparación y depuración de la base, exploración univariada con apoyo de la matriz de correlación, estudio de distribuciones mediante histogramas y densidades, y análisis gráfico de relaciones entre variables con diagramas de caja y diagramas de dispersión.
+Este documento reúne, en un solo archivo R Markdown, el análisis exploratorio del dataset *Default of Credit Card Clients* del repositorio UCI.
+El recorrido se organiza en cuatro partes: preparación y depuración de la base, exploración univariada con apoyo de la matriz de correlación, estudio de distribuciones mediante histogramas y densidades, y análisis gráfico de relaciones entre variables con diagramas de caja y diagramas de dispersión.
 
 El objetivo no es solo describir los datos, sino dejar claro qué estructura estadística tiene el conjunto: qué variables son categóricas aunque vengan codificadas numéricamente, dónde aparecen sesgos y valores atípicos, y qué bloques de variables exhiben dependencia suficiente como para justificar el uso posterior de herramientas de estadística multidimensional.
-
 
 # 1. Exploración Inicial del Dataset y Estructura de Correlación
 
@@ -89,7 +92,8 @@ library(here)
 
 Se trabaja con el archivo `credit.xls`, correspondiente al dataset **Default of Credit Card Clients** del repositorio **UC Irvine Machine Learning Repository**: <https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients>.
 
-La base contiene información de 30.000 clientes de tarjeta de crédito en Taiwán. Las variables recogen monto del cupo otorgado, características demográficas, historial reciente de pago, montos facturados y montos efectivamente pagados; la variable objetivo indica si el cliente incurrió o no en impago al mes siguiente.
+La base contiene información de 30.000 clientes de tarjeta de crédito en Taiwán durante el año 2005.
+Las variables recogen monto del cupo otorgado, características demográficas, historial reciente de pago, montos facturados y montos efectivamente pagados; la variable objetivo indica si el cliente incurrió o no en impago al mes siguiente.
 
 ```{r eda_carga-credito}
 library(readxl)
@@ -105,303 +109,442 @@ names(datos1)
 summary(datos1)
 ```
 
-### Verificación de consistencia y diccionario de variables
+### Verificación de consistencia y preparación de los datos
 
-La estructura general del archivo muestra 30.000 registros y 25 variables. En una primera revisión se detecta que `EDUCATION` y `MARRIAGE` contienen categorías no documentadas oficialmente: en `EDUCATION` aparecen `0`, `5` y `6`, y en `MARRIAGE` aparece `0`.
+El archivo original contiene 30.000 registros y 25 variables: un identificador, 23 variables explicativas y una variable de respuesta, siendo un total de 10 variables categoricas, 15 variables cuantitativas y 1 variable de identificador.
 
-En vez de eliminar esas observaciones, se recodifican en la categoría residual ya contemplada por el propio diccionario de datos. Esta decisión conserva tamaño muestral y evita perder casos que, aunque mal codificados o no documentados, siguen siendo informativos para el análisis descriptivo.
+Los prefijos `X1`, …, `X23` y `Y` se conservan como referencias en los títulos y en el diccionario.
+Los nombres reales de las columnas no incluyen estos prefijos.
 
-```{r eda_conversion_de_datos, include=FALSE}
+Este análisis parte del objeto `datos1`, previamente cargado.
+
+```{r eda_librerias, message=FALSE, warning=FALSE}
+library(dplyr)
+library(here)
+```
+
+### Consideraciones sobre la naturaleza de las variables
+
+El tipo de almacenamiento de una columna no determina su naturaleza estadística.
+Aunque las columnas estén almacenadas como números, algunas representan categorías:
+
+- **X2 - SEX**: categórica nominal. Sus códigos identifican grupos, no cantidades.
+- **X3 - EDUCATION**: los niveles educativos conocidos tienen un orden, pero la categoría «Otros» no tiene una posición definida. Por ello, la variable completa se trata como categórica nominal.
+- **X4 - MARRIAGE**: categórica nominal, sin orden entre sus categorías.
+- **X6 - PAY_0 a X11 - PAY_6**: estados de pago codificados. Los valores positivos representan meses de retraso y tienen un orden, pero los códigos especiales `-2`, `-1` y `0` no constituyen una escala de intervalos iguales con los demás valores.
+- **Y - default payment next month**: respuesta binaria. Identifica la ausencia o presencia de impago; puede analizarse mediante modelos de clasificación, incluida la regresión logística.
+
+Se conservan los códigos numéricos para facilitar la validación y exportación.
+Esto no implica que las variables categóricas deban interpretarse como cuantitativas.
+
+### Recodificación de categorías no documentadas
+
+En la revisión original de `EDUCATION` se identificaron 345 registros (1,15 %) con los códigos `0`, `5` y `6`.
+Estos se agrupan en la categoría `4 = Otros`, que queda conformada por 468 registros (1,56 %).
+
+En la revisión original de `MARRIAGE` se identificaron 54 registros (0,18 %) con el código `0`.
+Estos se agrupan en la categoría `3 = Otros`, que queda conformada por 377 registros (1,26 %).
+
+Esta decisión conserva las observaciones y utiliza las categorías residuales existentes.
+Las cifras corresponden a los resultados suministrados.
+
+```{r eda_conversion_de_datos}
 # Frecuencias antes de la recodificación
-table(datos1$EDUCATION)
-table(datos1$MARRIAGE)
+table(datos1$EDUCATION, useNA = "ifany")
+table(datos1$MARRIAGE, useNA = "ifany")
 
-# Recodificar categorías no documentadas como "otros"
+# Recodificar categorías no documentadas como "Otros"
 datos1 <- datos1 %>%
   mutate(
-    EDUCATION = ifelse(EDUCATION %in% c(0, 5, 6), 4, EDUCATION),
-    MARRIAGE  = ifelse(MARRIAGE == 0, 3, MARRIAGE)
+    EDUCATION = ifelse(
+      EDUCATION %in% c(0, 5, 6),
+      4,
+      EDUCATION
+    ),
+    MARRIAGE = ifelse(
+      MARRIAGE == 0,
+      3,
+      MARRIAGE
+    )
   )
 
 # Frecuencias después de la recodificación
-table(datos1$EDUCATION)
-table(datos1$MARRIAGE)
+table(datos1$EDUCATION, useNA = "ifany")
+table(datos1$MARRIAGE, useNA = "ifany")
 ```
+
+### Diccionario de variables
 
 #### Identificador
 
-- **`ID`** — Tipo: **Numeric** Identificador único de cada cliente.
+- **`ID`** — Identificador único de cada cliente, almacenado como número. Se excluye del análisis y de la base exportada.
 
-#### Variables demográficas
+#### Variables demográficas y límite de crédito
 
-- **`LIMIT_BAL`** — Tipo: **Numeric**\
-  Monto de crédito otorgado, en NT\$ (nuevo dólar taiwanés). Incluye tanto el crédito individual del consumidor como el crédito familiar/suplementario.
+- **X1 - `LIMIT_BAL`** — Variable cuantitativa. Monto de crédito otorgado, en nuevos dólares taiwaneses (NT\$). Incluye crédito individual y familiar/suplementario. Rango observado: de 10.000 a 1.000.000 NT\$.
+- **X2 - `SEX`** — Variable categórica nominal. `1 = Hombre`, `2 = Mujer`.
+- **X3 - `EDUCATION`** — Variable categórica. `1 = Posgrado`, `2 = Universidad`, `3 = Secundaria`, `4 = Otros`. Los códigos originales `0`, `5` y `6` se recodifican como `4`.
+- **X4 - `MARRIAGE`** — Variable categórica nominal. `1 = Casado`, `2 = Soltero`, `3 = Otros`. El código original `0` se recodifica como `3`.
+- **X5 - `AGE`** — Variable cuantitativa. Edad del cliente en años. Rango observado: de 21 a 79 años.
 
-- **`SEX`** — Tipo: **Numeric**\
-  Género del cliente. 1 = Hombre, 2 = Mujer.
+#### Historial de pagos
 
-- **`EDUCATION`** — Tipo: **Numeric**\
-  Nivel educativo. 1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros.
+La escala descrita en el diccionario proporcionado incluye `-1 = Pago puntual`, `1 = Retraso de un mes`, …, `9 = Retraso de nueve meses o más`.
 
-- **`MARRIAGE`** — Tipo: **Numeric**\
-  Estado civil. 1 = Casado, 2 = Soltero, 3 = Otros.
+También se observan los códigos `-2` y `0`, no documentados en esa escala.
+En el material proporcionado se asocian, respectivamente, con ausencia de actividad y pago mínimo o crédito revolvente.
+Estas interpretaciones requieren confirmación antes de utilizarlas como definiciones definitivas.
 
-- **`AGE`** — Tipo: **Numeric**\
-  Edad del cliente, en años.
+| Referencia | Nombre de la columna | Mes del estado de pago               |
+|:-----------|:---------------------|:-------------------------------------|
+| X6         | `PAY_0`              | Septiembre de 2005, mes más reciente |
+| X7         | `PAY_2`              | Agosto de 2005                       |
+| X8         | `PAY_3`              | Julio de 2005                        |
+| X9         | `PAY_4`              | Junio de 2005                        |
+| X10        | `PAY_5`              | Mayo de 2005                         |
+| X11        | `PAY_6`              | Abril de 2005, mes más antiguo       |
 
-#### Variables de Historial de pagos (Repayment Status)
+#### Montos de facturación
 
-Escala común para las siguientes 6 variables: -1 = Pagó puntualmente, 1 = Retraso de 1 mes, 2 = Retraso de 2 meses, ..., 9 = Retraso de 9 meses o más.
+Variables cuantitativas que representan el monto del estado de cuenta mensual, en NT\$.
+Los valores negativos pueden corresponder a saldos a favor y no se consideran errores automáticamente.
 
-Hay casos que también aparecen valores 0 y -2, no documentados oficialmente, asociados a "sin consumo" o "pago mínimo".
+| Referencia | Nombre de la columna | Mes del estado de cuenta |
+|:-----------|:---------------------|:-------------------------|
+| X12        | `BILL_AMT1`          | Septiembre de 2005       |
+| X13        | `BILL_AMT2`          | Agosto de 2005           |
+| X14        | `BILL_AMT3`          | Julio de 2005            |
+| X15        | `BILL_AMT4`          | Junio de 2005            |
+| X16        | `BILL_AMT5`          | Mayo de 2005             |
+| X17        | `BILL_AMT6`          | Abril de 2005            |
 
-| Valor | ¿Hubo deuda/consumo? | ¿Qué pasó con el pago?           |
-|-------|----------------------|----------------------------------|
-| -2    | No                   | No aplica — no hubo actividad    |
-| -1    | Sí                   | Pagó completo y a tiempo         |
-| 0     | Sí (o parcial)       | Pagó el mínimo, sin atraso pleno |
+#### Montos de pagos previos
 
-- **`PAY_0`** — Tipo: **Numeric**\
-  Estado de pago en septiembre de 2005 (mes más reciente).
+Variables cuantitativas que representan el monto efectivamente pagado por el cliente cada mes, en NT\$.
 
-- **`PAY_2`** — Tipo: **Numeric**\
-  Estado de pago en agosto de 2005.
+| Referencia | Nombre de la columna | Mes del pago       |
+|:-----------|:---------------------|:-------------------|
+| X18        | `PAY_AMT1`           | Septiembre de 2005 |
+| X19        | `PAY_AMT2`           | Agosto de 2005     |
+| X20        | `PAY_AMT3`           | Julio de 2005      |
+| X21        | `PAY_AMT4`           | Junio de 2005      |
+| X22        | `PAY_AMT5`           | Mayo de 2005       |
+| X23        | `PAY_AMT6`           | Abril de 2005      |
 
-- **`PAY_3`** — Tipo: **Numeric**\
-  Estado de pago en julio de 2005.
+#### Variable de respuesta
 
-- **`PAY_4`** — Tipo: **Numeric**\
-  Estado de pago en junio de 2005.
-
-- **`PAY_5`** — Tipo: **Numeric**\
-  Estado de pago en mayo de 2005.
-
-- **`PAY_6`** — Tipo: **Numeric**\
-  Estado de pago en abril de 2005 (mes más antiguo).
-
-#### Montos de facturación (Bill Statement Amount)
-
-Monto del estado de cuenta mensual, en NT\$. Puede ser negativo si el cliente tenía saldo a favor.
-
-- **`BILL_AMT1`** — Tipo: **Numeric**\
-  Monto del estado de cuenta en septiembre de 2005.
-
-- **`BILL_AMT2`** — Tipo: **Numeric**\
-  Monto del estado de cuenta en agosto de 2005.
-
-- **`BILL_AMT3`** — Tipo: **Numeric**\
-  Monto del estado de cuenta en julio de 2005.
-
-- **`BILL_AMT4`** — Tipo: **Numeric**\
-  Monto del estado de cuenta en junio de 2005.
-
-- **`BILL_AMT5`** — Tipo: **Numeric**\
-  Monto del estado de cuenta en mayo de 2005.
-
-- **`BILL_AMT6`** — Tipo: **Numeric**\
-  Monto del estado de cuenta en abril de 2005.
-
-#### Montos de pagos previos (Previous Payment Amount)
-
-Monto efectivamente pagado por el cliente cada mes, en NT\$.
-
-- **`PAY_AMT1`** — Tipo: **Numeric**\
-  Monto pagado en septiembre de 2005.
-
-- **`PAY_AMT2`** — Tipo: **Numeric**\
-  Monto pagado en agosto de 2005.
-
-- **`PAY_AMT3`** — Tipo: **Numeric**\
-  Monto pagado en julio de 2005.
-
-- **`PAY_AMT4`** — Tipo: **Numeric**\
-  Monto pagado en junio de 2005.
-
-- **`PAY_AMT5`** — Tipo: **Numeric**\
-  Monto pagado en mayo de 2005.
-
-- **`PAY_AMT6`** — Tipo: **Numeric**\
-  Monto pagado en abril de 2005.
-
-#### Variable Predictiva
-
-- **`default payment next month`** — Tipo: Binaria (0/1)\
-  Indica si el cliente incurrió en impago al mes siguiente. 1 = Sí (default), 0 = No.
+- **Y - `default payment next month`** — Variable binaria. Indica si el cliente incurrió en impago al mes siguiente: `1 = Sí`, `0 = No`.
 
 ### Preparación de variables para el análisis
 
-La variable `ID` actúa únicamente como identificador y no aporta contenido analítico. Por esa razón se elimina antes de construir la matriz de correlación y antes de exportar la versión de trabajo `datos_credit.csv`, que será la base usada en las siguientes secciones del informe.
+La variable `ID` se elimina porque identifica a los clientes y no representa una característica analítica.
 
-```{r eda_preparacion-credito, include=FALSE}
-# Eliminar variable ID
+La base exportada conserva todas las demás variables y sus nombres originales.
+La matriz de correlación de Pearson se calcula únicamente con las variables cuantitativas para evitar interpretar los códigos de categorías como magnitudes.
+
+```{r eda_preparacion_credito}
+# Eliminar el identificador
 datos_credit <- datos1 %>%
-  select(-ID)
+  select(-all_of("ID"))
 
-# Matriz de correlación
-matriz_cor <- cor(datos_credit, use = "pairwise.complete.obs")
+# Definir grupos de variables con sus nombres reales
+variables_bill <- paste0("BILL_AMT", 1:6)
+variables_pay_amt <- paste0("PAY_AMT", 1:6)
+
+variables_historial <- c(
+  "PAY_0",
+  "PAY_2",
+  "PAY_3",
+  "PAY_4",
+  "PAY_5",
+  "PAY_6"
+)
+
+variables_cuantitativas <- c(
+  "LIMIT_BAL",
+  "AGE",
+  variables_bill,
+  variables_pay_amt
+)
+
+# Matriz de correlación entre variables cuantitativas
+matriz_cor <- cor(
+  datos_credit %>% select(all_of(variables_cuantitativas)),
+  use = "pairwise.complete.obs",
+  method = "pearson"
+)
+
 round(matriz_cor, 2)
 
-# Exportar a CSV en la carpeta DATASET
+# Crear la carpeta de destino si no existe
+dir.create(
+  here::here("DATASET"),
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+# Exportar la base completa sin ID
 write.csv(
   datos_credit,
-  here("DATASET", "datos_credit.csv"),
-  row.names = FALSE
+  file = here::here("DATASET", "datos_credit.csv"),
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+
+# Para importar posteriormente el CSV conservando los nombres:
+# datos_credit <- read.csv(
+#   here::here("DATASET", "datos_credit.csv"),
+#   check.names = FALSE,
+#   fileEncoding = "UTF-8"
+# )
+```
+
+### Exploración univariada de las variables
+
+Las variables categóricas se revisan mediante tablas de frecuencias y comparaciones con los códigos admitidos.
+Las variables cuantitativas se resumen mediante mínimos, máximos, medias y cuantiles.
+
+En las validaciones siguientes, `numeric(0)` indica que no se encontraron códigos no admitidos entre los valores observados.
+Los valores faltantes se revisan por separado.
+
+```{r eda_dimensiones_y_faltantes}
+# Dimensiones de la base sin ID
+dim(datos_credit)
+
+# Valores faltantes por variable
+colSums(is.na(datos_credit))
+```
+
+### Variables categóricas
+
+#### X2 - SEX
+
+Categorías: `1 = Hombre`, `2 = Mujer`.
+
+```{r categorica_SEX}
+table(datos_credit$SEX, useNA = "ifany")
+
+categorias_validas_sex <- c(1, 2)
+
+setdiff(
+  na.omit(unique(datos_credit$SEX)),
+  categorias_validas_sex
 )
 ```
 
-### Exploración Univariada de las Variables
+Según los resultados proporcionados, hay 11.888 hombres y 18.112 mujeres.
+No se encontraron códigos fuera de las categorías admitidas, no habiendo un brecha tan grande entre el sexo del usuario, pero si siendo que las mujeres en taiwan tienen un mayor uso de las tajetas de credito.
 
-Antes de pasar a las visualizaciones, se revisan las variables según su naturaleza. Las variables categóricas se inspeccionan una por una para verificar niveles válidos; las variables numéricas de facturación y de pago se resumen en bloque; y la variable binaria de respuesta se revisa por separado. Esta organización permite distinguir desde el inicio qué columnas deben interpretarse como categorías codificadas y cuáles sí representan magnitudes continuas o cuasi-continuas.
+#### X3 - EDUCATION
 
-## Variables categóricas
-
-Para cada variable categórica se imprime su tabla de frecuencias con `table()` y se comparan sus niveles observados contra las categorías válidas esperadas mediante `setdiff()`. Si `setdiff()` devuelve `character(0)` o `numeric(0)`, entonces no quedan categorías fuera de lo documentado tras la depuración.
-
-### SEX
-
-Categorías documentadas: 1 = Hombre, 2 = Mujer.
-
-```{r categorica_SEX}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$SEX)
-
-# Verificación de categorías fuera de lo documentado
-categorias_validas_sex <- c(1, 2)
-setdiff(unique(datos_credit$SEX), categorias_validas_sex)
-```
-
-### EDUCATION
-
-Categorías documentadas: 1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros.
+Categorías: `1 = Posgrado`, `2 = Universidad`, `3 = Secundaria`, `4 = Otros`.
 
 ```{r categorica_EDUCATION}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$EDUCATION)
+table(datos_credit$EDUCATION, useNA = "ifany")
 
-# Verificación de categorías fuera de lo documentado
 categorias_validas_education <- c(1, 2, 3, 4)
-setdiff(unique(datos_credit$EDUCATION), categorias_validas_education)
+
+setdiff(
+  na.omit(unique(datos_credit$EDUCATION)),
+  categorias_validas_education
+)
 ```
 
-### MARRIAGE
+Después de la recodificación, los resultados proporcionados muestran 10.585 clientes con posgrado, 14.030 con educación universitaria, 4.917 con secundaria y 468 en «Otros».
 
-Categorías documentadas: 1 = Casado, 2 = Soltero, 3 = Otros.
+Lo que se ve es que la mayoria de las personas que manejan una tarjeta de credito en taiwan, son graduados de un pregrado universatario o superior, debido a su mayor nivel adquisitivo a diferencia de los que no completaron la educacion superior.
+
+#### X4 - MARRIAGE
+
+Categorías: `1 = Casado`, `2 = Soltero`, `3 = Otros`.
 
 ```{r categorica_MARRIAGE}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$MARRIAGE)
+table(datos_credit$MARRIAGE, useNA = "ifany")
 
-# Verificación de categorías fuera de lo documentado
 categorias_validas_marriage <- c(1, 2, 3)
-setdiff(unique(datos_credit$MARRIAGE), categorias_validas_marriage)
+
+setdiff(
+  na.omit(unique(datos_credit$MARRIAGE)),
+  categorias_validas_marriage
+)
 ```
 
-### PAY_0
+Después de la recodificación, los resultados proporcionados muestran 13.659 clientes casados, 15.964 solteros y 377 en «Otros», la difereancia entre el estado civel del usuario de la tarjeta de credito es muy pequeño, solo siendo soltero un poco mayor al de casados pero si mayor peso relevante el uno sobre el otro.
 
-Categorías documentadas: -2 = Sin consumo/actividad, -1 = Pago puntual, 0 = Pago mínimo sin atraso pleno, 1 a 9 = Meses de retraso.
+#### X6 - PAY_0
+
+Estado de pago en septiembre de 2005.
+
+Se admiten los códigos `-2`, `-1`, `0` y `1` a `9` para la revisión de consistencia.
+Admitir los códigos observados no confirma por sí mismo su interpretación.
 
 ```{r categorica_PAY_0}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$PAY_0)
+categorias_validas_pay <- c(-2, -1, 0, 1:9)
 
-# Verificación de categorías fuera de lo documentado
-categorias_validas_pay <- c(-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-setdiff(unique(datos_credit$PAY_0), categorias_validas_pay)
+table(datos_credit$PAY_0, useNA = "ifany")
+
+setdiff(
+  na.omit(unique(datos_credit$PAY_0)),
+  categorias_validas_pay
+)
 ```
 
-### PAY_2
+#### X7 - PAY_2
 
-Mismas categorías documentadas que `PAY_0` (estado de pago de agosto de 2005).
+Estado de pago en agosto de 2005.
 
 ```{r categorica_PAY_2}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$PAY_2)
+table(datos_credit$PAY_2, useNA = "ifany")
 
-# Verificación de categorías fuera de lo documentado
-setdiff(unique(datos_credit$PAY_2), categorias_validas_pay)
+setdiff(
+  na.omit(unique(datos_credit$PAY_2)),
+  categorias_validas_pay
+)
 ```
 
-### PAY_3
+#### X8 - PAY_3
 
-Mismas categorías documentadas que `PAY_0` (estado de pago de julio de 2005).
+Estado de pago en julio de 2005.
 
 ```{r categorica_PAY_3}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$PAY_3)
+table(datos_credit$PAY_3, useNA = "ifany")
 
-# Verificación de categorías fuera de lo documentado
-setdiff(unique(datos_credit$PAY_3), categorias_validas_pay)
+setdiff(
+  na.omit(unique(datos_credit$PAY_3)),
+  categorias_validas_pay
+)
 ```
 
-### PAY_4
+#### X9 - PAY_4
 
-Mismas categorías documentadas que `PAY_0` (estado de pago de junio de 2005).
+Estado de pago en junio de 2005.
 
 ```{r categorica_PAY_4}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$PAY_4)
+table(datos_credit$PAY_4, useNA = "ifany")
 
-# Verificación de categorías fuera de lo documentado
-setdiff(unique(datos_credit$PAY_4), categorias_validas_pay)
+setdiff(
+  na.omit(unique(datos_credit$PAY_4)),
+  categorias_validas_pay
+)
 ```
 
-### PAY_5
+#### X10 - PAY_5
 
-Mismas categorías documentadas que `PAY_0` (estado de pago de mayo de 2005).
+Estado de pago en mayo de 2005.
 
 ```{r categorica_PAY_5}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$PAY_5)
+table(datos_credit$PAY_5, useNA = "ifany")
 
-# Verificación de categorías fuera de lo documentado
-setdiff(unique(datos_credit$PAY_5), categorias_validas_pay)
+setdiff(
+  na.omit(unique(datos_credit$PAY_5)),
+  categorias_validas_pay
+)
 ```
 
-### PAY_6
+#### X11 - PAY_6
 
-Mismas categorías documentadas que `PAY_0` (estado de pago de abril de 2005).
+Estado de pago en abril de 2005.
 
 ```{r categorica_PAY_6}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$PAY_6)
+table(datos_credit$PAY_6, useNA = "ifany")
 
-# Verificación de categorías fuera de lo documentado
-setdiff(unique(datos_credit$PAY_6), categorias_validas_pay)
+setdiff(
+  na.omit(unique(datos_credit$PAY_6)),
+  categorias_validas_pay
+)
 ```
 
-## Variables de facturación (BILL_AMT1 a BILL_AMT6) en conjunto
+En las frecuencias proporcionadas, el código `0` es el más frecuente en los seis meses.
+No aparecen observaciones con código `9`; en mayo y abril tampoco aparece el código `1`.
+La ausencia de una categoría admitida no constituye un error de consistencia.
 
-Las seis variables `BILL_AMT` se resumen conjuntamente con `summary()` para observar, en un mismo bloque, sus rangos, cuantiles y posible presencia de saldos negativos.
+### Variables cuantitativas
+
+#### X1 - LIMIT_BAL y X5 - AGE
+
+Se revisan los rangos, la tendencia central y los cuantiles del límite de crédito y de la edad.
+
+```{r numericas_limite_edad}
+summary(
+  datos_credit %>%
+    select(all_of(c("LIMIT_BAL", "AGE")))
+)
+```
+
+#### Montos de facturación: X12 - BILL_AMT1 a X17 - BILL_AMT6
+
+Las seis variables de facturación se resumen conjuntamente para comparar sus distribuciones e identificar saldos negativos y valores elevados.
 
 ```{r numericas_bill_amt}
-summary(datos_credit[, c("BILL_AMT1", "BILL_AMT2", "BILL_AMT3", "BILL_AMT4", "BILL_AMT5", "BILL_AMT6")])
+summary(
+  datos_credit %>%
+    select(all_of(variables_bill))
+)
 ```
 
-## Variables de pagos (PAY_AMT1 a PAY_AMT6) en conjunto
+En los resultados proporcionados, las seis variables presentan mínimos negativos y medias superiores a sus medianas.
+Este patrón es compatible con distribuciones asimétricas hacia la derecha.
+Los valores extremos requieren revisión, pero no deben eliminarse únicamente por su magnitud.
 
-Las seis variables `PAY_AMT` también se resumen en conjunto. Aquí interesa especialmente identificar la fuerte concentración de pagos pequeños o nulos frente a una cola derecha de pagos altos.
+#### Montos de pagos: X18 - PAY_AMT1 a X23 - PAY_AMT6
+
+Las seis variables de pagos se resumen conjuntamente para examinar pagos nulos, valores habituales y pagos elevados.
 
 ```{r numericas_pay_amt}
-summary(datos_credit[, c("PAY_AMT1", "PAY_AMT2", "PAY_AMT3", "PAY_AMT4", "PAY_AMT5", "PAY_AMT6")])
+summary(
+  datos_credit %>%
+    select(all_of(variables_pay_amt))
+)
 ```
 
-## Variable binaria: default payment next month
+Los resultados proporcionados muestran mínimos de cero y medias superiores a las medianas en los seis meses.
+Los máximos son considerablemente mayores que los terceros cuartiles, lo que sugiere una cola derecha extensa.
 
-La variable de respuesta `default payment next month` se revisa por separado para confirmar que solo contiene las dos categorías esperadas: `0` para clientes sin impago y `1` para clientes que sí incurrieron en impago el mes siguiente.
+Lo que significa que la mayoria de los pagos a lo largo de los meses son de montos bajos por lo cual indica que las persona no suelen hacer gastos con cuotas muy altas, mientras que unos pocos que si se pueden permitir gastos mucho mas elevados si tienen unas cuotas por valres muy altos.
+
+El porcentaje de pagos nulos se calcula directamente para cuantificar su frecuencia entre los valores no faltantes.
+
+```{r proporcion_pagos_nulos}
+sapply(
+  datos_credit %>% select(all_of(variables_pay_amt)),
+  function(x) mean(x == 0, na.rm = TRUE) * 100
+)
+```
+
+### Variable binaria: Y - default payment next month
+
+Se verifica que la respuesta contenga únicamente `0 = Sin impago` y `1 = Con impago`.
 
 ```{r binaria_default}
-# Tabla de frecuencias de las categorías presentes
-table(datos_credit$`default payment next month`)
+table(
+  datos_credit$`default payment next month`,
+  useNA = "ifany"
+)
 
-# Verificación de categorías fuera de lo documentado
 categorias_validas_default <- c(0, 1)
-setdiff(unique(datos_credit$`default payment next month`), categorias_validas_default)
+
+setdiff(
+  na.omit(unique(datos_credit$`default payment next month`)),
+  categorias_validas_default
+)
+
+# Porcentajes entre las respuestas no faltantes
+round(
+  prop.table(
+    table(datos_credit$`default payment next month`)
+  ) * 100,
+  2
+)
 ```
 
+Según los resultados proporcionados, 23.364 clientes (77,88 %) no incurrieron en impago y 6.636 (22,12 %) sí lo hicieron.
+La distribución presenta que la gran mayoria de los usuarios de trajeta de credito en taiwan al mes de octubre si realizaron el pago mientras que muy pocos fueron los que no hicieron su pago en octubre,
 
-### Matriz de correlación e interpretación inicial
+###Matriz de correlación e interpretación inicial
 
-La matriz de correlación permite identificar, antes de cualquier modelamiento, qué variables se mueven de manera conjunta y qué bloques del dataset contienen información parcialmente redundante. En este conjunto se observan dos núcleos muy claros de dependencia: el historial de mora (`PAY_*`) y los montos facturados (`BILL_AMT*`). Esa estructura es precisamente la que vuelve pertinente el uso de técnicas de estadística multidimensional, porque no se trata de variables aisladas sino de familias enteras con comportamiento conjunto.
+La matriz de correlación permite identificar, antes de cualquier modelamiento, qué variables se mueven de manera conjunta y qué bloques del dataset contienen información parcialmente redundante.
+En este conjunto se observan dos núcleos muy claros de dependencia: el historial de mora (`PAY_*`) y los montos facturados (`BILL_AMT*`).
+Esa estructura es precisamente la que vuelve pertinente el uso de técnicas de estadística multidimensional, porque no se trata de variables aisladas sino de familias enteras con comportamiento conjunto.
 
 La lectura más importante es la siguiente:
 
@@ -409,7 +552,8 @@ La lectura más importante es la siguiente:
 - **Montos de facturación (`BILL_AMT1` a `BILL_AMT6`)**: aquí las correlaciones son todavía más altas, alrededor de `0.80` a `0.95`. En términos descriptivos, esto sugiere que el saldo facturado de un mes conserva gran parte de la estructura del mes anterior; los clientes con saldos altos o bajos tienden a mantenerse en ese mismo rango durante varios meses.
 - **`LIMIT_BAL` frente a mora y facturación**: el cupo de crédito se asocia negativamente con los estados de mora `PAY_*` y positivamente con los `BILL_AMT*`. La relación negativa con `PAY_*` sugiere que, dentro de este dataset, los clientes con mayor cupo tienden a presentar menos atraso relativo; la relación positiva con `BILL_AMT*` es coherente con que un cupo más alto permita también mayores niveles de utilización y facturación.
 
-Conviene no sobreinterpretar estas asociaciones como causalidad. La correlación aquí cumple una función descriptiva: mostrar que el dataset no es una colección de variables independientes, sino una base con bloques estructurados de información repetida en el tiempo.
+Conviene no sobreinterpretar estas asociaciones como causalidad.
+La correlación aquí cumple una función descriptiva: mostrar que el dataset no es una colección de variables independientes, sino una base con bloques estructurados de información repetida en el tiempo.
 
 ```{r eda_plot-correlacion-credito, fig.cap="Matriz de correlación del dataset de crédito"}
 corrplot(matriz_cor, 
@@ -422,8 +566,8 @@ corrplot(matriz_cor,
          number.cex = 0.4)
 ```
 
-Visualmente, el corrplot confirma esa lectura: aparecen bloques compactos de tonos intensos entre las variables `PAY_*` y, con más fuerza todavía, entre las `BILL_AMT*`. En cambio, variables como `SEX`, `MARRIAGE` o incluso `AGE` exhiben asociaciones mucho más débiles con el resto, por lo que su aporte descriptivo y predictivo, al menos desde una lectura lineal simple, es bastante más limitado.
-
+Visualmente, el corrplot confirma esa lectura: aparecen bloques compactos de tonos intensos entre las variables `PAY_*` y, con más fuerza todavía, entre las `BILL_AMT*`.
+En cambio, variables como `SEX`, `MARRIAGE` o incluso `AGE` exhiben asociaciones mucho más débiles con el resto, por lo que su aporte descriptivo y predictivo, al menos desde una lectura lineal simple, es bastante más limitado.
 
 # 2. Histogramas y Densidades
 
@@ -464,13 +608,13 @@ glimpse(df)
 
 En este archivo ya no aparece la columna `ID`, porque corresponde solo a un identificador y no aporta información útil para describir la distribución de los clientes.
 
-En esta sección se usan histogramas y curvas de densidad únicamente sobre variables cuantitativas cuyo comportamiento sí tiene sentido interpretar en términos de forma, concentración, asimetría y valores extremos. En particular, se revisan cuatro bloques:
+En esta sección se usan histogramas y curvas de densidad únicamente sobre variables cuantitativas cuyo comportamiento sí tiene sentido interpretar en términos de forma, concentración, asimetría y valores extremos.
+En particular, se revisan cuatro bloques:
 
 - `LIMIT_BAL`, para ver cómo se distribuyen los cupos de crédito otorgados.
 - `AGE`, para describir la estructura etaria de los clientes.
 - `BILL_AMT`, para examinar el comportamiento de los saldos facturados y detectar tanto concentración cerca de cero como saldos negativos.
 - `PAY_AMT`, para observar la fuerte acumulación de pagos nulos o pequeños frente a una cola derecha de pagos excepcionalmente altos.
-
 
 ## Interpretación general de histogramas y densidades
 
@@ -483,7 +627,9 @@ La lectura conjunta de histogramas y kernels deja un patrón bastante claro en l
 
 ## ¿Por qué este h? Comparación de reglas para elegir el número de bins
 
-En los histogramas anteriores se usó siempre `bins = 30` (o `bins = 25` para `AGE`), que es simplemente el valor por defecto de `ggplot2` y no responde a ninguna regla estadística. Existen varias reglas para elegir el número de bins (`K`) de un histograma a partir de las propiedades de los propios datos, en vez de fijar un número arbitrario. Aquí se comparan tres de las más usadas, todas calculadas **sobre `LIMIT_BAL` en su escala original (bruta)**, sin ningún tipo de estandarización, logaritmo u otra transformación:
+En los histogramas anteriores se usó siempre `bins = 30` (o `bins = 25` para `AGE`), que es simplemente el valor por defecto de `ggplot2` y no responde a ninguna regla estadística.
+Existen varias reglas para elegir el número de bins (`K`) de un histograma a partir de las propiedades de los propios datos, en vez de fijar un número arbitrario.
+Aquí se comparan tres de las más usadas, todas calculadas **sobre `LIMIT_BAL` en su escala original (bruta)**, sin ningún tipo de estandarización, logaritmo u otra transformación:
 
 - **Regla de la raíz cuadrada**: el número de bins es igual a la raíz cuadrada del total de observaciones, $K = \sqrt{n}$. Es rápida y útil para conjuntos de datos medianos.
 - **Regla de Sturges**: $K = 1 + 3.322 \log_{10}(n)$, donde $n$ es el número total de datos. Funciona bien con datos que siguen una distribución aproximadamente normal.
@@ -541,9 +687,11 @@ La **regla de Sturges** asume implícitamente una distribución cercana a la nor
 
 La **regla de la raíz cuadrada** propone un número de bins intermedio: mejora el nivel de detalle frente a Sturges, pero al depender solo de `n` (y no de la forma de la distribución ni de sus atípicos), tampoco tiene en cuenta que `LIMIT_BAL` tiene una cola derecha larga con valores extremos que estiran el rango total.
 
-La **regla de Freedman-Diaconis**, al construirse a partir del rango intercuartílico en vez del rango completo, es la que mejor se adapta al comportamiento real de `LIMIT_BAL`: no se deja arrastrar por los pocos clientes con cupos muy altos (los atípicos que sí afectan a las otras dos reglas a través de `rango_x`), y como consecuencia propone un número de bins mayor, que permite ver con más claridad la concentración de clientes en los montos bajos e intermedios sin caer en el ruido excesivo de un número de bins arbitrariamente alto. Por eso, de las tres, **Freedman-Diaconis es la que mejor se ajusta al comportamiento real de los datos** para una variable monetaria sesgada y con atípicos como `LIMIT_BAL`.
+La **regla de Freedman-Diaconis**, al construirse a partir del rango intercuartílico en vez del rango completo, es la que mejor se adapta al comportamiento real de `LIMIT_BAL`: no se deja arrastrar por los pocos clientes con cupos muy altos (los atípicos que sí afectan a las otras dos reglas a través de `rango_x`), y como consecuencia propone un número de bins mayor, que permite ver con más claridad la concentración de clientes en los montos bajos e intermedios sin caer en el ruido excesivo de un número de bins arbitrariamente alto.
+Por eso, de las tres, **Freedman-Diaconis es la que mejor se ajusta al comportamiento real de los datos** para una variable monetaria sesgada y con atípicos como `LIMIT_BAL`.
 
-Este mismo razonamiento aplica al resto de las variables del dataset: casi todas están sesgadas (la mayoría hacia la derecha, y algunas hacia la izquierda) y no siguen una distribución normal, tienen bastantes valores atípicos, y además se trabaja con un conjunto de datos grande (`r nrow(df)` observaciones), donde la regla de la raíz cuadrada tiende a sobreestimar el número de bins necesario y termina generando histogramas con ruido excesivo. Por esa razón, **de aquí en adelante todos los histogramas de este documento usan el número de bins que resulta de aplicar la regla de Freedman-Diaconis a cada variable** (calculado de forma independiente para cada variable y, cuando corresponda, para cada subconjunto de datos que se esté graficando), en lugar de un número de bins fijo como 30.
+Este mismo razonamiento aplica al resto de las variables del dataset: casi todas están sesgadas (la mayoría hacia la derecha, y algunas hacia la izquierda) y no siguen una distribución normal, tienen bastantes valores atípicos, y además se trabaja con un conjunto de datos grande (`r nrow(df)` observaciones), donde la regla de la raíz cuadrada tiende a sobreestimar el número de bins necesario y termina generando histogramas con ruido excesivo.
+Por esa razón, **de aquí en adelante todos los histogramas de este documento usan el número de bins que resulta de aplicar la regla de Freedman-Diaconis a cada variable** (calculado de forma independiente para cada variable y, cuando corresponda, para cada subconjunto de datos que se esté graficando), en lugar de un número de bins fijo como 30.
 
 ```{r fd_funcion_general}
 # Función reutilizable: número de bins según la regla de Freedman-Diaconis,
@@ -581,18 +729,30 @@ p1 <- ggplot(df, aes(x = LIMIT_BAL)) +
   geom_histogram(bins = bins_limit_bal, fill = "#2b5c8f", color = "white", alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("Histograma de LIMIT_BAL (K = ", bins_limit_bal, ")"), x = "Monto del cupo de crédito (NT$)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p2 <- ggplot(df, aes(x = AGE)) +
   geom_histogram(bins = bins_age, fill = "#3b7a57", color = "white", alpha = 0.8) +
         labs(title = paste0("Histograma de AGE (K = ", bins_age, ")"), x = "Edad (años)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p3 <- ggplot(df, aes(x = BILL_AMT1)) +
-  geom_histogram(bins = bins_bill_amt1, fill = "#c0392b", color = "white", alpha = 0.8) +
+  geom_histogram(bins = bins_bill_amt1, fill = "#c0392b", color = NA, alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-        labs(title = paste0("Histograma de BILL_AMT1 (K = ", bins_bill_amt1, ")"), x = "Monto facturado en septiembre de 2005 (NT$)", y = "Frecuencia") +
-  theme_minimal()
+        labs(title = paste0("Histograma de BILL_AMT1 (K = ", bins_bill_amt1, ")"), x = "Monto facturado en septiembre de 2005 (NT$)", y = "Frecuencia") + 
+  theme_minimal() +  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 # Visualización en bloque de 3
 p1 + p2 + p3
@@ -605,25 +765,122 @@ bins_bill_amt3 <- calcular_bins_fd(df$BILL_AMT3)
 bins_bill_amt4 <- calcular_bins_fd(df$BILL_AMT4)
 
 p4 <- ggplot(df, aes(x = BILL_AMT2)) +
-  geom_histogram(bins = bins_bill_amt2, fill = "#d35400", color = "white", alpha = 0.8) +
+  geom_histogram(bins = bins_bill_amt2, fill = "#d35400", color = NA, alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("Histograma de BILL_AMT2 (K = ", bins_bill_amt2, ")"), x = "Monto facturado en agosto de 2005 (NT$)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p5 <- ggplot(df, aes(x = BILL_AMT3)) +
-  geom_histogram(bins = bins_bill_amt3, fill = "#e67e22", color = "white", alpha = 0.8) +
+  geom_histogram(bins = bins_bill_amt3, fill = "#e67e22", color = NA, alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("Histograma de BILL_AMT3 (K = ", bins_bill_amt3, ")"), x = "Monto facturado en julio de 2005 (NT$)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p6 <- ggplot(df, aes(x = BILL_AMT4)) +
-  geom_histogram(bins = bins_bill_amt4, fill = "#f39c12", color = "white", alpha = 0.8) +
+  geom_histogram(bins = bins_bill_amt4, fill = "#f39c12", color = NA, alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("Histograma de BILL_AMT4 (K = ", bins_bill_amt4, ")"), x = "Monto facturado en junio de 2005 (NT$)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p4 + p5 + p6
 
+```
+El histograma esta prácticamente vacío porque el eje $X$ se estira hasta más de 1.000.000 NT$ o 1.500.000 NT$ debido a un puñado de clientes atípicos. Como más del 90% de los clientes están concentrados entre 0 y 200.000 NT$, todo ese volumen queda apretado en una columna finísima a la izquierda.
+
+se aplica zoom visual con coord_cartesian() que enfoca donde está la masa real de datos sin eliminar las filas del cálculo para poder observar esto:
+
+```{r hist_Historial_de_Facturación_Reciente_zoom}
+bins_bill_amt2 <- calcular_bins_fd(df$BILL_AMT2)
+bins_bill_amt3 <- calcular_bins_fd(df$BILL_AMT3)
+bins_bill_amt4 <- calcular_bins_fd(df$BILL_AMT4)
+
+limite_zoom <- c(-20000, 300000)
+
+p4 <- ggplot(df, aes(x = BILL_AMT2)) +
+  geom_histogram(bins = bins_bill_amt2, fill = "#d35400", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) + coord_cartesian(xlim = limite_zoom) +
+        labs(title = paste0("Histograma de BILL_AMT2 (K = ", bins_bill_amt2, ")"), x = "Monto facturado en agosto de 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +   theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+p5 <- ggplot(df, aes(x = BILL_AMT3)) +
+  geom_histogram(bins = bins_bill_amt3, fill = "#e67e22", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) + coord_cartesian(xlim = limite_zoom) +
+        labs(title = paste0("Histograma de BILL_AMT3 (K = ", bins_bill_amt3, ")"), x = "Monto facturado en julio de 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +   theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+p6 <- ggplot(df, aes(x = BILL_AMT4)) +
+  geom_histogram(bins = bins_bill_amt4, fill = "#f39c12", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) + coord_cartesian(xlim = limite_zoom) +
+        labs(title = paste0("Histograma de BILL_AMT4 (K = ", bins_bill_amt4, ")"), x = "Monto facturado en junio de 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +   theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+p4 + p5 + p6
+
+```
+Por que no se reduce el bins?
+
+ Como la enorme mayoría de los clientes debe o paga montos bajos o cero, y un puñado debe o paga hasta $1\,000\,000\text{ NT\$}$
+ Si se reduce los bins por ejemplo a $K = 15$ o $20$, el ancho $h$ será de unos $50\,000$ o $70\,000\text{ NT\$}$.La primera barra absorbe casi al 90% o 95% de la población, convirtiéndose en un bloque masivo contra el eje $Y$
+ 
+ 
+```{r hist_Historial_de_Facturación_Antigua}
+bins_bill_amt4 <- calcular_bins_fd(df$BILL_AMT4)
+bins_bill_amt5 <- calcular_bins_fd(df$BILL_AMT5)
+bins_bill_amt6 <- calcular_bins_fd(df$BILL_AMT6)
+
+limite_zoom <- c(-20000, 300000)
+
+p_b5 <- ggplot(df, aes(x = BILL_AMT5)) +
+  geom_histogram(bins = bins_bill_amt5, fill = "#e67e22", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  coord_cartesian(xlim = limite_zoom) +
+  labs(title = paste0("BILL_AMT5 (K = ", bins_bill_amt5, ")"), 
+       x = "Fact. mayo 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+p_b6 <- ggplot(df, aes(x = BILL_AMT6)) +
+  geom_histogram(bins = bins_bill_amt6, fill = "#d35400", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  coord_cartesian(xlim = limite_zoom) +
+  labs(title = paste0("BILL_AMT6 (K = ", bins_bill_amt6, ")"), 
+       x = "Fact. abril 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+  p_b5 + p_b6
 ```
 
 ```{r hist_Montos_Pagados}
@@ -632,32 +889,96 @@ bins_pay_amt2 <- calcular_bins_fd(df$PAY_AMT2)
 bins_pay_amt3 <- calcular_bins_fd(df$PAY_AMT3)
 
 p7 <- ggplot(df, aes(x = PAY_AMT1)) +
-  geom_histogram(bins = bins_pay_amt1, fill = "#16a085", color = "white", alpha = 0.8) +
+  geom_histogram(bins = bins_pay_amt1, fill = "#16a085", color = NA, alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("Histograma de PAY_AMT1 (K = ", bins_pay_amt1, ")"), x = "Monto pagado en septiembre de 2005 (NT$)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p8 <- ggplot(df, aes(x = PAY_AMT2)) +
-  geom_histogram(bins = bins_pay_amt2, fill = "#27ae60", color = "white", alpha = 0.8) +
+  geom_histogram(bins = bins_pay_amt2, fill = "#27ae60", color = NA, alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("Histograma de PAY_AMT2 (K = ", bins_pay_amt2, ")"), x = "Monto pagado en agosto de 2005 (NT$)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +   theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p9 <- ggplot(df, aes(x = PAY_AMT3)) +
-  geom_histogram(bins = bins_pay_amt3, fill = "#2ecc71", color = "white", alpha = 0.8) +
+  geom_histogram(bins = bins_pay_amt3, fill = "#2ecc71", color = NA, alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("Histograma de PAY_AMT3 (K = ", bins_pay_amt3, ")"), x = "Monto pagado en julio de 2005 (NT$)", y = "Frecuencia") +
-  theme_minimal()
+  theme_minimal() +   theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
 
 p7 + p8 + p9
 ```
 
-Al graficar `PAY_AMT1` a `PAY_AMT3` en su escala original, la asimetría extrema hacia la derecha comprime casi toda la masa de observaciones cerca de cero. Por eso los pagos altos quedan reducidos a unas pocas barras aisladas muy alejadas del resto. Más adelante, en la sección de **Estandarización de Variables**, estas mismas variables se retoman con transformación logarítmica para mostrar cómo cambia la interpretación visual.
+Al graficar `PAY_AMT1` a `PAY_AMT3` en su escala original, la asimetría extrema hacia la derecha comprime casi toda la masa de observaciones cerca de cero.
+Por eso los pagos altos quedan reducidos a unas pocas barras aisladas muy alejadas del resto.
+Más adelante, en la sección de **Estandarización de Variables**, estas mismas variables se retoman con transformación logarítmica para mostrar cómo cambia la interpretación visual.
 
+```{r hist_Montos_Pagados_Antiguos}
+bins_pay_amt4 <- calcular_bins_fd(df$PAY_AMT4)
+bins_pay_amt5 <- calcular_bins_fd(df$PAY_AMT5)
+bins_pay_amt6 <- calcular_bins_fd(df$PAY_AMT6)
+
+# Zoom enfocado en el rango donde se concentra más del 95% de las amortizaciones
+limite_zoom_pay <- c(0, 50000)
+
+p10 <- ggplot(df, aes(x = PAY_AMT4)) +
+  geom_histogram(bins = bins_pay_amt4, fill = "#1abc9c", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  coord_cartesian(xlim = limite_zoom_pay) +
+  labs(title = paste0("PAY_AMT4 (K = ", bins_pay_amt4, ")"), 
+       x = "Pago junio 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+p11 <- ggplot(df, aes(x = PAY_AMT5)) +
+  geom_histogram(bins = bins_pay_amt5, fill = "#16a085", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  coord_cartesian(xlim = limite_zoom_pay) +
+  labs(title = paste0("PAY_AMT5 (K = ", bins_pay_amt5, ")"), 
+       x = "Pago mayo 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+p12 <- ggplot(df, aes(x = PAY_AMT6)) +
+  geom_histogram(bins = bins_pay_amt6, fill = "#27ae60", color = NA, alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  coord_cartesian(xlim = limite_zoom_pay) +
+  labs(title = paste0("PAY_AMT6 (K = ", bins_pay_amt6, ")"), 
+       x = "Pago abril 2005 (NT$)", y = "Frecuencia") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8)
+  )
+
+p10 + p11 + p12
+```
 
 ### Histogramas segmentados por comportamiento de pago
 
-Para complementar la lectura global, el dataset se divide en dos subconjuntos: clientes sin impago el mes siguiente (`default = 0`) y clientes con impago (`default = 1`). Así se puede comparar si la forma de las distribuciones cambia cuando se separa a la población por su resultado de mora.
+Para complementar la lectura global, el dataset se divide en dos subconjuntos: clientes sin impago el mes siguiente (`default = 0`) y clientes con impago (`default = 1`).
+Así se puede comparar si la forma de las distribuciones cambia cuando se separa a la población por su resultado de mora.
 
 ```{r hist_separar_grupos}
 # Dividimos el dataframe en dos subconjuntos simples
@@ -684,7 +1005,7 @@ h2_no <- ggplot(df_no_mora, aes(x = AGE)) +
   theme_minimal()
 
 h3_no <- ggplot(df_no_mora, aes(x = PAY_AMT1)) +
-  geom_histogram(bins = bins_pay_amt1_no, fill = "#2980b9", color = "white") +
+  geom_histogram(bins = bins_pay_amt1_no, fill = "#2980b9", color = NA) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("PAY_AMT1 | Clientes sin impago (K = ", bins_pay_amt1_no, ")"), x = "Monto pagado en septiembre de 2005 (NT$)", y = "Frecuencia") +
   theme_minimal()
@@ -693,7 +1014,9 @@ h3_no <- ggplot(df_no_mora, aes(x = PAY_AMT1)) +
 h1_no + h2_no + h3_no
 ```
 
-En el subconjunto de **clientes sin impago**, `LIMIT_BAL` sigue mostrando asimetría a la derecha, pero con mayor concentración en cupos medios y relativamente altos que en la muestra total. `AGE` conserva la forma general observada antes, con predominio de edades adultas jóvenes y una cola derecha moderada. En `PAY_AMT1`, aunque la masa principal sigue comprimida cerca de cero, se aprecia una presencia algo más amplia de pagos positivos, consistente con un grupo que logró mantenerse al día al mes siguiente.
+En el subconjunto de **clientes sin impago**, `LIMIT_BAL` sigue mostrando asimetría a la derecha, pero con mayor concentración en cupos medios y relativamente altos que en la muestra total.
+`AGE` conserva la forma general observada antes, con predominio de edades adultas jóvenes y una cola derecha moderada.
+En `PAY_AMT1`, aunque la masa principal sigue comprimida cerca de cero, se aprecia una presencia algo más amplia de pagos positivos, consistente con un grupo que logró mantenerse al día al mes siguiente.
 
 ```{r hist_Clientes_Con_Incumplimiento}
 # Igual que en el subconjunto anterior, se recalcula el K sobre df_mora.
@@ -713,7 +1036,7 @@ h2_si <- ggplot(df_mora, aes(x = AGE)) +
   theme_minimal()
 
 h3_si <- ggplot(df_mora, aes(x = PAY_AMT1)) +
-  geom_histogram(bins = bins_pay_amt1_si, fill = "#c0392b", color = "white") +
+  geom_histogram(bins = bins_pay_amt1_si, fill = "#c0392b", color = NA) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
         labs(title = paste0("PAY_AMT1 | Clientes con impago (K = ", bins_pay_amt1_si, ")"), x = "Monto pagado en septiembre de 2005 (NT$)", y = "Frecuencia") +
   theme_minimal()
@@ -722,13 +1045,18 @@ h3_si <- ggplot(df_mora, aes(x = PAY_AMT1)) +
 h1_si + h2_si + h3_si
 ```
 
-En el subconjunto de **clientes con impago**, el patrón cambia sobre todo en `LIMIT_BAL`: la distribución se desplaza más hacia cupos bajos, lo que sugiere que el incumplimiento se concentra relativamente más en clientes con menor capacidad crediticia. La distribución de `AGE` no cambia de forma drástica respecto al grupo sin impago, por lo que la edad, por sí sola, no parece separar claramente ambos perfiles. En `PAY_AMT1` vuelve a observarse una concentración muy fuerte en pagos nulos o pequeños, ahora todavía más marcada, coherente con una población que terminó incurriendo en mora.
+En el subconjunto de **clientes con impago**, el patrón cambia sobre todo en `LIMIT_BAL`: la distribución se desplaza más hacia cupos bajos, lo que sugiere que el incumplimiento se concentra relativamente más en clientes con menor capacidad crediticia.
+La distribución de `AGE` no cambia de forma drástica respecto al grupo sin impago, por lo que la edad, por sí sola, no parece separar claramente ambos perfiles.
+En `PAY_AMT1` vuelve a observarse una concentración muy fuerte en pagos nulos o pequeños, ahora todavía más marcada, coherente con una población que terminó incurriendo en mora.
 
-Comparando ambos grupos, la diferencia visual más clara aparece en `LIMIT_BAL`, no en `AGE`. Los histogramas de pago muestran formas parecidas en ambos subconjuntos, aunque el grupo con impago concentra todavía más masa cerca de cero. En términos descriptivos, esto sugiere que el cupo de crédito diferencia mejor a los grupos que la edad, mientras que los pagos requieren una lectura más cuidadosa por su asimetría extrema.
+Comparando ambos grupos, la diferencia visual más clara aparece en `LIMIT_BAL`, no en `AGE`.
+Los histogramas de pago muestran formas parecidas en ambos subconjuntos, aunque el grupo con impago concentra todavía más masa cerca de cero.
+En términos descriptivos, esto sugiere que el cupo de crédito diferencia mejor a los grupos que la edad, mientras que los pagos requieren una lectura más cuidadosa por su asimetría extrema.
 
 ## Densidad de kernel
 
-Las curvas de densidad se usan sobre las mismas variables ya exploradas con histogramas. Su utilidad aquí no es reemplazar al histograma, sino suavizar la distribución para hacer más visible dónde se concentra la masa principal y cómo se extienden las colas.
+Las curvas de densidad se usan sobre las mismas variables ya exploradas con histogramas.
+Su utilidad aquí no es reemplazar al histograma, sino suavizar la distribución para hacer más visible dónde se concentra la masa principal y cómo se extienden las colas.
 
 Se incluyen:
 
@@ -739,7 +1067,7 @@ Se incluyen:
 
 En estas gráficas `ggplot2` calcula automáticamente el ancho de banda del kernel.
 
-``` {r perfil General}
+```{r perfil General}
 
 k1 <- ggplot(df, aes(x = LIMIT_BAL)) +
   geom_density(fill = "#2b5c8f", color = "#1a365d", alpha = 0.5, linewidth = 0.8) +
@@ -761,10 +1089,10 @@ k3 <- ggplot(df, aes(x = BILL_AMT1)) +
 k1 + k2 + k3
 ```
 
-``` {r historial de facturacion}
+```{r historial de facturacion}
 k4 <- ggplot(df, aes(x = BILL_AMT2)) +
   geom_density(fill = "#d35400", color = "#6e2c00", alpha = 0.5, linewidth = 0.8) +
-  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) + 
         labs(title = "Densidad de BILL_AMT2", x = "Monto facturado en agosto de 2005 (NT$)", y = "Densidad") +
   theme_minimal()
 
@@ -782,7 +1110,35 @@ k6 <- ggplot(df, aes(x = BILL_AMT4)) +
 
 k4 + k5 + k6
 ```
-``` {r Pagos sin transformacion logaritmica}
+
+Si se aplica el mismo zoom de los histogramas:
+
+```{r historial de facturacion zoom}
+
+limite_zoom <- c(-30000, 250000)
+
+k4 <- ggplot(df, aes(x = BILL_AMT2)) +
+  geom_density(fill = "#d35400", color = "#6e2c00", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) + coord_cartesian(xlim = limite_zoom) +
+        labs(title = "Densidad de BILL_AMT2", x = "Monto facturado en agosto de 2005 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k5 <- ggplot(df, aes(x = BILL_AMT3)) +
+  geom_density(fill = "#e67e22", color = "#7e4a15", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) + coord_cartesian(xlim = limite_zoom) +
+        labs(title = "Densidad de BILL_AMT3", x = "Monto facturado en julio de 2005 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k6 <- ggplot(df, aes(x = BILL_AMT4)) +
+  geom_density(fill = "#f39c12", color = "#7d510c", alpha = 0.5, linewidth = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) + coord_cartesian(xlim = limite_zoom) +
+        labs(title = "Densidad de BILL_AMT4", x = "Monto facturado en junio de 2005 (NT$)", y = "Densidad") +
+  theme_minimal()
+
+k4 + k5 + k6
+```
+
+```{r Pagos sin transformacion logaritmica}
 k7 <- ggplot(df, aes(x = PAY_AMT1)) +
   geom_density(fill = "#16a085", color = "#0e6251", alpha = 0.5, linewidth = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
@@ -804,9 +1160,12 @@ k9 <- ggplot(df, aes(x = PAY_AMT3)) +
 k7 + k8 + k9
 ```
 
-Al graficar `PAY_AMT1` a `PAY_AMT3` en su escala original (sin `log10`), la curva de densidad queda casi pegada al eje vertical: como la inmensa mayoría de los pagos son cero o montos muy bajos frente a los pocos pagos elevados, todo el ancho del eje horizontal se lo terminan llevando esos valores atípicos, y la forma real de la distribución cerca de cero se aplana visualmente. Más adelante, en la sección de **Estandarización de Variables** (al final del documento), se retoman estas mismas variables en escala logarítmica para mostrar cómo cambia esta lectura.
+Al graficar `PAY_AMT1` a `PAY_AMT3` en su escala original (sin `log10`), la curva de densidad queda casi pegada al eje vertical: como la inmensa mayoría de los pagos son cero o montos muy bajos frente a los pocos pagos elevados, todo el ancho del eje horizontal se lo terminan llevando esos valores atípicos, y la forma real de la distribución cerca de cero se aplana visualmente.
+Más adelante, en la sección de **Estandarización de Variables** (al final del documento), se retoman estas mismas variables en escala logarítmica para mostrar cómo cambia esta lectura.
 
-En conjunto, las curvas de densidad confirman lo ya visto en los histogramas: `LIMIT_BAL` y `AGE` tienen formas más legibles y estables, mientras que `BILL_AMT` y sobre todo `PAY_AMT` presentan distribuciones muy sesgadas, con alta concentración cerca de cero y colas derechas prolongadas. La ventaja del kernel aquí es hacer visible esa forma general sin depender de cortes discretos en bins; su limitación, en cambio, es la misma de toda representación en escala original para variables monetarias muy sesgadas: los valores extremos dominan buena parte del eje y aplanan visualmente la zona donde se acumula la mayoría de clientes.
+En conjunto, las curvas de densidad confirman lo ya visto en los histogramas: `LIMIT_BAL` y `AGE` tienen formas más legibles y estables, mientras que `BILL_AMT` y sobre todo `PAY_AMT` presentan distribuciones muy sesgadas, con alta concentración cerca de cero y colas derechas prolongadas.
+La ventaja del kernel aquí es hacer visible esa forma general sin depender de cortes discretos en bins; su limitación, en cambio, es la misma de toda representación en escala original para variables monetarias muy sesgadas: los valores extremos dominan buena parte del eje y aplanan visualmente la zona donde se acumula la mayoría de clientes.
+
 
 
 # 3. Visualización en el Espacio (Diagramas de Caja y Bigotes)
@@ -934,23 +1293,29 @@ boxplot(datos_credit_visu[, 18:23]/10000, las = 2, cex.axis = 0.7,
 
 #comparación de todos
 boxplot(datos_credit_visu[, c(1, c(5, 12:23))], las = 2, cex.axis = 0.7,
-        main = "LIMIT_BAL, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6",
+        main = "LIMIT_BAL, AGE, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6",
         ylab = "Años y N/$", col = "grey90")
 
 ```
 
-Aunque sea algo dificil apreciar detalles en estos boxplot, se pueden ver ciertos detalles interesantes. El primero de ellos es que **la media y la mediana son cercanas entre sí**; sin embargo, comparando con la información del **summary()**,los únicos casos en los que son cercanas es en LIMIT_BAL (relativamente) y AGE, y se ahondará en ello más adelante.
+Aunque sea algo dificil apreciar detalles en estos boxplot, se pueden ver ciertos detalles interesantes.
+El primero de ellos es que **la media y la mediana son cercanas entre sí**; sin embargo, comparando con la información del **summary()**,los únicos casos en los que son cercanas es en LIMIT_BAL (relativamente) y AGE, y se ahondará en ello más adelante.
 Lo segundo es que **los campos BILL_AMT tienen comportamientos muy similares entre sí**; salvo un par de datos anomalos, entre otros detalles, el diagrama muestra que estas variables se comportan muy similar.
 Lo tercero es que en las variables **PAY_ATM, la media, la mediana, 1er y 3er se encuentran muy próximos entre sí y muy cerca del origen: la mayoría de los clientes realizó pagos de magnitud reducida en relación con el rango total de la variable**.
-Para finalizar, tomando el gráfico donde se comparan todas las variables juntas sin estandarizar y sin ´división entre 10000 aplicada, LIMIT_BAL es la única variable medianamente legible. AGE, por su parte, queda reducida a una línea plana sobre el eje.
-Del boxplot individual de estas últimas dos variables se pueden sacar ciertos detalles:
-  1. La caja de LIMIT_BAL no es simétrica respecto de la mediana: la distancia entre Q1 y la mediana es menor que la distancia entre la mediana y Q3, y el bigote superior es considerablemente más extenso que el inferior. Esto configura un sesgo a la derecha.
-  2. Al igual que en el caso de LIMIT_BAL, la distribución de AGE muestra un sesgo a la derecha, aunque de menor magnitud: la mediana se sitúa levemente por debajo del centro de la caja y el bigote superior es más largo que el inferior.
-_Cabe aclarar que todas estas variables a excepción de AGE manejan las mismas unidades base (NT/$), por lo que se esperaría que el output fuera casi identico._
+Para finalizar, tomando el gráfico donde se comparan todas las variables juntas sin estandarizar y sin ´división entre 10000 aplicada, LIMIT_BAL es la única variable medianamente legible.
+AGE, por su parte, queda reducida a una línea plana sobre el eje.
+Del boxplot individual de estas últimas dos variables se pueden sacar ciertos detalles: 
+1. La caja de LIMIT_BAL no es simétrica respecto de la mediana: la distancia entre Q1 y la mediana es menor que la distancia entre la mediana y Q3, y el bigote superior es considerablemente más extenso que el inferior.
+Esto configura un sesgo a la derecha.
+2. Al igual que en el caso de LIMIT_BAL, la distribución de AGE muestra un sesgo a la derecha, aunque de menor magnitud: la mediana se sitúa levemente por debajo del centro de la caja y el bigote superior es más largo que el inferior.
+*Cabe aclarar que todas estas variables a excepción de AGE manejan las mismas unidades base (NT/\$), por lo que se esperaría que el output fuera casi identico.*
 
 #### Estandarizadas
 
-Este chunk repite exactamente las mismas cinco comparaciones del chunk anterior, pero aplicando la función `scale()` a cada conjunto de variables. `scale()` **estandariza** los datos, es decir, les resta su media y los divide entre su desviación estándar, dejándolos expresados en unidades de desviación estándar (con media 0). Esta transformación es necesaria porque variables como `AGE` (en años) y `BILL_AMT` (en miles de pesos taiwaneses) tienen escalas y unidades completamente distintas; al estandarizarlas, se pueden comparar visualmente su dispersión y valores atípicos en una misma escala común. La línea horizontal en 0 (`abline(h = 0, lty = 3)`) marca la media de cada variable tras la estandarización.
+Este chunk repite exactamente las mismas cinco comparaciones del chunk anterior, pero aplicando la función `scale()` a cada conjunto de variables.
+`scale()` **estandariza** los datos, es decir, les resta su media y los divide entre su desviación estándar, dejándolos expresados en unidades de desviación estándar (con media 0).
+Esta transformación es necesaria porque variables como `AGE` (en años) y `BILL_AMT` (en miles de pesos taiwaneses) tienen escalas y unidades completamente distintas; al estandarizarlas, se pueden comparar visualmente su dispersión y valores atípicos en una misma escala común.
+La línea horizontal en 0 (`abline(h = 0, lty = 3)`) marca la media de cada variable tras la estandarización.
 
 ```{r visu_cajas_y_bigotes_de_númericas_estandarizadas}
 #solo de limit_bal
@@ -978,20 +1343,25 @@ boxplot(scale(datos_credit_visu[, 18:23]), las = 2, cex.axis = 0.7,
 abline(h = 0, lty = 3)
 
 #comparación de todos
-boxplot(scale(datos_credit_visu[, c(1, c(5, 12:23))]), las = 2, cex.axis = 0.7,
-        main = "LIMIT_BAL, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6 estandarizadas",
+boxplot(scale(datos_credit_visu[, c(1, c(5, 12:23))]), las = 2, cex.axis = 0.7, cex.main = 0.8,
+        main = "LIMIT_BAL, AGE, BILL_AMT1 a BILL_AMT6 y PAY_AMT1 a PAY_AMT6 estandarizadas",
         ylab = "desviación estándar", col = "grey90")
 abline(h = 0, lty = 3)
 
 ```
 
-Tras la estandarización, las trece variables tienen ahora media 0 y desviación 1, así que las diferencias de magnitud absoluta que dominaban el gráfico anterior desaparecieron. Lo que queda visible es la **forma** de cada distribución: qué tan lejos se aleja cada variable de su propio centro, medida en sus propias unidades de dispersión.
+Tras la estandarización, las trece variables tienen ahora media 0 y desviación 1, así que las diferencias de magnitud absoluta que dominaban el gráfico anterior desaparecieron.
+Lo que queda visible es la **forma** de cada distribución: qué tan lejos se aleja cada variable de su propio centro, medida en sus propias unidades de dispersión.
 
 `LIMIT_BAL` y `AGE` son, en términos relativos, las variables mejor comportadas del conjunto: su dispersión total se explica bastante bien por su propia desviación estándar.
 
-Las seis variables `BILL_AMT` muestran cajas ya muy comprimidas contra el cero, con una nube densa de atípicos superiores que sube de forma continua hasta unas 10 desviaciones y máximos entre 13 y 15, salvo `BILL_AMT3`, que alcanza aproximadamente 23. A diferencia de las demás, estas sí presentan atípicos por debajo de la media (hasta cerca de -3 en varias y alrededor de -5 en `BILL_AMT6`), lo que corresponde a los saldos negativos que ya se veían en la escala original.
+Las seis variables `BILL_AMT` muestran cajas ya muy comprimidas contra el cero, con una nube densa de atípicos superiores que sube de forma continua hasta unas 10 desviaciones y máximos entre 13 y 15, salvo `BILL_AMT3`, que alcanza aproximadamente 23.
+A diferencia de las demás, estas sí presentan atípicos por debajo de la media (hasta cerca de -3 en varias y alrededor de -5 en `BILL_AMT6`), lo que corresponde a los saldos negativos que ya se veían en la escala original.
 
-Las seis `PAY_AMT` son el caso extremo y es aquí donde la estandarización revela algo que el gráfico sin transformar escondía. Sus cajas están literalmente colapsadas sobre la línea de cero, es decir, el 50 % central de las observaciones cabe en un intervalo mucho menor que una desviación estándar, mientras que los atípicos forman columnas verticales densas que llegan a 20 y 30 desviaciones y con puntos aislados. Un valor a 73 desviaciones de la media es un dato brutalmente extremo: significa que la desviación estándar de esa variable está siendo determinada casi por completo por un puñado de observaciones. También se nota que no hay nada por debajo de cero: como los pagos no pueden ser negativos y la media es pequeña, el piso de la distribución queda apenas unas décimas de desviación por debajo de la línea, y eso produce la franja recta que se ve en la base de las seis.
+Las seis `PAY_AMT` son el caso extremo y es aquí donde la estandarización revela algo que el gráfico sin transformar escondía.
+Sus cajas están literalmente colapsadas sobre la línea de cero, es decir, el 50 % central de las observaciones cabe en un intervalo mucho menor que una desviación estándar, mientras que los atípicos forman columnas verticales densas que llegan a 20 y 30 desviaciones y con puntos aislados.
+Un valor a 73 desviaciones de la media es un dato brutalmente extremo: significa que la desviación estándar de esa variable está siendo determinada casi por completo por un puñado de observaciones.
+También se nota que no hay nada por debajo de cero: como los pagos no pueden ser negativos y la media es pequeña, el piso de la distribución queda apenas unas décimas de desviación por debajo de la línea, y eso produce la franja recta que se ve en la base de las seis.
 
 ### De "SEX"
 
@@ -1006,13 +1376,24 @@ boxplot(LIMIT_BAL/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
-Lo primero que muestra el gráfico es que las dos distribuciones son muy parecidas entre sí. Ambas cajas ocupan prácticamente la misma franja del eje, ambos grupos parten de un mínimo cercano a 1 (NT$10.000) y los dos presentan la misma forma general: sesgo hacía la derecha, con la mediana desplazada hacia el borde inferior de la caja y una cola larga de valores atípicos por arriba. Es decir, el patrón de la variable `LIMIT_BAL` que ya se había descrito para el conjunto completo se reproduce casi idéntico dentro de cada categoría de sexo.
+Lo primero que muestra el gráfico es que las dos distribuciones son muy parecidas entre sí.
+Ambas cajas ocupan prácticamente la misma franja del eje, ambos grupos parten de un mínimo cercano a 1 (NT\$10.000) y los dos presentan la misma forma general: sesgo hacía la derecha, con la mediana desplazada hacia el borde inferior de la caja y una cola larga de valores atípicos por arriba.
+Es decir, el patrón de la variable `LIMIT_BAL` que ya se había descrito para el conjunto completo se reproduce casi idéntico dentro de cada categoría de sexo.
 
-Las diferencias que sí se aprecian son de posición y pequeñas. La mediana del grupo 1 (hombres) se ubica alrededor de 13 unidades de NT/$10.000, mientras que la del grupo 2 (mujeres) está cerca de 15. El primer cuartil también difiere: aproximadamente 5 en hombres frente a 7 en mujeres. El tercer cuartil, en cambio, es casi coincidente en ambos grupos, cerca de 24-25. El resultado es que el rango intercuartílico de las mujeres es levemente más estrecho (unas 18 unidades frente a 19-20 en hombres) y está desplazado un poco hacia arriba: **la mitad central de las clientas recibió cupos algo mayores que la mitad central de los clientes.**
+Las diferencias que sí se aprecian son de posición y pequeñas.
+La mediana del grupo 1 (hombres) se ubica alrededor de 13 unidades de NT/\$10.000, mientras que la del grupo 2 (mujeres) está cerca de 15.
+El primer cuartil también difiere: aproximadamente 5 en hombres frente a 7 en mujeres.
+El tercer cuartil, en cambio, es casi coincidente en ambos grupos, cerca de 24-25.
+El resultado es que el rango intercuartílico de las mujeres es levemente más estrecho (unas 18 unidades frente a 19-20 en hombres) y está desplazado un poco hacia arriba: **la mitad central de las clientas recibió cupos algo mayores que la mitad central de los clientes.**
 
-En los extremos la relación se invierte de forma leve. El bigote superior de los hombres alcanza aproximadamente 52 y el de las mujeres 49, y el máximo del conjunto de atípicos ordinarios está cerca de 80 en hombres y 78 en mujeres. Sin embargo, el punto extremo aislado en 100 (el cupo de NT$1.000.000, máximo de todo el conjunto de datos) pertenece al grupo de las mujeres. Ambos grupos tienen nubes densas de atípicos superiores de extensión comparable, y ninguno registra atípicos inferiores.
+En los extremos la relación se invierte de forma leve.
+El bigote superior de los hombres alcanza aproximadamente 52 y el de las mujeres 49, y el máximo del conjunto de atípicos ordinarios está cerca de 80 en hombres y 78 en mujeres.
+Sin embargo, el punto extremo aislado en 100 (el cupo de NT\$1.000.000, máximo de todo el conjunto de datos) pertenece al grupo de las mujeres.
+Ambos grupos tienen nubes densas de atípicos superiores de extensión comparable, y ninguno registra atípicos inferiores.
 
-La lectura de conjunto es que el solapamiento entre las dos distribuciones es casi total: la diferencia entre las medianas (unas 2 unidades, es decir NT$20.000) es muy pequeña frente al rango intercuartílico de cada grupo, que ronda las 19 unidades. Visualmente, el sexo no aparece como un factor que separe la distribución del cupo otorgado; lo que el gráfico muestra es un desplazamiento marginal hacia arriba en el grupo femenino, sobre todo en la mitad inferior de la distribución. _Hay que tener en cuenta que los tamaños de los dos grupos no son iguales en este conjunto de datos y el boxplot no los refleja._
+La lectura de conjunto es que el solapamiento entre las dos distribuciones es casi total: la diferencia entre las medianas (unas 2 unidades, es decir NT\$20.000) es muy pequeña frente al rango intercuartílico de cada grupo, que ronda las 19 unidades.
+Visualmente, el sexo no aparece como un factor que separe la distribución del cupo otorgado; lo que el gráfico muestra es un desplazamiento marginal hacia arriba en el grupo femenino, sobre todo en la mitad inferior de la distribución.
+*Hay que tener en cuenta que los tamaños de los dos grupos no son iguales en este conjunto de datos y el boxplot no los refleja.*
 
 A continuación, se cruza `AGE` (edad) contra `SEX`, para observar si la distribución de edades varía entre hombres y mujeres.
 
@@ -1023,7 +1404,9 @@ boxplot(AGE ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
-El solapamiento entre ambas distribuciones es casi completo y la diferencia de aproximadamente dos años entre las medianas es muy pequeña frente a un rango intercuartílico de unos trece o catorce años. Lo que el gráfico permite afirmar de manera descriptiva es que los clientes hombres de este conjunto tienden a ser marginalmente mayores que las clientas, y que la edad máxima registrada corresponde al grupo masculino, pero no que el sexo separe la distribución etaria de forma sustantiva. Vale la pena recordar, como en el gráfico anterior, que el diagrama de caja no informa sobre el tamaño de cada grupo, lo cual conviene reportar aparte si estas comparaciones se van a incluir en el informe.
+El solapamiento entre ambas distribuciones es casi completo y la diferencia de aproximadamente dos años entre las medianas es muy pequeña frente a un rango intercuartílico de unos trece o catorce años.
+Lo que el gráfico permite afirmar de manera descriptiva es que los clientes hombres de este conjunto tienden a ser marginalmente mayores que las clientas, y que la edad máxima registrada corresponde al grupo masculino, pero no que el sexo separe la distribución etaria de forma sustantiva.
+Vale la pena recordar, como en el gráfico anterior, que el diagrama de caja no informa sobre el tamaño de cada grupo, lo cual conviene reportar aparte si estas comparaciones se van a incluir en el informe.
 
 Prosiguiendo, este chunk cruza cada una de las seis variables `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de septiembre a abril de 2005, divididos entre 10.000) contra `SEX`, generando un boxplot por cada mes para comparar el monto del estado de cuenta entre hombres y mujeres mes a mes.
 
@@ -1059,21 +1442,29 @@ boxplot(BILL_AMT6/10000 ~ SEX, data = datos_credit_visu,
         col = "grey90")
 ```
 
-Los seis meses muestran lo mismo: hombres y mujeres tienen distribuciones prácticamente idénticas. Medianas cercanas a 2 unidades de NT/$10.000 en ambos grupos, cajas que van de 0 a 6 aproximadamente, y bigotes superiores que coinciden entre los dos sexos en cada mes. El sexo no separa esta variable.
+Los seis meses muestran lo mismo: hombres y mujeres tienen distribuciones prácticamente idénticas.
+Medianas cercanas a 2 unidades de NT/\$10.000 en ambos grupos, cajas que van de 0 a 6 aproximadamente, y bigotes superiores que coinciden entre los dos sexos en cada mes.
+El sexo no separa esta variable.
 
-Ojo con las escalas: cada panel tiene un eje vertical distinto (julio llega a 150, junio a 80), así que comparar meses a simple vista engaña.
+Cada panel tiene un eje vertical distinto (julio llega a 150, junio a 80), así que comparar meses a simple vista engaña.
 
 En los seis casos la forma es la misma: asimetría positiva fuerte, mediana pegada al borde inferior de la caja, y una columna densa y continua de atípicos hasta 50-60 unidades.
 
-El máximo siempre está en el grupo 2. Julio es el caso extremo: 166 en mujeres frente a 70 en hombres. Pero las mujeres son el grupo más numeroso del dataset, y a más observaciones, más probabilidad de extremos; el boxplot no muestra ese tamaño, así que el patrón puede ser solo eso.
+El máximo siempre está en el grupo 2.
+Julio es el caso extremo: 166 en mujeres frente a 70 en hombres.
+Pero las mujeres son el grupo más numeroso del dataset, y a más observaciones, más probabilidad de extremos; el boxplot no muestra ese tamaño, así que el patrón puede ser solo eso.
 
-Hay valores negativos en ambos grupos todos los meses. El más profundo es aproximadamente -34 en hombres en abril.
+Hay valores negativos en ambos grupos todos los meses.
+El más profundo es aproximadamente -34 en hombres en abril.
 
 Ahora, este chunk cruza las seis variables `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados por el cliente de septiembre a abril de 2005, divididos entre 10.000) contra `SEX`, para comparar cuánto pagaron efectivamente hombres y mujeres cada mes.
 
 ```{r visu_cajas_y_bigotes_de_sex_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ SEX, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por sexo ",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,
         xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
@@ -1102,21 +1493,31 @@ boxplot(PAY_AMT6/10000 ~ SEX, data = datos_credit_visu,
         xlab = "Sexo (1=Hombre, 2=Mujer)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
-Las cajas están colapsadas sobre cero en los dos grupos y en los seis meses. No se distingue mediana ni cuartiles: todo el rango intercuartílico cabe en menos de 1 unidad de NT/$10.000. El bigote superior llega a cerca de 1 unidad (NT$10.000). Sexo y mes son irrelevantes para esto: las doce cajas se ven iguales.
 
-Toda la información está en los atípicos. Forman una columna vertical densa desde cero hasta unas 20-25 unidades, y encima puntos sueltos.
+Las cajas están colapsadas sobre cero en los dos grupos y en los seis meses.
+No se distingue mediana ni cuartiles: todo el rango intercuartílico cabe en menos de 1 unidad de NT/\$10.000.
+El bigote superior llega a cerca de 1 unidad (NT\$10.000).
+Sexo y mes son irrelevantes para esto: las doce cajas se ven iguales.
 
-Cinco de seis meses tienen el máximo en mujeres. Agosto es el caso extremo: 168 frente a 40, con cuatro puntos aislados en el grupo 2 (168, 122, 102, 58) que no tienen contraparte en hombres.
+Toda la información está en los atípicos.
+Forman una columna vertical densa desde cero hasta unas 20-25 unidades, y encima puntos sueltos.
 
-Ojo con las escalas: cada panel tiene eje propio (agosto llega a 150, mayo a 40). La columna de atípicos de mayo parece más alta que la de agosto solo por eso.
+Cinco de seis meses tienen el máximo en mujeres.
+Agosto es el caso extremo: 168 frente a 40, con cuatro puntos aislados en el grupo 2 (168, 122, 102, 58) que no tienen contraparte en hombres.
 
-Comparado con BILL_AMT: allí las cajas eran visibles y había negativos. Aquí no. La asimetría de PAY_AMT es mucho más severa.
+Ojo con las escalas: cada panel tiene eje propio (agosto llega a 150, mayo a 40).
+La columna de atípicos de mayo parece más alta que la de agosto solo por eso.
+
+Comparado con BILL_AMT: allí las cajas eran visibles y había negativos.
+Aquí no.
+La asimetría de PAY_AMT es mucho más severa.
 
 ### De "EDUCATION"
 
 En esta sección se cruza la variable categórica `EDUCATION` (nivel educativo del cliente, convertida a factor) contra las mismas variables numéricas utilizadas en la sección anterior, para observar si el nivel educativo se relaciona con diferencias en el crédito otorgado, la edad, los montos de estado de cuenta y los montos pagados.
 
-Se cruza `LIMIT_BAL` (monto de crédito otorgado, en unidades de 10.000) contra `EDUCATION`, para ver si el monto de crédito varía según el nivel educativo. Nótese el comentario original del equipo señalando la necesidad de revisar el significado de las categorías 0, 5 y 6 de `EDUCATION`, que no están claramente documentadas en el diccionario de datos.
+Se cruza `LIMIT_BAL` (monto de crédito otorgado, en unidades de 10.000) contra `EDUCATION`, para ver si el monto de crédito varía según el nivel educativo.
+Nótese el comentario original del equipo señalando la necesidad de revisar el significado de las categorías 0, 5 y 6 de `EDUCATION`, que no están claramente documentadas en el diccionario de datos.
 
 ```{r visu_cajas_y_bigotes_de_education_y_LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ EDUCATION, data = datos_credit_visu, #CHICOS FAVOR MIRAR ESTE K SIGNIFICA 5 Y 6 Y 0 XDDD
@@ -1125,7 +1526,12 @@ boxplot(LIMIT_BAL/10000 ~ EDUCATION, data = datos_credit_visu, #CHICOS FAVOR MIR
         col = "grey90")
 ```
 
-Gráfico con diferencias claras. Medianas: 20 (posgrado), 11 (universidad), 8 (secundaria), 17 (otros). Cajas: 10-30, 5-21, 5-18, 9-24. Hay gradiente descendente 1→2→3: a menor nivel educativo, menor cupo. El grupo 4 se ubica entre 1 y 2. Los bigotes superiores siguen el mismo orden: 60, 45, 37, 46.
+Gráfico con diferencias claras.
+Medianas: 20 (posgrado), 11 (universidad), 8 (secundaria), 17 (otros).
+Cajas: 10-30, 5-21, 5-18, 9-24.
+Hay gradiente descendente 1→2→3: a menor nivel educativo, menor cupo.
+El grupo 4 se ubica entre 1 y 2.
+Los bigotes superiores siguen el mismo orden: 60, 45, 37, 46.
 
 Se cruza `AGE` contra `EDUCATION`, para observar cómo se distribuye la edad de los clientes según su nivel educativo.
 
@@ -1136,7 +1542,10 @@ boxplot(AGE ~ EDUCATION, data = datos_credit_visu,
         col = "grey90")
 ```
 
-Diferencia visible en sentido inverso. Medianas: 32, 33, 40, 35. El grupo 3 es claramente mayor y más disperso (caja 32-48, contra 28-39 en el grupo 1). Ojo: esto se cruza con LIMIT_BAL, el grupo con menor cupo es también el de más edad.
+Diferencia visible en sentido inverso.
+Medianas: 32, 33, 40, 35.
+El grupo 3 es claramente mayor y más disperso (caja 32-48, contra 28-39 en el grupo 1).
+Al analizar también con LIMIT_BAL, el grupo con menor cupo es también el de más edad.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` (montos del estado de cuenta de septiembre a abril de 2005) contra `EDUCATION`, generando un boxplot por mes para comparar el monto del estado de cuenta según el nivel educativo del cliente.
 
@@ -1172,23 +1581,34 @@ boxplot(BILL_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         col = "grey90")
 ```
 
-Los grupos 1, 2 y 3 son indistinguibles entre sí: medianas de 1 a 3, cajas de 0 a 6, bigotes superiores de 11 a 17. El nivel educativo no separa esta variable. El grupo 4 se ve distinto solo en apariencia: su caja es más ancha (llega a 11 en septiembre) y su bigote superior mucho más bajo (28 en septiembre, 20 en junio, 13 en abril), pero eso es efecto de tener pocas observaciones, no una diferencia real de comportamiento.
+Los grupos 1, 2 y 3 son indistinguibles entre sí: medianas de 1 a 3, cajas de 0 a 6, bigotes superiores de 11 a 17.
+El nivel educativo no separa esta variable.
+El grupo 4 se ve distinto solo en apariencia: su caja es más ancha (en septiembre) y su bigote superior mucho más bajo (aproximadamente 28 en septiembre, 20 en junio, 13 en abril), pero eso es efecto de tener pocas observaciones, no una diferencia real de comportamiento.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` (montos efectivamente pagados de septiembre a abril de 2005) contra `EDUCATION`, para comparar cuánto pagaron efectivamente los clientes según su nivel educativo, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_education_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ EDUCATION, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por nivel educativo",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9, 
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ EDUCATION, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en agosto de 2005 por nivel educativo",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ EDUCATION, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en julio de 2005 por nivel educativo",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
@@ -1199,15 +1619,24 @@ boxplot(PAY_AMT4/10000 ~ EDUCATION, data = datos_credit_visu,
 
 boxplot(PAY_AMT5/10000 ~ EDUCATION, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en mayo de 2005 por nivel educativo",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ EDUCATION, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en abril de 2005 por nivel educativo",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Nivel educativo (1 = Posgrado, 2 = Universidad, 3 = Secundaria, 4 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
-Todas las cajas colapsadas en cero en los cuatro grupos. Solo cambia la altura de la columna de atípicos: 1 y 2 llegan alto (168 y 122 en agosto, 90 en julio), 3 intermedio, 4 siempre el más bajo (21 en agosto, 12 en junio). Esa jerarquía refleja el número de observaciones de cada grupo, no la conducta de pago.
+
+Todas las cajas colapsadas en cero en los cuatro grupos.
+Solo cambia la altura de la columna de atípicos: 1 y 2 llegan alto (especialmente en agosto y en julio), 3 intermedio, 4 siempre el más bajo (especialmente en agosto y en junio).
+Esa jerarquía refleja el número de observaciones de cada grupo, no la conducta de pago.
 
 **Finalmente, se concluye que el nivel educativo discrimina el cupo otorgado y la edad, pero no el saldo ni el pago.**
 
@@ -1223,6 +1652,7 @@ boxplot(LIMIT_BAL/10000 ~ MARRIAGE, data = datos_credit_visu,
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+En este boxplot se puede apreciar una posible relación entre el monto de crédito que recibe una persona y su estado civil. Las personas casadas son las que tienen mayor cupo, los solteros quedan apenas por debajo, y el grupo "Otros" (posiblemente separados, viudos, etc) está notoriamente más abajo y con menos dispersión.
 
 Se cruza `AGE` contra `MARRIAGE`, para observar la distribución de edades según el estado civil.
 
@@ -1232,78 +1662,118 @@ boxplot(AGE ~ MARRIAGE, data = datos_credit_visu,
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+Los solteros son claramente el grupo más joven y más compacto; casados y "Otros" están desplazados hacia edades mayores, siendo "Otros" el de mediana más alta y el más disperso; se asemeja algo a una distribución normal.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `MARRIAGE`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado civil del cliente.
 
 ```{r visu_cajas_y_bigotes_de_MARRIAGE_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto del estado de cuenta en septiembre de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto del estado de cuenta en agosto de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto del estado de cuenta en julio de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto del estado de cuenta en junio de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto del estado de cuenta en mayo de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto del estado de cuenta en abril de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+Casados y solteros son indistinguibles entre sí en los seis paneles: misma posición, mismo tamaño de caja, misma nube densa de atípicos. "Otros" se ve más recogido, con menos alcance hacia arriba, lo cual responde a su menor número de observaciones más que a un comportamiento distinto. El patrón se repite idéntico mes a mes.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `MARRIAGE`, para comparar cuánto pagaron efectivamente los clientes según su estado civil, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_MARRIAGE_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ MARRIAGE, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado civil",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,         
         xlab = "Estado civil (1 = Casado, 2 = Soltero, 3 = Otros)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Cajas colapsadas en cero en los tres grupos, sin diferencias apreciables. Solo cambia la densidad y el alcance de la columna de atípicos: alta en casados y solteros, escasa en "Otros", otra vez por tamaño de grupo. Adicionalmente, el grupo "Otros" está condicionado por su tamaño, al ser una muestra menor (377 de 30000 registros, aproximadamente el 1.26%).
 
 ### De "default payment next month"
 
-En esta sección se cruza la variable de respuesta `default payment next month` (indicador de si el cliente incurrió en impago al mes siguiente, convertida a factor) contra las mismas variables numéricas. Esta es la sección más importante desde el punto de vista analítico, ya que permite explorar visualmente qué variables podrían estar asociadas con el impago, lo cual es relevante de cara a un eventual modelo predictivo.
+En esta sección se cruza la variable de respuesta `default payment next month` (indicador de si el cliente incurrió en impago al mes siguiente, convertida a factor) contra las mismas variables numéricas.
+Esta es la sección permite explorar visualmente qué variables podrían estar asociadas con el impago, lo cual es relevante de cara a un eventual modelo predictivo.
 
 Se cruza `LIMIT_BAL` contra `default payment next month`, para observar si los clientes que incurren en impago tienden a tener montos de crédito otorgado distintos a los que no incurren.
 
@@ -1313,6 +1783,7 @@ boxplot(LIMIT_BAL/10000 ~ `default payment next month`, data = datos_credit_visu
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+La única variable con separación visible. Quienes incurren en impago tienen una caja claramente desplazada hacia abajo y más estrecha, y su bigote superior queda muy por debajo del de los cumplidores.
 
 Se cruza `AGE` contra `default payment next month`, para observar si la edad se relaciona con la incurrencia en impago.
 
@@ -1322,74 +1793,113 @@ boxplot(AGE ~ `default payment next month`, data = datos_credit_visu,
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+Sin diferencia alguna: las dos cajas son prácticamente calcadas. La edad no discrimina el impago.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `default payment next month`, generando un boxplot por mes para comparar el monto del estado de cuenta entre quienes incurrieron en impago y quienes no.
 
 ```{r visu_cajas_y_bigotes_de_`default_payment_next_month`_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto del estado de cuenta en septiembre de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto del estado de cuenta en agosto de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto del estado de cuenta en julio de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto del estado de cuenta en junio de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto del estado de cuenta en mayo de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto del estado de cuenta en abril de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.9,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+Cajas casi idénticas entre los dos grupos en todos los meses. Se percibe apenas que el grupo de impago llega un poco menos alto en el bigote superior y en sus extremos, pero el solapamiento es casi total. El saldo adeudado, por sí solo, no separa.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `default payment next month`, para comparar cuánto pagaron efectivamente los clientes que incurrieron en impago frente a los que no, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_`default_payment_next_month`_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en agosto de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en julio de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en junio de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en mayo de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ `default payment next month`, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en abril de 2005 por incurrencia de impago al mes siguiente",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,        
         xlab = "Incurrencia de impago al mes siguiente (0 = No, 1 = Sí)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Aquí sí hay un patrón consistente en la cola: los cumplidores muestran una nube de atípicos mucho más densa y que alcanza montos muy superiores. El grupo de impago tiene una cola notoriamente más corta en los seis meses. Podría sugerir que quien no paga tampoco hace abonos grandes.
 
 ### De PAY_0
 
@@ -1403,6 +1913,7 @@ boxplot(LIMIT_BAL/10000 ~ PAY_0, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+Hay un descenso claro y monótono de la caja a medida que aumenta el retraso, desde las categorías sin mora hasta los retrasos intermedios. En las categorías de retraso alto el patrón se vuelve errático y las cajas cambian de forma sin orden posiblemente por la falta de observaciones. La lectura confiable llega hasta los primeros meses de retraso.
 
 Se cruza `AGE` contra `PAY_0`, para observar si la edad se relaciona con el estado de pago de septiembre de 2005.
 
@@ -1412,74 +1923,113 @@ boxplot(AGE ~ PAY_0, data = datos_credit_visu,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+No hay un patrón visible. Las cajas de las categorías pobladas son casi idénticas; las de retraso alto oscilan sin dirección, otra vez por tamaño de grupo.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_0`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de septiembre de 2005.
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+Las categorías -2 y -1 tienen cajas pegadas a cero y muy estrechas, consistentes con cuentas sin consumo o saldadas por completo. La categoría 0 posee una caja claramente elevada y ancha, con la mayor dispersión del panel, coherente con clientes activos que revuelven saldo pagando el mínimo. Esto respalda que -2/-1 y 0 no son grados de una misma escala sino situaciones cualitativamente distintas. El patrón se repite idéntico en los seis meses.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_0`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de septiembre de 2005, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_0, data = datos_credit_visu,
         main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,             
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Las categorías -2, -1 y 0 concentran toda la masa de pagos, con colas largas y densas. A partir del primer mes de retraso las colas tienden a acortarse de forma abrupta, y desde los retrasos medios en adelante prácticamente desaparece cualquier abono.
 
 ### De PAY_2
 
@@ -1489,87 +2039,127 @@ Se cruza `LIMIT_BAL` contra `PAY_2`, para comparar el monto de crédito otorgado
 
 ```{r visu_cajas_y_bigotes_de_PAY_2_y_LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        main = "Monto de crédito otorgado por estado de pago en agosto de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+Las categorías -2 y -1 reciben los cupos más altos. La 0 baja claramente, aunque conserva muchos clientes con cupos altos. A medida que aumenta el retraso, los cupos disminuyen. Esto sugiere que el banco asigna menos crédito a perfiles de mayor riesgo, o que quienes tienen cupos bajos se atrasan más. La categoría 1 y las de retraso alto (5 a 8) tienen muy pocos casos, así que sus cajas no son confiables
 
 Se cruza `AGE` contra `PAY_2`, para observar si la edad se relaciona con el estado de pago de agosto de 2005.
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_3}
 boxplot(AGE ~ PAY_2, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en agosto de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+Las medianas y las cajas son muy parecidas entre categorías, y las diferencias en los retrasos altos se explican por el bajo número de casos, por lo que no hay una relación visible.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_2`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de agosto de 2005.
 
 ```{r visu_cajas_y_bigotes_de_PAY_2_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,           
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,           
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,           
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,           
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,           
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,           
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+Se repite el patrón de ´PAY_0´. En -2 y -1 las cajas quedan pegadas a cero, con algunos saldos negativos, es decir, saldo a favor. La 0 tiene la caja más elevada y dispersa, lo que corresponde a clientes que mantienen deuda y abonan el mínimo. Los retrasos muestran saldos moderados pero persistentes. El patrón es estable en los seis meses, lo que indica que el comportamiento de agosto refleja un hábito y no un evento aislado.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_2`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de agosto de 2005, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_PAY_2_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,         
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_2, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en agosto de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Casi todos los abonos se concentran en -2, -1 y 0, con colas largas. Desde el tercer mes de retraso los pagos prácticamente desaparecen. Las categorías 1 y 2 conservan algo de actividad, sobre todo en meses cercanos a agosto.
 
 ### De PAY_3
 
@@ -1579,87 +2169,129 @@ Se cruza `LIMIT_BAL` contra `PAY_3`, para comparar el monto de crédito otorgado
 
 ```{r visu_cajas_y_bigotes_de_PAY_3_y_LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        main = "Monto de crédito otorgado por estado de pago en julio de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+Se mantiene la tendencia: -2 y -1 tienen los cupos más altos, la 0 baja pero conserva muchos cupos altos, y los retrasos se asocian con cupos menores. La categoría 1 aparece anómalamente alta, igual que la 5, pero ambas tienen muy pocos casos, así que no son interpretables.
 
 Se cruza `AGE` contra `PAY_3`, para observar si la edad se relaciona con el estado de pago de julio de 2005.
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_4}
 boxplot(AGE ~ PAY_3, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en julio de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+Sigue sin haber relación. Las diferencias en los retrasos altos se deben al tamaño reducido de esos grupos.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_3`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de julio de 2005.
 
 ```{r visu_cajas_y_bigotes_de_PAY_3_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
-
+El patrón es el mismo que en PAY_0 y PAY_2. En -2 y -1 los saldos están pegados a cero, con algunos negativos (saldo a favor). La 0 es el grupo con más deuda y más dispersión. Los retrasos tienen saldos moderados. Hay dos rarezas de grupos pequeños: la 1 se ve elevada y la 7 queda casi en cero, quizá por cuentas castigadas o de monto muy bajo. El comportamiento es estable en los seis meses.
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_3`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de julio de 2005, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_PAY_3_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_3, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en julio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Los abonos siguen concentrados en -2, -1 y 0. La 2 conserva una cola de pagos notable, lo que sugiere clientes que se ponen al día. Desde el tercer mes de retraso los pagos desaparecen. La caja amplia de la categoría 1 en abril es poco confiable por su bajo número de casos.
+
+
+De lo que se ha observado hasta el momento, si se retrocede en el tiempo (septiembre -> agosto -> julio), los patrones son prácticamente idénticos, confirmando la fuerte persistencia del comportamiento de pago que ya había mostrado la correlación entre PAY_0 y PAY_6.
 
 ### De PAY_4
 
@@ -1669,87 +2301,129 @@ Se cruza `LIMIT_BAL` contra `PAY_4`, para comparar el monto de crédito otorgado
 
 ```{r visu_cajas_y_bigotes_de_PAY_4_y_LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        main = "Monto de crédito otorgado por estado de pago en junio de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+La tendencia se mantiene: -2 y -1 tienen los cupos más altos, la 0 baja pero conserva una cola amplia, y los cupos disminuyen con el retraso. La categoría 1 aparece como una caja sin bigotes ni atípicos, señal de que tiene muy pocos clientes y no es interpretable. Los retrasos más altos (6 a 8) quedan comprimidos en cupos bajos.
 
 Se cruza `AGE` contra `PAY_4`, para observar si la edad se relaciona con el estado de pago de junio de 2005.
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_5}
 boxplot(AGE ~ PAY_4, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en junio de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+No hay relación apreciable. La 6, que se ve más joven, y las cajas irregulares de 1 y 8 se explican por el bajo número de casos.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_4`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de junio de 2005.
 
 ```{r visu_cajas_y_bigotes_de_PAY_4_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+El patrón es el mismo de las secciones anteriores. En -2 y -1 los saldos están pegados a cero, con negativos esporádicos. La 0 es el grupo más endeudado y disperso. Los retrasos tienen saldos moderados y compactos. La 1 vuelve a mostrar una caja elevada sin bigotes, un artefacto de muy pocos casos. La 7 se mantiene casi en cero, igual que en `PAY_3`. Todo es estable en los seis meses.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_4`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de junio de 2005, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_PAY_4_y_pay_amt}
 boxplot(PAY_AMT1/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_4, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en junio de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Los abonos siguen concentrados en -2, -1 y 0. La cola de pagos de la 2 persiste, pero es más corta que en julio. Desde el tercer mes de retraso los pagos son prácticamente nulos. La caja amplia de la 1 en abril responde nuevamente a un grupo mínimo.
+
+*D*e momento, se ha podido observar como la categoría 1 casi desaparece a medida que se retrocede en los meses, lo que sugiere que en la codificación los clientes pasan directamente de 0 o -1 a 2. Esto podría ser un indicio que `PAY` no es una escala ordinal uniforme sino una variable categórica con usos desiguales de sus niveles.
 
 ### De PAY_5
 
@@ -1759,87 +2433,129 @@ Se cruza `LIMIT_BAL` contra `PAY_5`, para comparar el monto de crédito otorgado
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_LIMIT_BAL_2}
 boxplot(LIMIT_BAL/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        main = "Monto de crédito otorgado por estado de pago en mayo de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+Igual que se ha visto anteriormente, -2 y -1 tienen los cupos más altos, la 0 queda en un punto intermedio con una cola amplia, y los cupos bajan con el retraso. La 6 muestra una caja amplia y la 8 un solo valor, ambas por tener muy pocos casos.
 
 Se cruza `AGE` contra `PAY_5`, para observar si la edad se relaciona con el estado de pago de mayo de 2005.
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_6}
 boxplot(AGE ~ PAY_5, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en mayo de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+La edad y el estado de pago en mayo no están relacionadas en este caso, no hay un parón claro y de las categorías 6, 7 y 8 hay muy pocas observaciones.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_5`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de mayo de 2005.
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_bill_amt_2}
 boxplot(BILL_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+En -2 y -1 los saldos están pegados a cero, con negativos esporádicos. La 0 es el grupo más endeudado y disperso, y la 2 lo sigue con saldos moderados. En 7 y 8 los saldos quedan prácticamente en cero, lo que podría sugerir cuentas castigadas/inactivas tras un atraso prolongado. La 6 se ve irregular por su bajo número de casos. Todo es estable en los seis meses.
 
 Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_5`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de mayo de 2005, mes a mes.
 
 ```{r visu_cajas_y_bigotes_de_PAY_0_y_pay_amt_2}
 boxplot(PAY_AMT1/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_5, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en mayo de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Los abonos siguen concentrados en -2, -1 y 0. La 2 conserva una cola corta. Desde el tercer mes de retraso los pagos son nulos.
+
+*L*a categoría 1 desaparece por completo en PAY_5, y teniendo en cuenta la idea planteada al final de la sección de `PAY_4`, se confirma de cierta manera lo que se venía observando: en los meses más antiguos los clientes no pasan por "un mes de retraso", sino que saltan de 0 (pago mínimo) o -1 (pago puntual) directamente a 2.
 
 ### De PAY_6
 
@@ -1849,87 +2565,137 @@ Se cruza `LIMIT_BAL` contra `PAY_6`, para comparar el monto de crédito otorgado
 
 ```{r visu_cajas_y_bigotes_de_PAY_6_y_LIMIT_BAL}
 boxplot(LIMIT_BAL/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto de crédito otorgado por estado de pago en septiembre de 2005",
+        main = "Monto de crédito otorgado por estado de pago en abril de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto de crédito otorgado (NT/$10000)",
         col = "grey90")
 ```
+El gradiente es el más limpio de la serie: -2 y -1 tienen los cupos más altos, luego 0, luego 2, y desde el tercer mes de retraso los cupos quedan bajos y compactos. La 5 y la 8 se ven algo más altas, pero tienen muy pocos casos.
 
 Se cruza `AGE` contra `PAY_6`, para observar si la edad se relaciona con el estado de pago de abril de 2005.
 
 ```{r visu_cajas_y_bigotes_de_default_payment_next_month_y_AGE_2}
 boxplot(AGE ~ PAY_6, data = datos_credit_visu,
-        main = "Edad por estado de pago en septiembre de 2005",
+        main = "Edad por estado de pago en abril de 2005",
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Edad (Años)",
         col = "grey90")
 ```
+No hay relación. La variación en los retrasos altos se explica por el tamaño de los grupos.
 
 Se cruzan `BILL_AMT1` a `BILL_AMT6` contra `PAY_6`, generando un boxplot por mes para comparar el monto del estado de cuenta según el estado de pago de abril de 2005.
 
 ```{r visu_cajas_y_bigotes_de_PAY_6_y_bill_amt}
 boxplot(BILL_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en septiembre de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en agosto de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en julio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en junio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en mayo de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 
 boxplot(BILL_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto del estado de cuenta en abril de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto del estado de cuenta (NT/$10000)",
         col = "grey90")
 ```
+El patrón es idéntico al de las secciones anteriores. En -2 y -1 los saldos están pegados a cero, con negativos esporádicos. La 0 es el grupo más endeudado y disperso, seguida por la 2. Los retrasos mayores tienen saldos bajos. La 7 vuelve a quedar en cero, consistente con cuentas castigadas o congeladas, y la 8 se ve algo elevada, pero con muy pocos casos.
 
-Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_6`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de abril de 2005, mes a mes. Con este chunk finaliza el conjunto de diagramas de caja y bigotes cruzados contra las seis variables de estado de pago mensual.
+Se cruzan `PAY_AMT1` a `PAY_AMT6` contra `PAY_6`, para comparar cuánto pagaron efectivamente los clientes según su estado de pago de abril de 2005, mes a mes.
+Con este chunk finaliza el conjunto de diagramas de caja y bigotes cruzados contra las seis variables de estado de pago mensual.
 
 ```{r visu_cajas_y_bigotes_de_PAY_6_y_pay_amt_2}
 boxplot(PAY_AMT1/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en septiembre de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT2/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en agosto de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT3/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en julio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT4/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en junio de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT5/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en mayo de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 
 boxplot(PAY_AMT6/10000 ~ PAY_6, data = datos_credit_visu,
-        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en septiembre de 2005",
+        main = "Monto efectivamente pagado por el cliente en abril de 2005 por estado de pago en abril de 2005",
+        las = 2, 
+        cex.axis = 0.7, 
+        cex.main = 0.7,
         xlab = "Estado de pago (-1 = Pago puntual, 1, 2, 3, 4, 5, 6, 7, 8, 9 = Meses de retraso)", ylab = "Monto efectivamente pagado (NT/$10000)",
         col = "grey90")
 ```
+Los abonos están concentrados en -2, -1 y 0, con cola corta en la 2 y nulos desde el tercer mes de retraso. En los meses cercanos a abril, la -1 muestra una caja levemente despegada de cero: el pago puntual se refleja en abonos del mismo período.
+
+###Conclusiones generales de los analisis sobre las variables `PAY`
+
+1. Los seis meses muestran los mismos patrones, lo que confirma que el estado de pago es un hábito estable del cliente.
+2. -2/-1 son clientes de alto cupo, saldo nulo y pagos altos. 0 son clientes de cupo medio, mayor deuda y pagos sostenidos. Los retrasos son clientes de cupo bajo, saldo moderado y pagos que se extinguen.
+3. La categoría 1 se reduce y desaparece en los meses antiguos, y los retrasos altos tienen muy pocos casos. Esto justifica tratar PAY como categórica y considerar agrupar los niveles de retraso (por ejemplo, 2 o más).
+4. La edad no discrimina el estado de pago en ningún mes.
+
+
 # 4. Análisis Bivariado
 
 ## Diagramas de Dispersión
@@ -2223,7 +2989,9 @@ for (i in seq_along(grupos)) {
 
 ## ¿Qué estandarización se aplicará y por qué?
 
-A lo largo de este documento, `PAY_AMT1` a `PAY_AMT3` (y en general las variables `PAY_AMT`) se graficaron siempre en su escala original, sin ningún tipo de transformación. Sin embargo, como ya se mencionó tanto en la sección de histogramas como en la de densidad de kernel, esa escala original comprime casi toda la información cerca de cero y no permite ver bien el comportamiento del resto de los pagos. Por esa razón, en esta sección puntual sí se aplica una transformación logarítmica sobre estas variables, con la siguiente justificación:
+A lo largo de este documento, `PAY_AMT1` a `PAY_AMT3` (y en general las variables `PAY_AMT`) se graficaron siempre en su escala original, sin ningún tipo de transformación.
+Sin embargo, como ya se mencionó tanto en la sección de histogramas como en la de densidad de kernel, esa escala original comprime casi toda la información cerca de cero y no permite ver bien el comportamiento del resto de los pagos.
+Por esa razón, en esta sección puntual sí se aplica una transformación logarítmica sobre estas variables, con la siguiente justificación:
 
 > Dado que los pagos presentan un sesgo extremo a la derecha, se aplica transformación logarítmica ($\log_{10}(x + 1)$) para visualizar mejor la distribución, ya que cuando se hizo sin esto no se visualizaba ningún dato por la magnitud de los mismos, el + 1 se aplica para aquellos valores de 0 ya que el logaritmo de 0 no existe.
 
@@ -2333,8 +3101,23 @@ plot(
 )
 ```
 
-Al igual que en los histogramas y las densidades, la transformación logarítmica en los diagramas de dispersión separa mejor la nube de puntos: sin ella, la enorme mayoría de las observaciones (los pagos de $0 o casi $0) quedarían aplastadas contra el origen y los pocos pagos altos estirarían el resto de la nube hacia un rincón del gráfico.
+Al igual que en los histogramas y las densidades, la transformación logarítmica en los diagramas de dispersión separa mejor la nube de puntos: sin ella, la enorme mayoría de las observaciones (los pagos de \$0 o casi \$0) quedarían aplastadas contra el origen y los pocos pagos altos estirarían el resto de la nube hacia un rincón del gráfico.
 
 ## Variables a trabajar
 
-*(Pendiente: aquí se determinará, más adelante, con cuáles variables finales se va a trabajar en el resto del análisis.)*
+Se seleccionarán todas las variables del dataset:
+
+- `LIMIT_BAL`
+- `SEX`
+- `EDUCATION`
+- `MARRIAGE`
+- `AGE`
+- `PAY_0` a `PAY_6`
+- `BILL_AMT1` a `BILL_AMT6`
+- `PAY_AMT1` a `PAY_AMT6`
+
+Excepto:
+
+- **`ID`**: Variable que no aporta información relevante para el análisis, ya que únicamente identifica cada registro.
+- **`default payment next month`**: Variable binaria que no se incluirá, debido a que el análisis principal se realizará mediante PCA, enfocado en las variables utilizadas para analizar la variabilidad del conjunto de datos.
+

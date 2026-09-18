@@ -675,7 +675,7 @@ El histograma esta prácticamente vacío porque el eje $X$ se estira hasta más 
 
 se aplica zoom visual con coord_cartesian() que enfoca donde está la masa real de datos sin eliminar las filas del cálculo para poder observar esto:
 
-```{r hist_Historial_de_Facturación_Reciente}
+```{r hist_Historial_de_Facturación_Reciente_zoom}
 bins_bill_amt2 <- calcular_bins_fd(df$BILL_AMT2)
 bins_bill_amt3 <- calcular_bins_fd(df$BILL_AMT3)
 bins_bill_amt4 <- calcular_bins_fd(df$BILL_AMT4)
@@ -987,7 +987,7 @@ k4 + k5 + k6
 
 Si se aplica el mismo zoom de los histogramas:
 
-```{r historial de facturacion}
+```{r historial de facturacion zoom}
 
 limite_zoom <- c(-30000, 250000)
 
