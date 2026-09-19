@@ -519,25 +519,13 @@ sapply(
 Se verifica que la respuesta contenga únicamente `0 = Sin impago` y `1 = Con impago`.
 
 ```{r binaria_default}
-table(
-  datos_credit$`default payment next month`,
-  useNA = "ifany"
+matriz_cor <- cor(
+  datos_credit,
+  use = "pairwise.complete.obs",
+  method = "pearson"
 )
 
-categorias_validas_default <- c(0, 1)
-
-setdiff(
-  na.omit(unique(datos_credit$`default payment next month`)),
-  categorias_validas_default
-)
-
-# Porcentajes entre las respuestas no faltantes
-round(
-  prop.table(
-    table(datos_credit$`default payment next month`)
-  ) * 100,
-  2
-)
+round(matriz_cor, 2)
 ```
 
 Según los resultados proporcionados, 23.364 clientes (77,88 %) no incurrieron en impago y 6.636 (22,12 %) sí lo hicieron.
