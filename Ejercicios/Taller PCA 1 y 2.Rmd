@@ -37,14 +37,14 @@ Con su decisión del punto 3:
 1. La gráfica de cuánta información guarda cada componente, con el acumulado.
 2. ¿Cuánta guarda la primera? ¿Cuántas hacen falta para pasar de 80 de cada 100?
 3. Escriban, en una frase para el cliente, qué significa esa cifra.
-
-## 5. Qué mide cada una (1,0)
+  
+## 5. Qué mide cada una (1,0) # Juan Pablo        
 
 Grafiquen los pesos de las dos o tres primeras componentes. **Pónganle nombre a cada una** mirando
 qué variables mandan, y expliquen el nombre. Recuerden que el signo es arbitrario: se lee qué manda y
 si las variables van en la misma dirección o en contra.
 
-## 6. El costo para su cliente (1,0)
+## 6. El costo para su cliente (1,0) # Juan Pablo
 
 Ésta es la pregunta de la clase aplicada a su negocio: **si su cliente decidiera con un solo número,
 ¿a quién o a qué dejaría por fuera?**
@@ -58,7 +58,7 @@ si las variables van en la misma dirección o en contra.
 ---
 # Parte 2 - PCA 2
 
-## 1. El mapa y sus direcciones (1,0)
+## 1. El mapa y sus direcciones (1,0) # Juan Pablo
 
 Con las variables numéricas del taller anterior (y la misma decisión sobre estandarizar):
 
