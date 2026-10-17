@@ -7,7 +7,7 @@ output: html_document
 # Parte 1 - PCA 1
 
 
-## 1. El encargo (0,5)
+## 1. El encargo (0,5) # Hana-Pinilla
 
 En un párrafo: **quién es su cliente, qué decisión toma y con qué variables numéricas la toma hoy**.
 Escojan entre 4 y 10 variables numéricas de su base, y digan por qué esas.
@@ -91,7 +91,7 @@ región, categoría, lo que tengan). Dibujen las elipses del 90 %.
   del otro.
 - Cierren con la frase para el cliente: ¿le sirve ese grupo para decidir, o no?
 
-## 5. La decisión en el mapa (1,0)
+## 5. La decisión en el mapa (1,0) #Hana-Pinilla
 
 Propongan **uno o dos cortes** en el mapa que le sirvan a su cliente para actuar, y **cuenten cuántos
 casos caen en cada zona**. Digan qué haría el cliente con cada zona, y qué pasa si mueve el corte.
