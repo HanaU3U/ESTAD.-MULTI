@@ -58,7 +58,7 @@ si las variables van en la misma dirección o en contra.
 ---
 # Parte 2 - PCA 2
 
-## 1. El mapa y sus direcciones (1,0)
+## 1. El mapa y sus direcciones (1,0) Ana 👻👻👻
 
 Con las variables numéricas del taller anterior (y la misma decisión sobre estandarizar):
 
@@ -67,7 +67,7 @@ Con las variables numéricas del taller anterior (y la misma decisión sobre est
    arriba, para su cliente.
 3. Fijen el signo de cada componente para que se lea fácil, y digan cómo lo fijaron.
 
-## 2. El biplot (1,0)
+## 2. El biplot (1,0) Ana 👻👻👻
 
 Hagan el biplot: los casos como puntos y las variables como flechas.
 
@@ -75,7 +75,7 @@ Hagan el biplot: los casos como puntos y las variables como flechas.
 - ¿Cuál va sola? ¿Alguna va en contra de otra?
 - Si hay muchas etiquetas encima, arréglenlas: un biplot que no se lee no cuenta.
 
-## 3. ¿Hay grupos o hay un continuo? (1,0)
+## 3. ¿Hay grupos o hay un continuo? (1,0) Ana 👻👻👻
 
 Miren la nube. **¿Tiene islas separadas por huecos, como setosa, o es una sola mancha?** Muéstrenlo
 con el gráfico y con una cifra: por ejemplo, dónde termina un grupo y dónde empieza el otro en la
