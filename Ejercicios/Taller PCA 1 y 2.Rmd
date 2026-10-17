@@ -38,9 +38,8 @@ Nuestro cliente es un banco taiwanés. La decisión que debe tomar es **realizar
 **Justificación de las variables**
 
 -   **LIMIT_BAL (límite de crédito):** representa la capacidad de endeudamiento del cliente. Permite identificar en qué rangos de monto los clientes tienden a pagar y en cuáles no.
--   **BILL_AMT1, BILL_AMT2 y BILL_AMT3 (monto de la factura):** reflejan cuánto debe el cliente en los meses más recientes. Se toman solo tres meses porque los bancos suelen usar ese horizonte como límite para tolerar un pago atrasado o un impago. Más allá de ese plazo, el comportamiento deja de ser una señal temprana.
--   **PAY_AMT1, PAY_AMT2 y PAY_AMT3 (monto pagado):** muestran cuánto ha pagado el cliente en esos mismos tres meses. Al compararlas con la factura, se ve si el cliente cubre su deuda o se está atrasando. Se eligen los tres meses más recientes por la misma razón que en la factura.
--   **EDUCATION (escolaridad), como variable de apoyo:** es categórica, así que no cuenta dentro de las numéricas. Sirve para caracterizar el perfil de las personas que pagan y de las que no.
+-   **BILL_AMT1, BILL_AMT2, BILL_AMT3 y BILL_AMT4 (monto de la factura):** reflejan cuánto debe el cliente en los meses más recientes. Se toman solo cuatro meses porque los bancos suelen usar ese horizonte como límite para tolerar un pago atrasado o un impago. Más allá de ese plazo, el comportamiento deja de ser una señal temprana.
+-   **PAY_AMT1, PAY_AMT2, PAY_AMT3 y PAY_AMT4 (monto pagado):** muestran cuánto ha pagado el cliente en esos mismos tres meses. Al compararlas con la factura, se ve si el cliente cubre su deuda o se está atrasando. Se eligen los cuatro meses más recientes por la misma razón que en la factura.
 
 ## 2. ¿Se repiten? (0,8)
 
