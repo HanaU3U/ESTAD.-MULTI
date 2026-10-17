@@ -3,8 +3,8 @@ title: "Taller PCA 1 y 2"
 output: html_document
 ---
 
-
-#Parte 1 - PCA 1
+---
+# Parte 1 - PCA 1
 
 
 ## 1. El encargo (0,5)
@@ -53,3 +53,49 @@ si las variables van en la misma dirección o en contra.
   una condición.
 - Cuenten cuántos de ese grupo encuentra la primera componente, y **cuántos se le escapan**.
 - Cierren con la decisión: ¿le basta un número, o necesita reportar dos o tres?
+
+---
+
+---
+# Parte 2 - PCA 2
+
+## 1. El mapa y sus direcciones (1,0)
+
+Con las variables numéricas del taller anterior (y la misma decisión sobre estandarizar):
+
+1. Dibujen sus casos en el plano de las dos primeras componentes. ¿Cuánta información guarda?
+2. **Pónganle nombre a cada dirección**: qué significa ir a la derecha y qué significa ir hacia
+   arriba, para su cliente.
+3. Fijen el signo de cada componente para que se lea fácil, y digan cómo lo fijaron.
+
+## 2. El biplot (1,0)
+
+Hagan el biplot: los casos como puntos y las variables como flechas.
+
+- ¿Qué flechas van juntas? Digan el ángulo aproximado entre ellas.
+- ¿Cuál va sola? ¿Alguna va en contra de otra?
+- Si hay muchas etiquetas encima, arréglenlas: un biplot que no se lee no cuenta.
+
+## 3. ¿Hay grupos o hay un continuo? (1,0)
+
+Miren la nube. **¿Tiene islas separadas por huecos, como setosa, o es una sola mancha?** Muéstrenlo
+con el gráfico y con una cifra: por ejemplo, dónde termina un grupo y dónde empieza el otro en la
+primera componente.
+
+## 4. ¿Los grupos que su cliente conoce se separan? (1,0)
+
+Coloreen el mapa por **una variable de grupo** que su cliente use para decidir (tipo de cliente,
+región, categoría, lo que tengan). Dibujen las elipses del 90 %.
+
+- ¿Se separan o solo se desplazan?
+- Muéstrenlo con dos cifras: la distancia entre los promedios, y qué parte de un grupo cae en la zona
+  del otro.
+- Cierren con la frase para el cliente: ¿le sirve ese grupo para decidir, o no?
+
+## 5. La decisión en el mapa (1,0)
+
+Propongan **uno o dos cortes** en el mapa que le sirvan a su cliente para actuar, y **cuenten cuántos
+casos caen en cada zona**. Digan qué haría el cliente con cada zona, y qué pasa si mueve el corte.
+
+---
+
