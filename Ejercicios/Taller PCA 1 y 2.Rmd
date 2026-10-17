@@ -3,3 +3,53 @@ title: "Taller PCA 1 y 2"
 output: html_document
 ---
 
+
+#Parte 1 - PCA 1
+
+
+## 1. El encargo (0,5)
+
+En un párrafo: **quién es su cliente, qué decisión toma y con qué variables numéricas la toma hoy**.
+Escojan entre 4 y 10 variables numéricas de su base, y digan por qué esas.
+
+
+## 2. ¿Se repiten? (0,8)
+
+Hagan la matriz de correlaciones de esas variables, en gráfico. Respondan:
+
+- ¿Qué variables se repiten más?
+- ¿Cuál va más sola?
+- ¿Tiene sentido resumirlas? Si casi todas las correlaciones están cerca de cero, **díganlo**: ésa
+  también es una respuesta para el cliente.
+
+
+## 3. ¿Estandarizar? (0,7)
+
+Muestren la desviación de cada variable. **Decidan antes de correr** si estandarizan y justifíquenlo.
+Después corran el PCA **de las dos maneras** y muestren cuánto cambia la información que guarda la
+primera componente.
+
+
+## 4. Cuánta información guarda (1,0)
+
+Con su decisión del punto 3:
+
+1. La gráfica de cuánta información guarda cada componente, con el acumulado.
+2. ¿Cuánta guarda la primera? ¿Cuántas hacen falta para pasar de 80 de cada 100?
+3. Escriban, en una frase para el cliente, qué significa esa cifra.
+
+## 5. Qué mide cada una (1,0)
+
+Grafiquen los pesos de las dos o tres primeras componentes. **Pónganle nombre a cada una** mirando
+qué variables mandan, y expliquen el nombre. Recuerden que el signo es arbitrario: se lee qué manda y
+si las variables van en la misma dirección o en contra.
+
+## 6. El costo para su cliente (1,0)
+
+Ésta es la pregunta de la clase aplicada a su negocio: **si su cliente decidiera con un solo número,
+¿a quién o a qué dejaría por fuera?**
+
+- Definan un grupo que al cliente le importe: los peores, los mejores, los de riesgo, los que cumplen
+  una condición.
+- Cuenten cuántos de ese grupo encuentra la primera componente, y **cuántos se le escapan**.
+- Cierren con la decisión: ¿le basta un número, o necesita reportar dos o tres?
