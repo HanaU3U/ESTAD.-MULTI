@@ -34,7 +34,9 @@ paquetes <- c(
   "readxl",
   "ragg",
   "kableExtra",
-  "tidyr"
+  "tidyr",
+  "ggplot2",
+  "ggrepel"
 )
 
 paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
@@ -650,8 +652,95 @@ Decisión. A este cliente no le basta un número, y tampoco le bastan dos: repor
 Con las variables numéricas del taller anterior (y la misma decisión sobre estandarizar):
 
 1.  Dibujen sus casos en el plano de las dos primeras componentes. ¿Cuánta información guarda?
+
+```{r pca2-preparacion, include=FALSE}
+
+# Reutilizar el PCA estandarizado de la Parte 1.
+modelo_pca2 <- pca_estandarizado
+variables_pca2 <- rownames(modelo_pca2$rotation)
+
+filas_pca2 <- complete.cases(datos_credit[, variables_pca2])
+stopifnot(sum(filas_pca2) == nrow(modelo_pca2$x))
+
+# Orientar PC1 hacia mayor facturación y PC2 hacia mayores pagos.
+signos_pca2 <- c(
+  sign(sum(modelo_pca2$rotation[paste0("BILL_AMT", 1:4), 1])),
+  sign(sum(modelo_pca2$rotation[paste0("PAY_AMT", 1:4), 2]))
+)
+signos_pca2[signos_pca2 == 0] <- 1
+
+puntajes_pca2 <- sweep(
+  modelo_pca2$x[, 1:2, drop = FALSE], 2, signos_pca2, "*"
+)
+pesos_pca2 <- sweep(
+  modelo_pca2$rotation[, 1:2, drop = FALSE], 2, signos_pca2, "*"
+)
+
+porcentaje_pca2 <- 100 * modelo_pca2$sdev^2 /
+  sum(modelo_pca2$sdev^2)
+
+mapa_pca2 <- data.frame(
+  PC1 = puntajes_pca2[, 1],
+  PC2 = puntajes_pca2[, 2]
+)
+
+numero_pca2 <- function(x, digitos = 2) {
+  formatC(x, format = "f", digits = digitos, decimal.mark = ",")
+}
+
+eje1_pca2 <- paste0(
+  "PC1: deuda acumulada (",
+  numero_pca2(porcentaje_pca2[1]), " %)"
+)
+eje2_pca2 <- paste0(
+  "PC2: pagos frente a facturas (",
+  numero_pca2(porcentaje_pca2[2]), " %)"
+)
+
+tema_pca2 <- theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom"
+  )
+```
+
+```{r pca2-mapa, echo=FALSE, fig.width=10, fig.height=7}
+ggplot(mapa_pca2, aes(PC1, PC2)) +
+  geom_hline(yintercept = 0, color = "grey75", linewidth = 0.4) +
+  geom_vline(xintercept = 0, color = "grey75", linewidth = 0.4) +
+  geom_point(color = "#d470b9", alpha = 0.18, size = 0.7) +
+  coord_equal() +
+  labs(
+    title = "Clientes en el plano de las dos primeras componentes",
+    subtitle = paste(
+      "PCA estandarizado |", nrow(mapa_pca2), "clientes"
+    ),
+    x = eje1_pca2,
+    y = eje2_pca2,
+    caption = "Se muestran todos los casos, incluidos los valores extremos."
+  ) +
+  tema_pca2
+```
+
+**Información conservada: ** El plano guarda el
+**`r numero_pca2(sum(porcentaje_pca2[1:2]))` %** de la variación de las nueve
+variables. Queda fuera el
+`r numero_pca2(100 - sum(porcentaje_pca2[1:2]))` %, por lo que el mapa es un
+resumen parcial del perfil financiero.
+
+
 2.  **Pónganle nombre a cada dirección**: qué significa ir a la derecha y qué significa ir hacia arriba, para su cliente.
+
+**Rta: **Ir a la **derecha** indica mayor facturación sostenida.
+Ir hacia **arriba** indica mayores pagos en contraste con las facturas;
+no representa una razón pago/factura ni una probabilidad de incumplimiento.
+
 3.  Fijen el signo de cada componente para que se lea fácil, y digan cómo lo fijaron.
+**Rta: **Se orientó PC1 para que la suma de los pesos de las cuatro
+facturas fuera positiva y PC2 para que la suma de los pesos de los cuatro
+pagos fuera positiva. El mismo cambio se aplicó a los puntajes y a los
+pesos; esto no modifica la varianza explicada.
 
 ## 2. El biplot (1,0)
 
@@ -662,6 +751,146 @@ Hagan el biplot: los casos como puntos y las variables como flechas.
 - ¿Qué flechas van juntas? Digan el ángulo aproximado entre ellas.
 - ¿Cuál va sola? ¿Alguna va en contra de otra?
 - Si hay muchas etiquetas encima, arréglenlas: un biplot que no se lee no cuenta.
+
+```{r pca2-flechas, include=FALSE}
+etiquetas_pca2 <- c(
+  LIMIT_BAL = "Límite de crédito",
+  BILL_AMT1 = "Factura septiembre",
+  BILL_AMT2 = "Factura agosto",
+  BILL_AMT3 = "Factura julio",
+  BILL_AMT4 = "Factura junio",
+  PAY_AMT1 = "Pago septiembre",
+  PAY_AMT2 = "Pago agosto",
+  PAY_AMT3 = "Pago julio",
+  PAY_AMT4 = "Pago junio"
+)
+
+# En un PCA estandarizado, peso * desviación de la componente
+# es la correlación entre la variable y esa componente.
+coordenadas_flechas <- sweep(
+  pesos_pca2, 2, modelo_pca2$sdev[1:2], "*"
+)
+
+flechas_pca2 <- data.frame(
+  variable = variables_pca2,
+  etiqueta = unname(etiquetas_pca2[variables_pca2]),
+  x = coordenadas_flechas[, 1],
+  y = coordenadas_flechas[, 2]
+)
+
+flechas_pca2$tipo <- ifelse(
+  grepl("^BILL", flechas_pca2$variable), "Facturas",
+  ifelse(grepl("^PAY", flechas_pca2$variable), "Pagos", "Límite")
+)
+
+# Biplot de correlaciones: puntajes divididos por la desviación
+# de cada componente. No se vuelve a ajustar el PCA.
+casos_biplot <- data.frame(
+  C1 = mapa_pca2$PC1 / modelo_pca2$sdev[1],
+  C2 = mapa_pca2$PC2 / modelo_pca2$sdev[2]
+)
+
+longitudes <- sqrt(rowSums(coordenadas_flechas^2))
+cosenos <- tcrossprod(coordenadas_flechas) /
+  outer(longitudes, longitudes)
+cosenos[cosenos > 1] <- 1
+cosenos[cosenos < -1] <- -1
+angulos_pca2 <- acos(cosenos) * 180 / pi
+dimnames(angulos_pca2) <- list(variables_pca2, variables_pca2)
+
+rango_angulos <- function(variables) {
+  matriz <- angulos_pca2[variables, variables, drop = FALSE]
+  range(matriz[upper.tri(matriz)])
+}
+
+angulos_facturas <- rango_angulos(paste0("BILL_AMT", 1:4))
+angulos_pagos <- rango_angulos(paste0("PAY_AMT", 1:4))
+angulos_limite <- range(
+  angulos_pca2["LIMIT_BAL", paste0("PAY_AMT", 1:4)]
+)
+angulo_maximo <- max(angulos_pca2)
+
+# Ventana central para leer las flechas sin que dominen los extremos.
+limites_biplot_x <- range(
+  quantile(casos_biplot$C1, c(0.005, 0.995)),
+  1.25 * flechas_pca2$x, 0
+)
+limites_biplot_y <- range(
+  quantile(casos_biplot$C2, c(0.005, 0.995)),
+  1.25 * flechas_pca2$y, 0
+)
+
+visibles_biplot <- with(
+  casos_biplot,
+  C1 >= limites_biplot_x[1] & C1 <= limites_biplot_x[2] &
+    C2 >= limites_biplot_y[1] & C2 <= limites_biplot_y[2]
+)
+```
+
+```{r pca2-biplot, echo=FALSE, fig.width=11, fig.height=8}
+ggplot(casos_biplot, aes(C1, C2)) +
+  geom_hline(yintercept = 0, color = "grey80") +
+  geom_vline(xintercept = 0, color = "grey80") +
+  geom_point(color = "grey45", alpha = 0.10, size = 0.6) +
+  geom_segment(
+    data = flechas_pca2,
+    aes(x = 0, y = 0, xend = x, yend = y, color = tipo),
+    inherit.aes = FALSE,
+    arrow = grid::arrow(length = grid::unit(0.22, "cm")),
+    linewidth = 0.8
+  ) +
+  geom_label_repel(
+    data = flechas_pca2,
+    aes(x, y, label = etiqueta, color = tipo),
+    inherit.aes = FALSE,
+    seed = 19,
+    size = 3.4,
+    box.padding = 0.6,
+    point.padding = 0.2,
+    min.segment.length = 0,
+    max.overlaps = Inf,
+    max.iter = 20000,
+    max.time = 3,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "Facturas" = "#A65E00",
+      "Pagos" = "#24735B",
+      "Límite" = "#285A91"
+    ),
+    name = NULL
+  ) +
+  coord_equal(
+    xlim = limites_biplot_x,
+    ylim = limites_biplot_y
+  ) +
+  labs(
+    title = "Biplot: clientes y variables financieras",
+    subtitle = "Flechas: correlaciones con PC1 y PC2",
+    x = "PC1 / desviación estándar de PC1",
+    y = "PC2 / desviación estándar de PC2",
+    caption = paste0(
+      "Vista central: ", sum(visibles_biplot), " de ",
+      nrow(casos_biplot), " clientes dentro de la ventana.\n",
+      "El PCA incluye todos los casos; las flechas no se ampliaron."
+    )
+  ) +
+  tema_pca2
+```
+
+
+
+**Flechas que van juntas: ** Las cuatro facturas apuntan hacia la derecha y ligeramente hacia abajo, con ángulos aproximados entre 2,0° y 8,3°. Esto respalda la interpretación de PC1 como “deuda acumulada” definida en PCA 1. Los cuatro pagos apuntan hacia arriba y a la derecha, con ángulos entre 0,3° y 7,4°: presentan una dirección semejante en este plano.
+
+**Flecha más independiente: ** Ninguna aparece flecha claramente aislada. El límite de crédito queda entre ambos conjuntos, más cerca de los pagos, con los que forma ángulos de aproximadamente 17° a 24,4°
+
+**Direcciones opuestas: ** Facturas y pagos tienen signos contrarios en PC2, lo que respalda el nombre “pagos frente a facturas”. Sin embargo, ninguna pareja de flechas forma un ángulo mayor de 90° (lo cual NO significa que exista una correlación negativa entre sus variables originales)
+
+**Alcance: ** Los ángulos describen la proyección en dos componentes.
+En particular, la cercanía entre pagos no implica que sus correlaciones
+originales sean altas (parte de sus diferencias queda en las componentes
+omitidas, como ya mostró PCA 1)
 
 ## 3. ¿Hay grupos o hay un continuo? (1,0)
 
