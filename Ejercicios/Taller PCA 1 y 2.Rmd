@@ -24,6 +24,66 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
+```{r paquetes, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl",
+  "ragg",
+  "kableExtra"
+)
+
+paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes)
+}
+
+# Esto es lo que faltaba: cargar los paquetes
+invisible(lapply(paquetes, library, character.only = TRUE))
+```
+
+```{r lectura, include=FALSE}
+datos_credit <- read_csv(here("DATASET", "datos_credit.csv"))
+
+variables_seleccionadas <- c(
+  "LIMIT_BAL",
+  paste0("BILL_AMT", 1:4),
+  paste0("PAY_AMT", 1:4)
+)
+
+datos_sin_estandarizar <- as.data.frame(
+  datos_credit[, variables_seleccionadas]
+)
+
+# Conservar las mismas observaciones para ambos análisis.
+datos_sin_estandarizar <- datos_sin_estandarizar[
+  complete.cases(datos_sin_estandarizar),
+  ,
+  drop = FALSE
+]
+
+datos_estandarizados <- as.data.frame(
+  scale(datos_sin_estandarizar, center = TRUE, scale = TRUE)
+)
+
+pca_sin_estandarizar <- prcomp(
+  datos_sin_estandarizar,
+  center = TRUE,
+  scale. = FALSE
+)
+
+pca_estandarizado <- prcomp(
+  datos_estandarizados,
+  center = TRUE,
+  scale. = FALSE
+)
+```
+
+
 # Parte 1 - PCA 1
 
 ## 1. El encargo (0,5)
@@ -33,30 +93,392 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 En un párrafo: **quién es su cliente, qué decisión toma y con qué variables numéricas la toma hoy**.
 Escojan entre 4 y 10 variables numéricas de su base, y digan por qué esas.
 
-Nuestro cliente es un banco taiwanés. La decisión que debe tomar es **realizar una intervención temprana**, es decir, reajuste o congelamiento de cupo, llamadas de gestión temprana de mora o alertas de sobreendeudamiento, sobre los clientes que el modelo perfila como probables incumplidos, es decir, quienes no pagarán el mes siguiente. Hoy toma esa decisión con ocho variables numéricas: el límite de crédito, el monto facturado y el monto pagado en los cuatro meses más recientes.
+Nuestro cliente es un banco taiwanés.
+La decisión que debe tomar es **realizar una intervención temprana** sobre los clientes que el modelo perfila como probables incumplidos, es decir, quienes no pagarán el mes siguiente.
+Hoy toma esa decisión con siete variables numéricas: el límite de crédito, el monto facturado y el monto pagado en los cuatro meses más recientes.
+Como apoyo para caracterizar el perfil del cliente, usa además el nivel de escolaridad, que es categórico.
 
 **Justificación de las variables**
 
--   **LIMIT_BAL (límite de crédito):** representa la capacidad de endeudamiento del cliente. Permite identificar en qué rangos de monto los clientes tienden a pagar y en cuáles no.
--   **BILL_AMT1, BILL_AMT2, BILL_AMT3 y BILL_AMT4 (monto de la factura):** reflejan cuánto debe el cliente en los meses más recientes. Se toman solo cuatro meses porque los bancos suelen usar ese horizonte como límite para tolerar un pago atrasado o un impago. Más allá de ese plazo, el comportamiento deja de ser una señal temprana.
--   **PAY_AMT1, PAY_AMT2, PAY_AMT3 y PAY_AMT4 (monto pagado):** muestran cuánto ha pagado el cliente en esos mismos tres meses. Al compararlas con la factura, se ve si el cliente cubre su deuda o se está atrasando. Se eligen los cuatro meses más recientes por la misma razón que en la factura.
+- **LIMIT_BAL (límite de crédito):** representa la capacidad de endeudamiento del cliente. Permite identificar en qué rangos de monto los clientes tienden a pagar y en cuáles no.
+- **BILL_AMT1, BILL_AMT2, BILL_AMT3 y BILL_AMT4 (monto de la factura):** reflejan cuánto debe el cliente en los meses más recientes. Se toman solo cuatro meses porque los bancos suelen usar ese horizonte como límite para tolerar un pago atrasado o un impago. Más allá de ese plazo, el comportamiento deja de ser una señal temprana.
+- **PAY_AMT1, PAY_AMT2, PAY_AMT3 y PAY_AMT4 (monto pagado):** muestran cuánto ha pagado el cliente en esos mismos tres meses. Al compararlas con la factura, se ve si el cliente cubre su deuda o se está atrasando. Se eligen los cuatro meses más recientes por la misma razón que en la factura.
 
 ## 2. ¿Se repiten? (0,8)
 
 *Responsable: Juan David*
 
-Hagan la matriz de correlaciones de esas variables, en gráfico. Respondan:
+Hagan la matriz de correlaciones de esas variables, en gráfico.
+Respondan:
 
--   ¿Qué variables se repiten más?
--   ¿Cuál va más sola?
--   ¿Tiene sentido resumirlas? Si casi todas las correlaciones están cerca de cero, **díganlo**: ésa también es una respuesta para el cliente.
+- ¿Qué variables se repiten más?
+- ¿Cuál va más sola?
+- ¿Tiene sentido resumirlas? Si casi todas las correlaciones están cerca de cero, **díganlo**: ésa también es una respuesta para el cliente.
+
+```{r matriz-correlaciones, message=FALSE, warning=FALSE, fig.width=11, fig.height=8, out.width='100%', fig.align='center', include=FALSE}
+
+library(dplyr)
+library(corrplot)
+
+# Se parte de la base depurada datos_credit.
+# EDUCATION se reserva para caracterizar perfiles por ser categórica.
+variables_pca <- c(
+  "LIMIT_BAL",
+  paste0("BILL_AMT", 1:4),
+  paste0("PAY_AMT", 1:4)
+)
+
+datos_pca <- datos_credit %>%
+  select(all_of(variables_pca))
+
+matriz_cor <- cor(
+  datos_pca,
+  method = "pearson",
+  use = "complete.obs"
+)
+
+etiquetas <- c(
+  "Límite de crédito",
+  "Factura septiembre", "Factura agosto",
+  "Factura julio", "Factura junio",
+  "Pago septiembre", "Pago agosto",
+  "Pago julio", "Pago junio"
+)
+
+dimnames(matriz_cor) <- list(etiquetas, etiquetas)
+
+corrplot(
+  matriz_cor,
+  method = "color",
+  type = "upper",
+  diag = TRUE,
+  order = "original",
+  col = colorRampPalette(c("#B2182B", "#FFFFFF", "#2166AC"))(200),
+  col.lim = c(-1, 1),
+  addCoef.col = "black",
+  number.cex = 1.15,
+  number.digits = 2,
+  tl.col = "black",
+  tl.cex = 1.05,
+  tl.srt = 45,
+  cl.cex = 0.85,
+  addgrid.col = "grey85",
+  mar = c(0, 0, 4, 0),
+  title = paste(
+    "Variables seleccionadas",
+    "Azul: positiva | Rojo: negativa | Blanco: cercana a cero",
+    sep = "\n"
+  )
+)
+```
+
+**Correlacion entre variables** Primero se deja fuera de la matriz la variable de escolaridad que aunque este este definida como numerica de el dataset orignal, en realidad en una variable categorica que no entra dentro de este analisis.
+
+Se evidencia que la mayor correlacion entre variables se da entre los montos facturados cada mes, y de incluso mayor forma en los que es al mes directamente siguiente (las relaciones de Septiembre - Agosto, Agosto - Julio y Julio - Junio), lo que nos dice que una persona que tenga factuaracion por un monto alto el siguiente mes vuelva a tener una facturacion por un alto monto (debido a un uso mantenido en los meses y con gastos constates de su tarjeta de credito).
+
+Mientras que con los montos pagados en cada mes, ve una debil correlacion, con lo que se infiere que los pagos mes a mes del usuario promedio de tarjeta de credito no paga en los meses cercanos montos similares que puede ser debido a ya uso inconsiste de como cada persona maneje sus cuotas y lo que decida y tenga capacidad para pagar en cada mes .
+Y a su vez en general el limite de credito de los usuarios no tiene correlacion significativa ya sea con los pagos o las facturaciones mes a mes y esta variable en si dependa de otros aspecto del historial crediticio, que se ve en solo estos cuatros meses de los usuarios.
+
+**Varible mas sola**
+
+Por lo que se ve la varible que menos se correlaciona con las otras es la del pago de junio (*PAY_AMT4*), lo cual nos indica que es la que mas variabilidad tiene del conjunto de variables escogido y que se ve que no afecta de forma significativa tanto a las otras variables de pago, como menos a las de facturacion y limite de credito.
+
+**Sentido de resumirlas**
+
+Con lo que se observo, las variables que mas sentido tienen para ser resumidas con PCA, serian las de factuaracion, las cuales entre si siguen tienden a que un usuario que de facturacion alta esta se repeta en los meses cercanos.
+
+Mientras que las correlaciones bajas de los pagos y el limite de credito, entre si y tambien con las variables de facturacion muestra mucha mayor variablidad, que da debido al uso de las tarjetas de credito de los usuarios en si, lo que hace que al juntarlas se pueda perder mas informacion de lo que estas variables dan por separado.
+
+La utilidad para orientar la intervención de un banco se deberá comprobarse frente al posible no pago del mes siguiente, porque al conservar mucha variación no nos garantiza identificar mejor a los posibles impagos.
 
 ## 3. ¿Estandarizar? (0,7)
 
 *Responsable: Juan David*
 
-Muestren la desviación de cada variable. **Decidan antes de correr** si estandarizan y justifíquenlo.
+Muestren la desviación de cada variable.
+**Decidan antes de correr** si estandarizan y justifíquenlo.
 Después corran el PCA **de las dos maneras** y muestren cuánto cambia la información que guarda la primera componente.
+
+```{r escalas-variables, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(kableExtra)
+
+variables_seleccionadas <- c(
+  "LIMIT_BAL",
+  paste0("BILL_AMT", 1:4),
+  paste0("PAY_AMT", 1:4)
+)
+
+tabla_escalas <- datos_credit %>%
+  select(all_of(variables_seleccionadas)) %>%
+  pivot_longer(
+    everything(),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) %>%
+  group_by(Variable) %>%
+  summarise(
+    Minimo = min(Valor, na.rm = TRUE),
+    Maximo = max(Valor, na.rm = TRUE),
+    Amplitud = Maximo - Minimo,
+    Media = mean(Valor, na.rm = TRUE),
+    Mediana = median(Valor, na.rm = TRUE),
+    Desviacion = sd(Valor, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(Variable = factor(Variable, levels = variables_seleccionadas)) %>%
+  arrange(Variable) %>%
+  mutate(
+    Variable = c(
+      "LIMIT_BAL · Límite de crédito",
+      "BILL_AMT1 · Septiembre",
+      "BILL_AMT2 · Agosto",
+      "BILL_AMT3 · Julio",
+      "BILL_AMT4 · Junio",
+      "PAY_AMT1 · Septiembre",
+      "PAY_AMT2 · Agosto",
+      "PAY_AMT3 · Julio",
+      "PAY_AMT4 · Junio"
+    )
+  )
+
+tabla_escalas %>%
+  kable(
+    format = "html",
+    caption = "NTD: nuevos dólares taiwaneses. Amplitud = máximo − mínimo.",
+    col.names = c(
+      "Variable / mes", "Mínimo", "Máximo", "Amplitud",
+      "Media", "Mediana", "Desviación estándar"
+    ),
+    digits = 2,
+    format.args = list(big.mark = ".", decimal.mark = ","),
+    align = c("l", rep("r", 6))
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "responsive"),
+    full_width = TRUE,
+    font_size = 15
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447") %>%
+  row_spec(1, background = "#E8EFFA", color = "#17365D") %>%
+  row_spec(2:5, background = "#FFF1DE", color = "#754000") %>%
+  row_spec(6:9, background = "#E5F3EE", color = "#175541") %>%
+  column_spec(1, bold = TRUE, width = "6cm") %>%
+  pack_rows(
+    "LÍMITE DE CRÉDITO · Cupo otorgado",
+    1, 1,
+    label_row_css = "background-color: #285A91; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "FACTURACIÓN · Montos de los estados de cuenta",
+    2, 5,
+    label_row_css = "background-color: #A65E00; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "PAGOS · Montos efectivamente pagados",
+    6, 9,
+    label_row_css = "background-color: #24735B; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  footnote(
+    general = c(
+      "NT$: nuevos dólares taiwaneses. Amplitud = máximo − mínimo.",
+      "Desviación estándar: dispersión de los valores alrededor de la media.",
+      "Aunque todas las variables comparten unidad monetaria, sus magnitudes y dispersiones son diferentes."
+    ),
+    general_title = "Nota: ",
+    footnote_as_chunk = TRUE
+  )
+```
+
+**Aclaraciones y porque se estandariza**
+
+Se puede ver por la media y la mediana de las variables, que la primera es mas alta en todos los caos, lo cual identifica que la media no sirve por si sola para conocer el comportamiento del cliente promedio ya que hay casos con montos y pagos muy altos pero poco comunes que suben la media (teniendo en cuenta en lo que son los montos negativos y pagos de cero de los usuarios).
+
+En todos las variables se ve una alta dispercion de los datos de los clientes, ya sean con montos muy pequeños (o negativos), junto con que la varianza a en los pagos es varias veces mayor al promedio (gracias a los pagos de cero) hace que la dispercion sea muy grande para todas las variables en si, incluiddo el limite de credito por lo cual se decide que lo mejor es estandarizar las variables aunque esten en la misma unidad debido a la gran disparidad del uso de los usuarios con sus tarjetas de credito.
+
+**Estandarizacion**
+La estandarización se realizó sobre las nueve variables numéricas seleccionadas: el límite de crédito, los cuatro montos facturados y los cuatro montos pagados. Para cada variable, se restó a cada observación su media y se dividió el resultado entre su desviación estándar, mediante scale(center = TRUE, scale = TRUE). Así, cada variable quedó con media cero y desviación estándar uno, expresada sin unidades. Esto permite compararlas en una escala común y evita que las de mayor dispersión dominen el PCA. Las variables originales se conservaron en un objeto aparte y EDUCATION se excluyó por ser categórica.
+```{r, include=FALSE}
+library(dplyr)
+
+variables_seleccionadas <- c(
+  "LIMIT_BAL",
+  paste0("BILL_AMT", 1:4),
+  paste0("PAY_AMT", 1:4)
+)
+
+# Grupo 1: variables originales, sin estandarizar (NT$).
+datos_sin_estandarizar <- datos_credit %>%
+  select(all_of(variables_seleccionadas))
+
+# Grupo 2: variables estandarizadas.
+# A cada valor se le resta la media y se divide por la desviación estándar.
+# Cada columna queda con media 0 y desviación estándar 1, sin unidad.
+datos_estandarizados <- datos_sin_estandarizar %>%
+  scale(center = TRUE, scale = TRUE) %>%
+  as.data.frame()
+
+# Ambos grupos conservan las mismas filas y el mismo orden de variables.
+# EDUCATION queda fuera porque es categórica.
+```
+
+**PCA**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+
+crear_tabla_pca <- function(modelo, titulo, color) {
+
+  varianza <- modelo$sdev^2
+  porcentaje <- 100 * varianza / sum(varianza)
+  contribuciones <- 100 * t(modelo$rotation^2)
+
+  tabla <- data.frame(
+    Componente = colnames(modelo$rotation),
+    Individual = porcentaje,
+    Acumulada = cumsum(porcentaje),
+    contribuciones,
+    check.names = FALSE
+  )
+
+  tabla %>%
+    kable(
+      format = "html",
+      caption = titulo,
+      row.names = FALSE,
+      col.names = c(
+        "PC", "Indiv.", "Acum.", "Cupo",
+        "Sep.", "Ago.", "Jul.", "Jun.",
+        "Sep.", "Ago.", "Jul.", "Jun."
+      ),
+      digits = 2,
+      format.args = list(decimal.mark = ","),
+      align = c("c", rep("r", 11)),
+      table.attr = paste0(
+        'style="width:100%; table-layout:fixed;',
+        'margin-bottom:30px;"'
+      )
+    ) %>%
+    kable_styling(
+      bootstrap_options = c("hover", "condensed"),
+      full_width = TRUE,
+      font_size = 12
+    ) %>%
+    add_header_above(
+      c(
+        " " = 1,
+        "Varianza (%)" = 2,
+        "Límite" = 1,
+        "Facturas · Contribución (%)" = 4,
+        "Pagos · Contribución (%)" = 4
+      ),
+      bold = TRUE,
+      color = "white",
+      background = color
+    ) %>%
+    column_spec(1, bold = TRUE) %>%
+    column_spec(2:3, background = "#F1F4F8") %>%
+    column_spec(4, background = "#E8EFFA") %>%
+    column_spec(5:8, background = "#FFF1DE") %>%
+    column_spec(9:12, background = "#E5F3EE")
+}
+
+tabla_original <- crear_tabla_pca(
+  pca_sin_estandarizar,
+  "PCA sin estandarizar",
+  "#A65E00"
+)
+
+tabla_estandarizada <- crear_tabla_pca(
+  pca_estandarizado,
+  "PCA estandarizado",
+  "#24735B"
+)
+
+htmltools::browsable(
+  htmltools::tagList(
+    htmltools::tags$style(htmltools::HTML("
+      .pca-tablas {
+        background: #FFFFFF;
+        color: #243447;
+        padding: 24px;
+        font-family: 'Segoe UI', Arial, sans-serif;
+      }
+
+      .pca-tablas table {
+        width: 100% !important;
+        border-collapse: collapse;
+        background: #FFFFFF;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 13px !important;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: 32px !important;
+      }
+
+      .pca-tablas caption {
+        caption-side: top;
+        text-align: left;
+        color: #243447 !important;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 19px !important;
+        font-weight: 600;
+        padding: 0 0 14px;
+      }
+
+      .pca-tablas th,
+      .pca-tablas td {
+        padding: 9px 4px !important;
+        border: none;
+        border-bottom: 1px solid #DCE3EA;
+        color: #243447;
+      }
+
+      .pca-tablas thead tr:last-child th {
+        background: #F1F4F8 !important;
+        color: #243447 !important;
+        font-weight: 600;
+      }
+
+      .pca-tablas tbody td:first-child {
+        background: #FFFFFF !important;
+        font-weight: 700;
+      }
+
+      .pca-tablas p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #425466;
+      }
+    ")),
+
+    htmltools::tags$div(
+      class = "pca-tablas",
+
+      htmltools::HTML(as.character(tabla_original)),
+      htmltools::HTML(as.character(tabla_estandarizada)),
+
+      htmltools::tags$p(
+        htmltools::tags$strong("Cómo leer las tablas: "),
+        "Indiv. = varianza explicada por cada componente; ",
+        "Acum. = varianza acumulada. ",
+        "Azul: límite de crédito; naranja: facturas; verde: pagos. ",
+        "Las contribuciones se calculan como 100 × peso² y suman 100% ",
+        "entre las nueve variables de cada fila. No representan la varianza ",
+        "de cada variable explicada por la componente."
+      )
+    )
+  )
+)
+```
+
+
+
 
 ## 4. Cuánta información guarda (1,0)
 
@@ -65,14 +487,31 @@ Después corran el PCA **de las dos maneras** y muestren cuánto cambia la infor
 Con su decisión del punto 3:
 
 1.  La gráfica de cuánta información guarda cada componente, con el acumulado.
+
+Se porcentaje de varianza que explica cada componente por separado; la línea acumulada indica cuánto conservamos al añadirlas sucesivamente.
+Sin estandarizar, la información se concentra en las dos primeras componentes: juntas explican 93,11 % de la varianza. Sin embargo, ambas están dominadas por el límite de crédito y las facturas; los pagos tienen contribuciones casi nulas. 
+Esa concentración refleja la mayor dispersión de los cupos y las facturas.
+Al estandarizar, la varianza se distribuye entre más componentes. La primera está dominada por las cuatro facturas, que suman aproximadamente 85,49 % de su contribución. Los pagos adquieren mayor participación en las componentes siguientes. Por eso, conservar solo la primera dejaría fuera buena parte de las diferencias en los pagos.
+
 2.  ¿Cuánta guarda la primera? ¿Cuántas hacen falta para pasar de 80 de cada 100?
+
+| Análisis | Varianza explicada por la primera componente | Componentes necesarias para superar el 80 % | Varianza acumulada con esas componentes |
+|:---|---:|---:|---:|
+| Sin estandarizar | 60,45 % | 2 | 93,11 % |
+| Estandarizado | 45,66 % | 4 | 81,07 % |
+
+Para el análisis, tomaremos el PCA estandarizado, porque permite considerar las nueve variables sin que su dispersión determine su influencia de un grado tan dispar. En este caso, tres componentes conservan 72,36 %, por lo que necesitamos una cuarta para superar el umbral.
+
 3.  Escriban, en una frase para el cliente, qué significa esa cifra.
+
+“Se pueden resumir las nueve variables en cuatro componentes que conservan el 81% de la variación de los perfiles financieros de sus clientes; esto facilita su caracterización, aunque todavía debemos evaluar si ese resumen permite identificar a quienes incumplirán el mes siguiente”.
 
 ## 5. Qué mide cada una (1,0)
 
 *Responsable: Juan Pablo*
 
-Grafiquen los pesos de las dos o tres primeras componentes. **Pónganle nombre a cada una** mirando qué variables mandan, y expliquen el nombre.
+Grafiquen los pesos de las dos o tres primeras componentes.
+**Pónganle nombre a cada una** mirando qué variables mandan, y expliquen el nombre.
 Recuerden que el signo es arbitrario: se lee qué manda y si las variables van en la misma dirección o en contra.
 
 ## 6. El costo para su cliente (1,0)
@@ -81,9 +520,9 @@ Recuerden que el signo es arbitrario: se lee qué manda y si las variables van e
 
 Ésta es la pregunta de la clase aplicada a su negocio: **si su cliente decidiera con un solo número, ¿a quién o a qué dejaría por fuera?**
 
--   Definan un grupo que al cliente le importe: los peores, los mejores, los de riesgo, los que cumplen una condición.
--   Cuenten cuántos de ese grupo encuentra la primera componente, y **cuántos se le escapan**.
--   Cierren con la decisión: ¿le basta un número, o necesita reportar dos o tres?
+- Definan un grupo que al cliente le importe: los peores, los mejores, los de riesgo, los que cumplen una condición.
+- Cuenten cuántos de ese grupo encuentra la primera componente, y **cuántos se le escapan**.
+- Cierren con la decisión: ¿le basta un número, o necesita reportar dos o tres?
 
 # Parte 2 - PCA 2
 
@@ -103,9 +542,9 @@ Con las variables numéricas del taller anterior (y la misma decisión sobre est
 
 Hagan el biplot: los casos como puntos y las variables como flechas.
 
--   ¿Qué flechas van juntas? Digan el ángulo aproximado entre ellas.
--   ¿Cuál va sola? ¿Alguna va en contra de otra?
--   Si hay muchas etiquetas encima, arréglenlas: un biplot que no se lee no cuenta.
+- ¿Qué flechas van juntas? Digan el ángulo aproximado entre ellas.
+- ¿Cuál va sola? ¿Alguna va en contra de otra?
+- Si hay muchas etiquetas encima, arréglenlas: un biplot que no se lee no cuenta.
 
 ## 3. ¿Hay grupos o hay un continuo? (1,0)
 
@@ -121,9 +560,9 @@ Miren la nube.
 Coloreen el mapa por **una variable de grupo** que su cliente use para decidir (tipo de cliente, región, categoría, lo que tengan).
 Dibujen las elipses del 90 %.
 
--   ¿Se separan o solo se desplazan?
--   Muéstrenlo con dos cifras: la distancia entre los promedios, y qué parte de un grupo cae en la zona del otro.
--   Cierren con la frase para el cliente: ¿le sirve ese grupo para decidir, o no?
+- ¿Se separan o solo se desplazan?
+- Muéstrenlo con dos cifras: la distancia entre los promedios, y qué parte de un grupo cae en la zona del otro.
+- Cierren con la frase para el cliente: ¿le sirve ese grupo para decidir, o no?
 
 ## 5. La decisión en el mapa (1,0)
 
