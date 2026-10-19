@@ -899,6 +899,85 @@ omitidas, como ya mostró PCA 1)
 Miren la nube.
 **¿Tiene islas separadas por huecos, como setosa, o es una sola mancha?** Muéstrenlo con el gráfico y con una cifra: por ejemplo, dónde termina un grupo y dónde empieza el otro en la primera componente.
 
+```{r pca2-continuo, echo=FALSE, fig.width=10, fig.height=7}
+# Ampliación visual; no elimina observaciones del PCA.
+limites_nube_x <- quantile(mapa_pca2$PC1, c(0.005, 0.995))
+limites_nube_y <- quantile(mapa_pca2$PC2, c(0.005, 0.995))
+
+dentro_nube <- with(
+  mapa_pca2,
+  PC1 >= limites_nube_x[1] & PC1 <= limites_nube_x[2] &
+    PC2 >= limites_nube_y[1] & PC2 <= limites_nube_y[2]
+)
+
+ggplot(mapa_pca2, aes(PC1, PC2)) +
+  geom_point(color = "#d470b9", alpha = 0.12, size = 0.65) +
+  coord_equal(xlim = limites_nube_x, ylim = limites_nube_y) +
+  labs(
+    title = "Ampliación de la nube central",
+    subtitle = "Una concentración principal con prolongaciones hacia valores altos",
+    x = eje1_pca2,
+    y = eje2_pca2,
+    caption = paste0(
+      "Ventana entre los percentiles 0,5 y 99,5 de cada eje: ",
+      sum(dentro_nube), " de ", nrow(mapa_pca2), " clientes.\n",
+      "Los extremos se muestran en el gráfico del punto 1."
+    )
+  ) +
+  tema_pca2
+```
+
+```{r pca2-rangos, echo=FALSE}
+# Contraste descriptivo con el resultado observado de pago.
+# Esta variable no interviene en el cálculo del PCA.
+resultado_pago_pca2 <- datos_credit[["default payment next month"]][filas_pca2]
+
+rangos_pca2 <- do.call(rbind, lapply(0:1, function(grupo) {
+  filas_grupo <- which(resultado_pago_pca2 == grupo)
+
+  data.frame(
+    Grupo = if (grupo == 0) "Cumplen" else "Incumplen",
+    Clientes = length(filas_grupo),
+    Minimo_PC1 = min(mapa_pca2$PC1[filas_grupo]),
+    Maximo_PC1 = max(mapa_pca2$PC1[filas_grupo]),
+    Minimo_PC2 = min(mapa_pca2$PC2[filas_grupo]),
+    Maximo_PC2 = max(mapa_pca2$PC2[filas_grupo])
+  )
+}))
+
+inicio_solapamiento <- max(rangos_pca2$Minimo_PC1)
+fin_solapamiento <- min(rangos_pca2$Maximo_PC1)
+
+proporcion_solapamiento <- 100 * mean(
+  mapa_pca2$PC1 >= inicio_solapamiento &
+    mapa_pca2$PC1 <= fin_solapamiento
+)
+
+knitr::kable(
+  rangos_pca2,
+  col.names = c(
+    "Grupo", "Clientes",
+    "Mínimo de PC1", "Máximo de PC1",
+    "Mínimo de PC2", "Máximo de PC2"
+  ),
+  digits = 3,
+  row.names = FALSE,
+  format.args = list(decimal.mark = ","),
+  caption = "Extensión de los grupos observados sobre PC1 y PC2"
+)
+```
+
+**Forma de la nube: ** La nube presenta una zona de alta concentración con dos prolongaciones conectadas, sin islas claramente separadas por huecos. Esto sugiere un continuo de perfiles financieros, más que grupos claramente diferenciados. Para el banco, el gráfico por sí solo no permite distinguir a quienes cumplen de quienes incumplen. Los extremos de la tabla corresponden a toda la base, mientras que el gráfico muestra una ampliación central.
+
+**Evidencia numérica: ** Los rangos de quienes cumplen y quienes incumplen se superponen en ambas componentes. Por tanto, ni “deuda acumulada” ni “pagos frente a facturas”, consideradas por separado, permiten separar completamente los dos grupos mediante un único corte. La tabla incluye todos los clientes, mientras que el gráfico muestra una ampliación de la zona central; por eso sus extremos no coinciden con los límites visibles.
+
+**Conclusión para el banco.** El mapa no muestra tipos de clientes
+claramente separados ni permite identificar el incumplimiento mediante
+una frontera evidente. El solapamiento en PC1 complementa la inspección
+del plano; por sí solo no demuestra ausencia de grupos en otras
+dimensiones.
+El gráfico y los rangos no proporcionan evidencia suficiente para distinguir claramente a quienes cumplen de quienes incumplen; para evaluar su separación en el plano, es necesario observar el mapa coloreado por grupo.
+
 ## 4. ¿Los grupos que su cliente conoce se separan? (1,0)
 
 *Responsable: Juan Pablo*
