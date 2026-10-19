@@ -33,7 +33,8 @@ paquetes <- c(
   "here",
   "readxl",
   "ragg",
-  "kableExtra"
+  "kableExtra",
+  "tidyr"
 )
 
 paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
@@ -82,7 +83,6 @@ pca_estandarizado <- prcomp(
   scale. = FALSE
 )
 ```
-
 
 # Parte 1 - PCA 1
 
@@ -301,8 +301,12 @@ Se puede ver por la media y la mediana de las variables, que la primera es mas a
 
 En todos las variables se ve una alta dispercion de los datos de los clientes, ya sean con montos muy pequeños (o negativos), junto con que la varianza a en los pagos es varias veces mayor al promedio (gracias a los pagos de cero) hace que la dispercion sea muy grande para todas las variables en si, incluiddo el limite de credito por lo cual se decide que lo mejor es estandarizar las variables aunque esten en la misma unidad debido a la gran disparidad del uso de los usuarios con sus tarjetas de credito.
 
-**Estandarizacion**
-La estandarización se realizó sobre las nueve variables numéricas seleccionadas: el límite de crédito, los cuatro montos facturados y los cuatro montos pagados. Para cada variable, se restó a cada observación su media y se dividió el resultado entre su desviación estándar, mediante scale(center = TRUE, scale = TRUE). Así, cada variable quedó con media cero y desviación estándar uno, expresada sin unidades. Esto permite compararlas en una escala común y evita que las de mayor dispersión dominen el PCA. Las variables originales se conservaron en un objeto aparte y EDUCATION se excluyó por ser categórica.
+**Estandarizacion** La estandarización se realizó sobre las nueve variables numéricas seleccionadas: el límite de crédito, los cuatro montos facturados y los cuatro montos pagados.
+Para cada variable, se restó a cada observación su media y se dividió el resultado entre su desviación estándar, mediante scale(center = TRUE, scale = TRUE).
+Así, cada variable quedó con media cero y desviación estándar uno, expresada sin unidades.
+Esto permite compararlas en una escala común y evita que las de mayor dispersión dominen el PCA.
+Las variables originales se conservaron en un objeto aparte y EDUCATION se excluyó por ser categórica.
+
 ```{r, include=FALSE}
 library(dplyr)
 
@@ -328,6 +332,7 @@ datos_estandarizados <- datos_sin_estandarizar %>%
 ```
 
 **PCA**
+
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 library(knitr)
 library(kableExtra)
@@ -477,9 +482,6 @@ htmltools::browsable(
 )
 ```
 
-
-
-
 ## 4. Cuánta información guarda (1,0)
 
 *Responsable: Juan David*
@@ -489,18 +491,23 @@ Con su decisión del punto 3:
 1.  La gráfica de cuánta información guarda cada componente, con el acumulado.
 
 Se porcentaje de varianza que explica cada componente por separado; la línea acumulada indica cuánto conservamos al añadirlas sucesivamente.
-Sin estandarizar, la información se concentra en las dos primeras componentes: juntas explican 93,11 % de la varianza. Sin embargo, ambas están dominadas por el límite de crédito y las facturas; los pagos tienen contribuciones casi nulas. 
+Sin estandarizar, la información se concentra en las dos primeras componentes: juntas explican 93,11 % de la varianza.
+Sin embargo, ambas están dominadas por el límite de crédito y las facturas; los pagos tienen contribuciones casi nulas.
 Esa concentración refleja la mayor dispersión de los cupos y las facturas.
-Al estandarizar, la varianza se distribuye entre más componentes. La primera está dominada por las cuatro facturas, que suman aproximadamente 85,49 % de su contribución. Los pagos adquieren mayor participación en las componentes siguientes. Por eso, conservar solo la primera dejaría fuera buena parte de las diferencias en los pagos.
+Al estandarizar, la varianza se distribuye entre más componentes.
+La primera está dominada por las cuatro facturas, que suman aproximadamente 85,49 % de su contribución.
+Los pagos adquieren mayor participación en las componentes siguientes.
+Por eso, conservar solo la primera dejaría fuera buena parte de las diferencias en los pagos.
 
 2.  ¿Cuánta guarda la primera? ¿Cuántas hacen falta para pasar de 80 de cada 100?
 
 | Análisis | Varianza explicada por la primera componente | Componentes necesarias para superar el 80 % | Varianza acumulada con esas componentes |
-|:---|---:|---:|---:|
+|:-----------------|-----------------:|-----------------:|-----------------:|
 | Sin estandarizar | 60,45 % | 2 | 93,11 % |
 | Estandarizado | 45,66 % | 4 | 81,07 % |
 
-Para el análisis, tomaremos el PCA estandarizado, porque permite considerar las nueve variables sin que su dispersión determine su influencia de un grado tan dispar. En este caso, tres componentes conservan 72,36 %, por lo que necesitamos una cuarta para superar el umbral.
+Para el análisis, tomaremos el PCA estandarizado, porque permite considerar las nueve variables sin que su dispersión determine su influencia de un grado tan dispar.
+En este caso, tres componentes conservan 72,36 %, por lo que necesitamos una cuarta para superar el umbral.
 
 3.  Escriban, en una frase para el cliente, qué significa esa cifra.
 
@@ -514,6 +521,65 @@ Grafiquen los pesos de las dos o tres primeras componentes.
 **Pónganle nombre a cada una** mirando qué variables mandan, y expliquen el nombre.
 Recuerden que el signo es arbitrario: se lee qué manda y si las variables van en la misma dirección o en contra.
 
+```{r pesos-componentes, echo=FALSE, fig.width=10, fig.height=10, out.width='100%'}
+etiquetas_pesos <- c(
+  "Límite",
+  "Factura sep.", "Factura ago.", "Factura jul.", "Factura jun.",
+  "Pago sep.", "Pago ago.", "Pago jul.", "Pago jun."
+)
+
+colores_pesos <- c("#285A91", rep("#A65E00", 4), rep("#24735B", 4))
+
+pesos <- pca_estandarizado$rotation[, 1:3]
+rownames(pesos) <- etiquetas_pesos
+
+varianza_pct <- 100 * pca_estandarizado$sdev^2 / sum(pca_estandarizado$sdev^2)
+
+par(mfrow = c(3, 1), mar = c(5, 4, 3, 1))
+for (i in 1:3) {
+  barplot(
+    pesos[, i],
+    col = colores_pesos,
+    las = 2,
+    ylim = c(-1, 1),
+    ylab = "Peso",
+    main = paste0("PC", i, " (", round(varianza_pct[i], 1), " % de la varianza)")
+  )
+  abline(h = 0)
+}
+par(mfrow = c(1, 1))
+
+# Tabla de pesos para apoyar la lectura
+round(pesos, 3)
+```
+
+Con esa gráfica, la lectura de cada componente se hace así:
+
+1.  PC1 (45,7 % de la varianza): “deuda acumulada”
+
+Las cuatro facturas mandan con pesos casi iguales 0,46 a 0,47 y todas con el mismo signo.
+El límite 0,2 y los cuatro pagos 0,13 a 0,18 aportan poco, aunque también en positivo.
+Por eso esta componente mide qué tan alta es la facturación del cliente de forma sostenida en los cuatro meses.
+Un valor alto indica un cliente con facturas grandes de forma persistente.
+Como todos los pesos son positivos, ninguna variable va en contra de las demás: es una componente de tamaño general, y el signo es arbitrario.
+
+2.  PC2 (16,9 %): “Pagos frente a facturas”
+
+Los cuatro pagos mandan con signo positivo 0,42 a 0,47.
+Las cuatro facturas tienen signo negativo, aunque con menos peso −0,13 a −0,25.
+El límite aporta algo positivo 0,27.
+Aquí los pagos van en contra de las facturas: un valor alto describe a quien paga mucho con facturas relativamente bajas, y un valor bajo, a quien paga poco frente a lo que le facturan.
+Es la dimensión que separa el esfuerzo de pago de la deuda, y por eso es la más relevante para la intervención temprana.
+
+3.  PC3 (9,8 %): “Pago reciente de junio frente a pagos de agosto y septiembre, con cupo alto”
+
+Esta es la más difícil de nombrar, porque mezcla varias cosas.
+Mandan el pago de junio 0,6, el límite +0,47, el pago de agosto −0,53 y el pago de septiembre −0,34.
+Las facturas y el pago de julio casi no pesan.
+Se lee como un contraste temporal en los pagos un valor alto describe a un cliente que pagó más en junio y menos en agosto y septiembre, con un cupo alto.
+Es decir, un cambio en el patrón de pagos entre el inicio y el final del periodo.
+se podria nombrar como Cambio en el patrón de pagos y aclarar que es una interpretación tentativa, porque explica solo 9,8 % y su lectura es menos nítida.
+
 ## 6. El costo para su cliente (1,0)
 
 *Responsable: Juan Pablo*
@@ -523,6 +589,57 @@ Recuerden que el signo es arbitrario: se lee qué manda y si las variables van e
 - Definan un grupo que al cliente le importe: los peores, los mejores, los de riesgo, los que cumplen una condición.
 - Cuenten cuántos de ese grupo encuentra la primera componente, y **cuántos se le escapan**.
 - Cierren con la decisión: ¿le basta un número, o necesita reportar dos o tres?
+
+```{r}
+
+# AJUSTAR: nombre exacto de la columna en datos_credit
+col_default <- "default payment next month"
+
+# Mismas filas que usó el PCA
+filas_ok <- complete.cases(datos_credit[, variables_seleccionadas])
+y <- datos_credit[[col_default]][filas_ok]
+
+puntajes <- pca_estandarizado$x
+tasa <- mean(y == 1)
+n_incumplen <- sum(y == 1)
+
+evaluar <- function(marca, nombre) {
+  encontrados <- sum(marca & y == 1)
+  data.frame(
+    Regla = nombre,
+    Marcados = sum(marca),
+    Encontrados = encontrados,
+    `Se escapan` = n_incumplen - encontrados,
+    `% encontrado` = round(100 * encontrados / n_incumplen, 1),
+    `% acierto entre marcados` = round(100 * encontrados / sum(marca), 1),
+    Lift = round((encontrados / sum(marca)) / tasa, 2),
+    check.names = FALSE
+  )
+}
+
+marca_pc1 <- puntajes[, 1] >= quantile(puntajes[, 1], 1 - tasa)
+marca_pc2 <- puntajes[, 2] <= quantile(puntajes[, 2], tasa)
+
+resultado <- rbind(
+  evaluar(marca_pc1, "PC1 alta (mucha facturación)"),
+  evaluar(marca_pc2, "PC2 baja (paga poco frente a lo facturado)"),
+  evaluar(marca_pc1 | marca_pc2, "PC1 o PC2")
+)
+
+cat("Tasa de incumplimiento:", round(100 * tasa, 1), "%  |  Incumplidos:", n_incumplen, "\n")
+resultado
+
+```
+Para el banco, el grupo que importa son los clientes que no pagarán el mes siguiente default payment next month = 1: 6.636 clientes, el 22,1 % de la base. Para comparar de forma justa, cada regla marca al 22,1 % de clientes con valores más extremos en la componente (6.636 clientes).
+
+Qué encuentra la primera componente. Si el banco decidiera con un solo número, la PC1 nivel de facturación, y marcara a los clientes con facturación más alta, encontraría 1.224 incumplidos y se le escaparían 5.412: el 81,6 % de quienes no pagan quedaría por fuera. De cada 100 clientes marcados, solo 18,4 incumplen, frente a 22,1 de cada 100 al escoger al azar, esta regla es peor que el azar. Tiene sentido, porque la PC1 mide cuánto se factura, y tener una factura alta no implica dejar de pagar.
+
+Qué cambia con la segunda componente. Marcar a quienes tienen la PC2 baja pagan poco frente a lo facturada encuentra 1.651 incumplidos y deja escapar 4.985 75,1 %. El acierto sube a 24,9 %. Es mejor que el azar, pero la mejora es tres de cada cuatro incumplidos siguen sin ser detectados.
+
+Combinar ambas. Marcar a los clientes que cumplan la regla de la PC1 o la de la PC2 señala a 8.907 clientes y encuentra 1.876 incumplidos (28,3 %), con 4.760 que se escapan. Frente a usar solo la PC2, se marcan 2.271 clientes más para encontrar apenas 225 incumplidos adicionales. Es decir, agregar la PC1 vuelve la regla menos eficiente.
+
+Decisión. A este cliente no le basta un número, y tampoco le bastan dos: reportar PC1 y PC2 no mejora de forma útil la detección. Si hubiera que quedarse con una sola, sería la PC2 pagos frente a facturas, que es la única que supera al azar, aunque por poco. La razón de fondo es que estas componentes resumen cuánto se factura y cuánto se paga, y eso no captura si el cliente se está atrasando. Para intervenir de forma temprana, el banco necesitaría incluir las variables de historial de atraso PAY_0 a PAY_6, que quedaron fuera. Que el resumen conserve el 81 % de la variación no significa que conserve lo que sirve para decidir.
+
 
 # Parte 2 - PCA 2
 
