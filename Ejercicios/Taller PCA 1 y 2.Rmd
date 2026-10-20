@@ -42,8 +42,12 @@ paquetes <- c(
 paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
 
 if (length(paquetes_faltantes) > 0) {
-  install.packages(paquetes_faltantes)
+  install.packages(
+    paquetes_faltantes,
+    repos = "https://cloud.r-project.org"
+  )
 }
+
 
 # Esto es lo que faltaba: cargar los paquetes
 invisible(lapply(paquetes, library, character.only = TRUE))
@@ -90,8 +94,6 @@ pca_estandarizado <- prcomp(
 
 ## 1. El encargo (0,5)
 
-*Responsable: Hana Pinilla*
-
 En un párrafo: **quién es su cliente, qué decisión toma y con qué variables numéricas la toma hoy**.
 Escojan entre 4 y 10 variables numéricas de su base, y digan por qué esas.
 
@@ -108,8 +110,6 @@ Como apoyo para caracterizar el perfil del cliente, usa además el nivel de esco
 
 ## 2. ¿Se repiten? (0,8)
 
-*Responsable: Juan David*
-
 Hagan la matriz de correlaciones de esas variables, en gráfico.
 Respondan:
 
@@ -117,7 +117,7 @@ Respondan:
 - ¿Cuál va más sola?
 - ¿Tiene sentido resumirlas? Si casi todas las correlaciones están cerca de cero, **díganlo**: ésa también es una respuesta para el cliente.
 
-```{r matriz-correlaciones, message=FALSE, warning=FALSE, fig.width=11, fig.height=8, out.width='100%', fig.align='center', include=FALSE}
+```{r matriz-correlaciones, echo=FALSE, message=FALSE, warning=FALSE, fig.width=11, fig.height=8, out.width='100%', fig.align='center'}
 
 library(dplyr)
 library(corrplot)
@@ -174,28 +174,27 @@ corrplot(
 )
 ```
 
-**Correlacion entre variables** Primero se deja fuera de la matriz la variable de escolaridad que aunque este este definida como numerica de el dataset orignal, en realidad en una variable categorica que no entra dentro de este analisis.
+**Correlación entre variables** 
 
-Se evidencia que la mayor correlacion entre variables se da entre los montos facturados cada mes, y de incluso mayor forma en los que es al mes directamente siguiente (las relaciones de Septiembre - Agosto, Agosto - Julio y Julio - Junio), lo que nos dice que una persona que tenga factuaracion por un monto alto el siguiente mes vuelva a tener una facturacion por un alto monto (debido a un uso mantenido en los meses y con gastos constates de su tarjeta de credito).
+Las facturas son las variables que más se repiten entre sí. Las correlaciones más altas aparecen entre meses consecutivos (septiembre-agosto, agosto-julio y julio-junio): un cliente con una factura alta en un mes tiende a tener también una factura alta al mes siguiente. Esto sugiere un uso sostenido de la tarjeta, con gastos recurrentes de un mes a otro.
 
-Mientras que con los montos pagados en cada mes, ve una debil correlacion, con lo que se infiere que los pagos mes a mes del usuario promedio de tarjeta de credito no paga en los meses cercanos montos similares que puede ser debido a ya uso inconsiste de como cada persona maneje sus cuotas y lo que decida y tenga capacidad para pagar en cada mes .
-Y a su vez en general el limite de credito de los usuarios no tiene correlacion significativa ya sea con los pagos o las facturaciones mes a mes y esta variable en si dependa de otros aspecto del historial crediticio, que se ve en solo estos cuatros meses de los usuarios.
+Los pagos, en cambio, muestran correlaciones débiles entre sí. El monto que un cliente paga en un mes dice poco sobre lo que pagará en el siguiente, lo que indica un comportamiento de pago irregular: cada persona paga según su capacidad y decisión en cada momento, sin un patrón estable entre meses cercanos.
 
-**Varible mas sola**
+Por último, el límite de crédito casi no se relaciona con las facturas ni con los pagos. Esto sugiere que el cupo se asigna con base en otros factores del historial crediticio del cliente, que no se observan en estos cuatro meses.
 
-Por lo que se ve la varible que menos se correlaciona con las otras es la del pago de junio (*PAY_AMT4*), lo cual nos indica que es la que mas variabilidad tiene del conjunto de variables escogido y que se ve que no afecta de forma significativa tanto a las otras variables de pago, como menos a las de facturacion y limite de credito.
+**Variable mas sola**
+
+La variable que menos se correlaciona con las demás es el pago de junio (*PAY_AMT4*). Esto significa que lo que un cliente pagó en junio aporta poca información sobre sus otros pagos, sus facturas o su límite de crédito. Es, por tanto, la variable más independiente del conjunto.
 
 **Sentido de resumirlas**
 
-Con lo que se observo, las variables que mas sentido tienen para ser resumidas con PCA, serian las de factuaracion, las cuales entre si siguen tienden a que un usuario que de facturacion alta esta se repeta en los meses cercanos.
+Resumir tiene sentido sobre todo para las facturas. Como están muy correlacionadas entre sí (un cliente con factura alta en un mes suele tenerla también en los meses cercanos), una sola componente puede representar buena parte de lo que las cuatro dicen por separado.
 
-Mientras que las correlaciones bajas de los pagos y el limite de credito, entre si y tambien con las variables de facturacion muestra mucha mayor variablidad, que da debido al uso de las tarjetas de credito de los usuarios en si, lo que hace que al juntarlas se pueda perder mas informacion de lo que estas variables dan por separado.
+En cambio, los pagos y el límite de crédito tienen correlaciones bajas entre ellos y con las facturas. Cada uno aporta información distinta, ligada a cómo cada cliente usa su tarjeta, y al combinarlos en pocas componentes se perdería parte de esa información.
 
-La utilidad para orientar la intervención de un banco se deberá comprobarse frente al posible no pago del mes siguiente, porque al conservar mucha variación no nos garantiza identificar mejor a los posibles impagos.
+Además, que un resumen conserve mucha variación no garantiza que sirva para decidir. Para el banco, su utilidad debe comprobarse frente a lo que realmente le importa: identificar a los clientes que no pagarán el mes siguiente.
 
 ## 3. ¿Estandarizar? (0,7)
-
-*Responsable: Juan David*
 
 Muestren la desviación de cada variable.
 **Decidan antes de correr** si estandarizan y justifíquenlo.
@@ -297,17 +296,18 @@ tabla_escalas %>%
   )
 ```
 
-**Aclaraciones y porque se estandariza**
+**Aclaraciones y por qué se estandariza**
 
-Se puede ver por la media y la mediana de las variables, que la primera es mas alta en todos los caos, lo cual identifica que la media no sirve por si sola para conocer el comportamiento del cliente promedio ya que hay casos con montos y pagos muy altos pero poco comunes que suben la media (teniendo en cuenta en lo que son los montos negativos y pagos de cero de los usuarios).
+En todas las variables, la media es mayor que la mediana. Esto indica que la distribución tiene una cola hacia valores altos: unos pocos clientes con facturas o pagos muy grandes elevan el promedio, mientras que la mayoría se ubica por debajo de él. Por eso la media, por sí sola, no describe al cliente típico. Por ejemplo, en septiembre la factura promedio es de 51.223 NTD, pero la mediana es de 22.382 NTD, es decir, menos de la mitad.
 
-En todos las variables se ve una alta dispercion de los datos de los clientes, ya sean con montos muy pequeños (o negativos), junto con que la varianza a en los pagos es varias veces mayor al promedio (gracias a los pagos de cero) hace que la dispercion sea muy grande para todas las variables en si, incluiddo el limite de credito por lo cual se decide que lo mejor es estandarizar las variables aunque esten en la misma unidad debido a la gran disparidad del uso de los usuarios con sus tarjetas de credito.
+La dispersión también es alta en todas las variables. En las facturas hay valores negativos y valores muy altos, con amplitudes superiores a 1.000.000 NTD. En los pagos, muchos clientes pagan cero, mientras que unos pocos pagan montos enormes (hasta 1.684.259 NTD en agosto). Como resultado, la desviación estándar de los pagos es entre tres y cuatro veces mayor que su media. El límite de crédito, por su parte, varía entre 10.000 y 1.000.000 NTD.
 
-**Estandarizacion** La estandarización se realizó sobre las nueve variables numéricas seleccionadas: el límite de crédito, los cuatro montos facturados y los cuatro montos pagados.
-Para cada variable, se restó a cada observación su media y se dividió el resultado entre su desviación estándar, mediante scale(center = TRUE, scale = TRUE).
-Así, cada variable quedó con media cero y desviación estándar uno, expresada sin unidades.
-Esto permite compararlas en una escala común y evita que las de mayor dispersión dominen el PCA.
-Las variables originales se conservaron en un objeto aparte y EDUCATION se excluyó por ser categórica.
+Aunque todas las variables están en la misma unidad monetaria, sus escalas son muy diferentes: la desviación estándar va desde unos 15.700 NTD en los pagos hasta unos 129.700 NTD en el límite de crédito. Sin estandarizar, las variables con mayor dispersión dominarían el PCA solo por su escala. Por eso se decide estandarizar.
+
+**Estandarización**
+
+La estandarización se aplicó a las nueve variables numéricas seleccionadas: el límite de crédito, los cuatro montos facturados y los cuatro montos pagados. A cada observación se le restó la media de su variable y el resultado se dividió entre su desviación estándar, mediante `scale(center = TRUE, scale = TRUE)`. Así, cada variable quedó con media cero y desviación estándar uno, sin unidades. Esto permite compararlas en una escala común y evita que las de mayor dispersión dominen el PCA. Las variables originales se conservaron en un objeto aparte.
+
 
 ```{r, include=FALSE}
 library(dplyr)
@@ -330,7 +330,7 @@ datos_estandarizados <- datos_sin_estandarizar %>%
   as.data.frame()
 
 # Ambos grupos conservan las mismas filas y el mismo orden de variables.
-# EDUCATION queda fuera porque es categórica.
+
 ```
 
 **PCA**
@@ -486,8 +486,6 @@ htmltools::browsable(
 
 ## 4. Cuánta información guarda (1,0)
 
-*Responsable: Juan David*
-
 Con su decisión del punto 3:
 
 1.  La gráfica de cuánta información guarda cada componente, con el acumulado.
@@ -513,11 +511,9 @@ En este caso, tres componentes conservan 72,36 %, por lo que necesitamos una cua
 
 3.  Escriban, en una frase para el cliente, qué significa esa cifra.
 
-“Se pueden resumir las nueve variables en cuatro componentes que conservan el 81% de la variación de los perfiles financieros de sus clientes; esto facilita su caracterización, aunque todavía debemos evaluar si ese resumen permite identificar a quienes incumplirán el mes siguiente”.
+“Las nueve variables financieras de sus clientes se pueden resumir en cuatro índices que conservan el 81 % de la información; esto simplifica el seguimiento, pero queda por comprobar si ese resumen sirve para identificar a quienes no pagarán el mes siguiente.”
 
 ## 5. Qué mide cada una (1,0)
-
-*Responsable: Juan Pablo*
 
 Grafiquen los pesos de las dos o tres primeras componentes.
 **Pónganle nombre a cada una** mirando qué variables mandan, y expliquen el nombre.
@@ -584,8 +580,6 @@ se podria nombrar como Cambio en el patrón de pagos y aclarar que es una interp
 
 ## 6. El costo para su cliente (1,0)
 
-*Responsable: Juan Pablo*
-
 Ésta es la pregunta de la clase aplicada a su negocio: **si su cliente decidiera con un solo número, ¿a quién o a qué dejaría por fuera?**
 
 - Definan un grupo que al cliente le importe: los peores, los mejores, los de riesgo, los que cumplen una condición.
@@ -632,37 +626,19 @@ cat("Tasa de incumplimiento:", round(100 * tasa, 1), "%  |  Incumplidos:", n_inc
 resultado
 
 ```
+Para el banco, el grupo que importa son los clientes que no pagarán el mes siguiente default payment next month = 1: 6.636 clientes, el 22,1 % de la base. Para comparar de forma justa, cada regla marca al 22,1 % de clientes con valores más extremos en la componente (6.636 clientes).
 
-Para el banco, el grupo que importa son los clientes que no pagarán el mes siguiente default payment next month = 1: 6.636 clientes, el 22,1 % de la base.
-Para comparar de forma justa, cada regla marca al 22,1 % de clientes con valores más extremos en la componente (6.636 clientes).
+**Qué encuentra la primera componente.** Si el banco decidiera con un solo número, la PC1 nivel de facturación, y marcara a los clientes con facturación más alta, encontraría 1.224 incumplidos y se le escaparían 5.412: el 81,6 % de quienes no pagan quedaría por fuera. De cada 100 clientes marcados, solo 18,4 incumplen, frente a 22,1 de cada 100 al escoger al azar, esta regla es peor que el azar. Tiene sentido, porque la PC1 mide cuánto se factura, y tener una factura alta no implica dejar de pagar.
 
-Qué encuentra la primera componente.
-Si el banco decidiera con un solo número, la PC1 nivel de facturación, y marcara a los clientes con facturación más alta, encontraría 1.224 incumplidos y se le escaparían 5.412: el 81,6 % de quienes no pagan quedaría por fuera.
-De cada 100 clientes marcados, solo 18,4 incumplen, frente a 22,1 de cada 100 al escoger al azar, esta regla es peor que el azar.
-Tiene sentido, porque la PC1 mide cuánto se factura, y tener una factura alta no implica dejar de pagar.
+**Qué cambia con la segunda componente.** Marcar a quienes tienen la PC2 baja pagan poco frente a lo facturada encuentra 1.651 incumplidos y deja escapar 4.985 75,1 %. El acierto sube a 24,9 %. Es mejor que el azar, pero la mejora es tres de cada cuatro incumplidos siguen sin ser detectados.
 
-Qué cambia con la segunda componente.
-Marcar a quienes tienen la PC2 baja pagan poco frente a lo facturada encuentra 1.651 incumplidos y deja escapar 4.985 75,1 %.
-El acierto sube a 24,9 %.
-Es mejor que el azar, pero la mejora es tres de cada cuatro incumplidos siguen sin ser detectados.
+**Combinar ambas.** Marcar a los clientes que cumplan la regla de la PC1 o la de la PC2 señala a 8.907 clientes y encuentra 1.876 incumplidos (28,3 %), con 4.760 que se escapan. Frente a usar solo la PC2, se marcan 2.271 clientes más para encontrar apenas 225 incumplidos adicionales. Es decir, agregar la PC1 vuelve la regla menos eficiente.
 
-Combinar ambas.
-Marcar a los clientes que cumplan la regla de la PC1 o la de la PC2 señala a 8.907 clientes y encuentra 1.876 incumplidos (28,3 %), con 4.760 que se escapan.
-Frente a usar solo la PC2, se marcan 2.271 clientes más para encontrar apenas 225 incumplidos adicionales.
-Es decir, agregar la PC1 vuelve la regla menos eficiente.
-
-Decisión.
-A este cliente no le basta un número, y tampoco le bastan dos: reportar PC1 y PC2 no mejora de forma útil la detección.
-Si hubiera que quedarse con una sola, sería la PC2 pagos frente a facturas, que es la única que supera al azar, aunque por poco.
-La razón de fondo es que estas componentes resumen cuánto se factura y cuánto se paga, y eso no captura si el cliente se está atrasando.
-Para intervenir de forma temprana, el banco necesitaría incluir las variables de historial de atraso PAY_0 a PAY_6, que quedaron fuera.
-Que el resumen conserve el 81 % de la variación no significa que conserve lo que sirve para decidir.
+**Decisión.** A este cliente no le basta un número, y tampoco le bastan dos: reportar PC1 y PC2 no mejora de forma útil la detección. Si hubiera que quedarse con una sola, sería la PC2 pagos frente a facturas, que es la única que supera al azar, aunque por poco. La razón de fondo es que estas componentes resumen cuánto se factura y cuánto se paga, y eso no captura si el cliente se está atrasando. Para intervenir de forma temprana, el banco necesitaría incluir las variables de historial de atraso PAY_0 a PAY_6, que quedaron fuera. Que el resumen conserve el 81 % de la variación no significa que conserve lo que sirve para decidir.
 
 # Parte 2 - PCA 2
 
 ## 1. El mapa y sus direcciones (1,0)
-
-*Responsable: Ana👻👻👻*
 
 Con las variables numéricas del taller anterior (y la misma decisión sobre estandarizar):
 
@@ -743,10 +719,11 @@ Queda fuera el `r numero_pca2(100 - sum(porcentaje_pca2[1:2]))` %, por lo que el
 
 2.  **Pónganle nombre a cada dirección**: qué significa ir a la derecha y qué significa ir hacia arriba, para su cliente.
 
-**Rta:** Ir a la **derecha** indica mayor facturación sostenida.
-Ir hacia **arriba** indica mayores pagos en contraste con las facturas; no representa una razón pago/factura ni una probabilidad de incumplimiento.
+**Rta:** Ir a la **derecha** indica mayor facturación sostenida. Ir a la **izquierda** indica facturación baja, que incluye tanto a clientes con poca deuda como a quienes tienen saldo a favor (facturas negativas), ya que la PC1 no distingue entre ambos casos. Ir hacia **arriba** indica mayores pagos en contraste con las facturas; no representa una razón pago/factura ni una probabilidad de incumplimiento.
 
-3.  Fijen el signo de cada componente para que se lea fácil, y digan cómo lo fijaron. **Rta:** Se orientó PC1 para que la suma de los pesos de las cuatro facturas fuera positiva y PC2 para que la suma de los pesos de los cuatro pagos fuera positiva. El mismo cambio se aplicó a los puntajes y a los pesos; esto no modifica la varianza explicada.
+3.  Fijen el signo de cada componente para que se lea fácil, y digan cómo lo fijaron. 
+
+**Rta:** Se orientó PC1 para que la suma de los pesos de las cuatro facturas fuera positiva y PC2 para que la suma de los pesos de los cuatro pagos fuera positiva. El mismo cambio se aplicó a los puntajes y a los pesos; esto no modifica la varianza explicada.
 
 ## 2. El biplot (1,0)
 
@@ -900,8 +877,6 @@ En particular, la cercanía entre pagos no implica que sus correlaciones origina
 
 ## 3. ¿Hay grupos o hay un continuo? (1,0)
 
-*Responsable: Ana 👻👻👻*
-
 Miren la nube.
 **¿Tiene islas separadas por huecos, como setosa, o es una sola mancha?** Muéstrenlo con el gráfico y con una cifra: por ejemplo, dónde termina un grupo y dónde empieza el otro en la primera componente.
 
@@ -987,8 +962,6 @@ El solapamiento en PC1 complementa la inspección del plano; por sí solo no dem
 El gráfico y los rangos no proporcionan evidencia suficiente para distinguir claramente a quienes cumplen de quienes incumplen; para evaluar su separación en el plano, es necesario observar el mapa coloreado por grupo.
 
 ## 4. ¿Los grupos que su cliente conoce se separan? (1,0)
-
-*Responsable: Juan Pablo*
 
 Coloreen el mapa por **una variable de grupo** que su cliente use para decidir (tipo de cliente, región, categoría, lo que tengan).
 Dibujen las elipses del 90 %.
@@ -1123,7 +1096,130 @@ resumen_grupos %>%
 
 ## 5. La decisión en el mapa (1,0)
 
-*Responsable: Hana Pinilla*
-
 Propongan **uno o dos cortes** en el mapa que le sirvan a su cliente para actuar, y **cuenten cuántos casos caen en cada zona**.
 Digan qué haría el cliente con cada zona, y qué pasa si mueve el corte.
+
+
+Se proponen **dos cortes**: uno vertical en **PC1 = 0** y uno oblicuo, la recta **PC2 = 0,3 · PC1**, que se aplica solo a la derecha del corte vertical. Esto divide el mapa en tres zonas:
+
+- **Izquierda (PC1 < 0):** facturación por debajo de la del cliente promedio. Incluye a quienes deben poco, a quienes casi no usan la tarjeta y a quienes tienen saldo a favor (facturas negativas).
+- **Derecha, arriba de la recta:** facturación media o alta, con pagos iguales o mayores a lo que corresponde a esa facturación.
+- **Derecha, debajo de la recta:** facturación media o alta, con pagos menores a lo que corresponde. Es la zona a vigilar.
+
+```{r pca2-corte, echo=FALSE, fig.width=10, fig.height=7}
+pendiente <- 0.3
+corte_x <- 0
+
+# Mismas filas del PCA
+base_mapa <- datos_credit[filas_pca2, ]
+factura_prom <- rowMeans(base_mapa[, paste0("BILL_AMT", 1:4)])
+pago_total <- rowSums(base_mapa[, paste0("PAY_AMT", 1:4)])
+
+zona <- factor(
+  ifelse(mapa_pca2$PC1 < corte_x, "Izquierda",
+  ifelse(mapa_pca2$PC2 >= pendiente * mapa_pca2$PC1,
+         "Derecha, arriba", "Derecha, debajo")),
+  levels = c("Izquierda", "Derecha, arriba", "Derecha, debajo")
+)
+
+conteo <- table(zona)
+colores_zona <- c(
+  "Izquierda" = "#285A91",
+  "Derecha, arriba" = "#24735B",
+  "Derecha, debajo" = "#A65E00"
+)
+
+# Clientes con saldo a favor (factura promedio negativa), solo para resaltar
+saldo_favor <- mapa_pca2[factura_prom < 0, ]
+
+ggplot(mapa_pca2, aes(PC1, PC2, color = zona)) +
+  geom_point(alpha = 0.12, size = 0.65) +
+  geom_point(data = saldo_favor, inherit.aes = FALSE,
+             aes(PC1, PC2), color = "#B2182B", alpha = 0.6, size = 0.9) +
+  geom_vline(xintercept = corte_x, linetype = "dashed",
+             color = "grey20", linewidth = 1) +
+  geom_segment(
+    aes(x = corte_x, y = pendiente * corte_x,
+        xend = limites_nube_x[2], yend = pendiente * limites_nube_x[2]),
+    inherit.aes = FALSE, linetype = "dashed",
+    color = "grey20", linewidth = 1
+  ) +
+  annotate("text", x = limites_nube_x[1], y = limites_nube_y[2],
+           label = paste0("Izquierda\n", format(conteo[1], big.mark = "."),
+                          " clientes"),
+           hjust = 0, vjust = 1, color = "#285A91", fontface = "bold") +
+  annotate("text", x = limites_nube_x[2], y = limites_nube_y[2],
+           label = paste0("Derecha, arriba\n", format(conteo[2], big.mark = "."),
+                          " clientes"),
+           hjust = 1, vjust = 1, color = "#24735B", fontface = "bold") +
+  annotate("text", x = limites_nube_x[2], y = limites_nube_y[1],
+           label = paste0("Derecha, debajo\n", format(conteo[3], big.mark = "."),
+                          " clientes"),
+           hjust = 1, vjust = 0, color = "#A65E00", fontface = "bold") +
+  scale_color_manual(values = colores_zona, name = "Zona") +
+  coord_equal(xlim = limites_nube_x, ylim = limites_nube_y) +
+  labs(
+    title = "Cortes en PC1 = 0 y PC2 = 0,3 · PC1",
+    x = eje1_pca2,
+    y = eje2_pca2,
+    caption = paste0(
+      "Puntos rojos: clientes con factura promedio negativa (saldo a favor).\n",
+      "Ventana central de la sección 3; los conteos incluyen todos los clientes."
+    )
+  ) +
+  tema_pca2
+```
+
+```{r pca2-corte-tablas, echo=FALSE}
+tabla_zonas <- do.call(rbind, lapply(levels(zona), function(z) {
+  i <- zona == z
+  data.frame(
+    Zona = z,
+    Clientes = sum(i),
+    `% de la base` = 100 * mean(i),
+    `Factura promedio (NTD)` = mean(factura_prom[i]),
+    `% con factura promedio negativa` = 100 * mean(factura_prom[i] < 0),
+    `Pago total promedio (NTD)` = mean(pago_total[i]),
+    `Pago total mediano (NTD)` = median(pago_total[i]),
+    check.names = FALSE
+  )
+}))
+
+knitr::kable(
+  tabla_zonas,
+  digits = 1,
+  format.args = list(big.mark = ".", decimal.mark = ","),
+  caption = "Perfil de cada zona del mapa"
+)
+
+# ¿Qué pasa si se mueve el corte oblicuo? (solo a la derecha de PC1 = 0)
+pendientes <- c(0, 0.15, 0.3, 0.5, 1)
+derecha <- mapa_pca2$PC1 >= corte_x
+sensibilidad <- data.frame(
+  Pendiente = pendientes,
+  `Clientes a vigilar` = sapply(pendientes,
+    function(m) sum(derecha & mapa_pca2$PC2 < m * mapa_pca2$PC1)),
+  `% de la base` = sapply(pendientes,
+    function(m) 100 * mean(derecha & mapa_pca2$PC2 < m * mapa_pca2$PC1)),
+  check.names = FALSE
+)
+
+knitr::kable(
+  sensibilidad,
+  digits = 1,
+  format.args = list(big.mark = ".", decimal.mark = ","),
+  caption = "Clientes en la zona de vigilancia según la pendiente"
+)
+```
+
+**Cuántos caen en cada zona.** A la izquierda quedan `r format(conteo[1], big.mark = ".")` clientes (`r round(100 * conteo[1] / nrow(mapa_pca2), 1)` %), a la derecha y arriba de la recta `r format(conteo[2], big.mark = ".")` (`r round(100 * conteo[2] / nrow(mapa_pca2), 1)` %), y a la derecha y debajo `r format(conteo[3], big.mark = ".")` (`r round(100 * conteo[3] / nrow(mapa_pca2), 1)` %).
+
+**Qué haría el cliente con cada zona.**
+
+- **Izquierda:** no requiere intervención por deuda. Dentro de ella hay tres tipos de cliente (poca deuda, poco uso de la tarjeta y saldo a favor) que el mapa no distingue. El banco podría ofrecerles productos para aumentar el uso, y a quienes tienen saldo a favor, tratarlos como buenos pagadores. La tabla indica que `[completar: % con factura promedio negativa en la zona izquierda]` % de esta zona tiene saldo a favor.
+- **Derecha, arriba de la recta:** clientes con deuda sostenida que pagan en proporción. Basta seguimiento normal y, a los de mayor pago, se les puede ofrecer más cupo.
+- **Derecha, debajo de la recta:** es la zona a vigilar. Son clientes que deben mucho y pagan poco, por lo que el banco podría contactarlos de forma temprana o revisar su cupo.
+
+**Qué pasa si se mueve el corte.** [Completar con la tabla de sensibilidad: describir cuánto cambia el tamaño de la zona de vigilancia al pasar de pendiente 0 a 1.] Mover el corte vertical a la derecha agranda la zona izquierda y deja sin vigilar a clientes con deuda moderada. Moverlo a la izquierda hace que la regla oblicua también aplique a clientes con facturación baja, que es justo lo que se quería evitar.
+
+**Límite.** El corte en PC1 = 0 separa por facturación respecto al promedio, no por saldo a favor: la mayoría de los clientes de la izquierda tiene una factura positiva, solo menor al promedio. Los puntos rojos muestran que quienes tienen saldo a favor son una fracción pequeña de esa zona. Además, la recta compara puntajes de componentes y no equivale a una razón pago/factura. Los clientes cercanos a los cortes cambian de zona con ajustes pequeños, así que son reglas prácticas y no fronteras naturales entre tipos de cliente.
