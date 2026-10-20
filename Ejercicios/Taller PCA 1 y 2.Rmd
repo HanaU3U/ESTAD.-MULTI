@@ -632,16 +632,31 @@ cat("Tasa de incumplimiento:", round(100 * tasa, 1), "%  |  Incumplidos:", n_inc
 resultado
 
 ```
-Para el banco, el grupo que importa son los clientes que no pagarán el mes siguiente default payment next month = 1: 6.636 clientes, el 22,1 % de la base. Para comparar de forma justa, cada regla marca al 22,1 % de clientes con valores más extremos en la componente (6.636 clientes).
 
-Qué encuentra la primera componente. Si el banco decidiera con un solo número, la PC1 nivel de facturación, y marcara a los clientes con facturación más alta, encontraría 1.224 incumplidos y se le escaparían 5.412: el 81,6 % de quienes no pagan quedaría por fuera. De cada 100 clientes marcados, solo 18,4 incumplen, frente a 22,1 de cada 100 al escoger al azar, esta regla es peor que el azar. Tiene sentido, porque la PC1 mide cuánto se factura, y tener una factura alta no implica dejar de pagar.
+Para el banco, el grupo que importa son los clientes que no pagarán el mes siguiente default payment next month = 1: 6.636 clientes, el 22,1 % de la base.
+Para comparar de forma justa, cada regla marca al 22,1 % de clientes con valores más extremos en la componente (6.636 clientes).
 
-Qué cambia con la segunda componente. Marcar a quienes tienen la PC2 baja pagan poco frente a lo facturada encuentra 1.651 incumplidos y deja escapar 4.985 75,1 %. El acierto sube a 24,9 %. Es mejor que el azar, pero la mejora es tres de cada cuatro incumplidos siguen sin ser detectados.
+Qué encuentra la primera componente.
+Si el banco decidiera con un solo número, la PC1 nivel de facturación, y marcara a los clientes con facturación más alta, encontraría 1.224 incumplidos y se le escaparían 5.412: el 81,6 % de quienes no pagan quedaría por fuera.
+De cada 100 clientes marcados, solo 18,4 incumplen, frente a 22,1 de cada 100 al escoger al azar, esta regla es peor que el azar.
+Tiene sentido, porque la PC1 mide cuánto se factura, y tener una factura alta no implica dejar de pagar.
 
-Combinar ambas. Marcar a los clientes que cumplan la regla de la PC1 o la de la PC2 señala a 8.907 clientes y encuentra 1.876 incumplidos (28,3 %), con 4.760 que se escapan. Frente a usar solo la PC2, se marcan 2.271 clientes más para encontrar apenas 225 incumplidos adicionales. Es decir, agregar la PC1 vuelve la regla menos eficiente.
+Qué cambia con la segunda componente.
+Marcar a quienes tienen la PC2 baja pagan poco frente a lo facturada encuentra 1.651 incumplidos y deja escapar 4.985 75,1 %.
+El acierto sube a 24,9 %.
+Es mejor que el azar, pero la mejora es tres de cada cuatro incumplidos siguen sin ser detectados.
 
-Decisión. A este cliente no le basta un número, y tampoco le bastan dos: reportar PC1 y PC2 no mejora de forma útil la detección. Si hubiera que quedarse con una sola, sería la PC2 pagos frente a facturas, que es la única que supera al azar, aunque por poco. La razón de fondo es que estas componentes resumen cuánto se factura y cuánto se paga, y eso no captura si el cliente se está atrasando. Para intervenir de forma temprana, el banco necesitaría incluir las variables de historial de atraso PAY_0 a PAY_6, que quedaron fuera. Que el resumen conserve el 81 % de la variación no significa que conserve lo que sirve para decidir.
+Combinar ambas.
+Marcar a los clientes que cumplan la regla de la PC1 o la de la PC2 señala a 8.907 clientes y encuentra 1.876 incumplidos (28,3 %), con 4.760 que se escapan.
+Frente a usar solo la PC2, se marcan 2.271 clientes más para encontrar apenas 225 incumplidos adicionales.
+Es decir, agregar la PC1 vuelve la regla menos eficiente.
 
+Decisión.
+A este cliente no le basta un número, y tampoco le bastan dos: reportar PC1 y PC2 no mejora de forma útil la detección.
+Si hubiera que quedarse con una sola, sería la PC2 pagos frente a facturas, que es la única que supera al azar, aunque por poco.
+La razón de fondo es que estas componentes resumen cuánto se factura y cuánto se paga, y eso no captura si el cliente se está atrasando.
+Para intervenir de forma temprana, el banco necesitaría incluir las variables de historial de atraso PAY_0 a PAY_6, que quedaron fuera.
+Que el resumen conserve el 81 % de la variación no significa que conserve lo que sirve para decidir.
 
 # Parte 2 - PCA 2
 
@@ -723,24 +738,15 @@ ggplot(mapa_pca2, aes(PC1, PC2)) +
   tema_pca2
 ```
 
-**Información conservada: ** El plano guarda el
-**`r numero_pca2(sum(porcentaje_pca2[1:2]))` %** de la variación de las nueve
-variables. Queda fuera el
-`r numero_pca2(100 - sum(porcentaje_pca2[1:2]))` %, por lo que el mapa es un
-resumen parcial del perfil financiero.
-
+**Información conservada:** El plano guarda el **`r numero_pca2(sum(porcentaje_pca2[1:2]))` %** de la variación de las nueve variables.
+Queda fuera el `r numero_pca2(100 - sum(porcentaje_pca2[1:2]))` %, por lo que el mapa es un resumen parcial del perfil financiero.
 
 2.  **Pónganle nombre a cada dirección**: qué significa ir a la derecha y qué significa ir hacia arriba, para su cliente.
 
-**Rta: **Ir a la **derecha** indica mayor facturación sostenida.
-Ir hacia **arriba** indica mayores pagos en contraste con las facturas;
-no representa una razón pago/factura ni una probabilidad de incumplimiento.
+**Rta:** Ir a la **derecha** indica mayor facturación sostenida.
+Ir hacia **arriba** indica mayores pagos en contraste con las facturas; no representa una razón pago/factura ni una probabilidad de incumplimiento.
 
-3.  Fijen el signo de cada componente para que se lea fácil, y digan cómo lo fijaron.
-**Rta: **Se orientó PC1 para que la suma de los pesos de las cuatro
-facturas fuera positiva y PC2 para que la suma de los pesos de los cuatro
-pagos fuera positiva. El mismo cambio se aplicó a los puntajes y a los
-pesos; esto no modifica la varianza explicada.
+3.  Fijen el signo de cada componente para que se lea fácil, y digan cómo lo fijaron. **Rta:** Se orientó PC1 para que la suma de los pesos de las cuatro facturas fuera positiva y PC2 para que la suma de los pesos de los cuatro pagos fuera positiva. El mismo cambio se aplicó a los puntajes y a los pesos; esto no modifica la varianza explicada.
 
 ## 2. El biplot (1,0)
 
@@ -879,18 +885,18 @@ ggplot(casos_biplot, aes(C1, C2)) +
   tema_pca2
 ```
 
+**Flechas que van juntas:** Las cuatro facturas apuntan hacia la derecha y ligeramente hacia abajo, con ángulos aproximados entre 2,0° y 8,3°.
+Esto respalda la interpretación de PC1 como “deuda acumulada” definida en PCA 1.
+Los cuatro pagos apuntan hacia arriba y a la derecha, con ángulos entre 0,3° y 7,4°: presentan una dirección semejante en este plano.
 
+**Flecha más independiente:** Ninguna aparece flecha claramente aislada.
+El límite de crédito queda entre ambos conjuntos, más cerca de los pagos, con los que forma ángulos de aproximadamente 17° a 24,4°
 
-**Flechas que van juntas: ** Las cuatro facturas apuntan hacia la derecha y ligeramente hacia abajo, con ángulos aproximados entre 2,0° y 8,3°. Esto respalda la interpretación de PC1 como “deuda acumulada” definida en PCA 1. Los cuatro pagos apuntan hacia arriba y a la derecha, con ángulos entre 0,3° y 7,4°: presentan una dirección semejante en este plano.
+**Direcciones opuestas:** Facturas y pagos tienen signos contrarios en PC2, lo que respalda el nombre “pagos frente a facturas”.
+Sin embargo, ninguna pareja de flechas forma un ángulo mayor de 90° (lo cual NO significa que exista una correlación negativa entre sus variables originales)
 
-**Flecha más independiente: ** Ninguna aparece flecha claramente aislada. El límite de crédito queda entre ambos conjuntos, más cerca de los pagos, con los que forma ángulos de aproximadamente 17° a 24,4°
-
-**Direcciones opuestas: ** Facturas y pagos tienen signos contrarios en PC2, lo que respalda el nombre “pagos frente a facturas”. Sin embargo, ninguna pareja de flechas forma un ángulo mayor de 90° (lo cual NO significa que exista una correlación negativa entre sus variables originales)
-
-**Alcance: ** Los ángulos describen la proyección en dos componentes.
-En particular, la cercanía entre pagos no implica que sus correlaciones
-originales sean altas (parte de sus diferencias queda en las componentes
-omitidas, como ya mostró PCA 1)
+**Alcance:** Los ángulos describen la proyección en dos componentes.
+En particular, la cercanía entre pagos no implica que sus correlaciones originales sean altas (parte de sus diferencias queda en las componentes omitidas, como ya mostró PCA 1)
 
 ## 3. ¿Hay grupos o hay un continuo? (1,0)
 
@@ -967,15 +973,17 @@ knitr::kable(
 )
 ```
 
-**Forma de la nube: ** La nube presenta una zona de alta concentración con dos prolongaciones conectadas, sin islas claramente separadas por huecos. Esto sugiere un continuo de perfiles financieros, más que grupos claramente diferenciados. Para el banco, el gráfico por sí solo no permite distinguir a quienes cumplen de quienes incumplen. Los extremos de la tabla corresponden a toda la base, mientras que el gráfico muestra una ampliación central.
+**Forma de la nube:** La nube presenta una zona de alta concentración con dos prolongaciones conectadas, sin islas claramente separadas por huecos.
+Esto sugiere un continuo de perfiles financieros, más que grupos claramente diferenciados.
+Para el banco, el gráfico por sí solo no permite distinguir a quienes cumplen de quienes incumplen.
+Los extremos de la tabla corresponden a toda la base, mientras que el gráfico muestra una ampliación central.
 
-**Evidencia numérica: ** Los rangos de quienes cumplen y quienes incumplen se superponen en ambas componentes. Por tanto, ni “deuda acumulada” ni “pagos frente a facturas”, consideradas por separado, permiten separar completamente los dos grupos mediante un único corte. La tabla incluye todos los clientes, mientras que el gráfico muestra una ampliación de la zona central; por eso sus extremos no coinciden con los límites visibles.
+**Evidencia numérica:** Los rangos de quienes cumplen y quienes incumplen se superponen en ambas componentes.
+Por tanto, ni “deuda acumulada” ni “pagos frente a facturas”, consideradas por separado, permiten separar completamente los dos grupos mediante un único corte.
+La tabla incluye todos los clientes, mientras que el gráfico muestra una ampliación de la zona central; por eso sus extremos no coinciden con los límites visibles.
 
-**Conclusión para el banco.** El mapa no muestra tipos de clientes
-claramente separados ni permite identificar el incumplimiento mediante
-una frontera evidente. El solapamiento en PC1 complementa la inspección
-del plano; por sí solo no demuestra ausencia de grupos en otras
-dimensiones.
+**Conclusión para el banco.** El mapa no muestra tipos de clientes claramente separados ni permite identificar el incumplimiento mediante una frontera evidente.
+El solapamiento en PC1 complementa la inspección del plano; por sí solo no demuestra ausencia de grupos en otras dimensiones.
 El gráfico y los rangos no proporcionan evidencia suficiente para distinguir claramente a quienes cumplen de quienes incumplen; para evaluar su separación en el plano, es necesario observar el mapa coloreado por grupo.
 
 ## 4. ¿Los grupos que su cliente conoce se separan? (1,0)
@@ -988,6 +996,130 @@ Dibujen las elipses del 90 %.
 - ¿Se separan o solo se desplazan?
 - Muéstrenlo con dos cifras: la distancia entre los promedios, y qué parte de un grupo cae en la zona del otro.
 - Cierren con la frase para el cliente: ¿le sirve ese grupo para decidir, o no?
+
+```{r pca2-grupos, echo=FALSE, fig.width=10, fig.height=7}
+# Grupo de escolaridad (no interviene en el PCA)
+educ_cruda <- datos_credit[["EDUCATION"]][filas_pca2]
+
+grupo_educ <- factor(
+  ifelse(educ_cruda == 1, "Posgrado",
+  ifelse(educ_cruda == 2, "Universitario",
+  ifelse(educ_cruda == 3, "Bachillerato", NA))),
+  levels = c("Posgrado", "Universitario", "Bachillerato")
+)
+
+mapa_grupos <- cbind(mapa_pca2, Educacion = grupo_educ)
+mapa_grupos <- mapa_grupos[!is.na(mapa_grupos$Educacion), ]
+
+colores_educ <- c(
+  "Posgrado" = "#285A91",
+  "Universitario" = "#A65E00",
+  "Bachillerato" = "#24735B"
+)
+
+# Misma ventana central de la sección 3 (solo visual)
+ggplot(mapa_grupos, aes(PC1, PC2, color = Educacion)) +
+  geom_point(alpha = 0.10, size = 0.6) +
+  stat_ellipse(level = 0.90, linewidth = 1.1) +
+  scale_color_manual(values = colores_educ, name = "Escolaridad") +
+  coord_equal(xlim = limites_nube_x, ylim = limites_nube_y) +
+  labs(
+    title = "Mapa coloreado por escolaridad, con elipses del 90 %",
+    x = eje1_pca2,
+    y = eje2_pca2,
+    caption = paste0(
+      "Se excluyen ", sum(is.na(grupo_educ)),
+      " clientes con escolaridad no clasificada.\n",
+      "Ventana central de la sección 3; las elipses usan todos los casos."
+    )
+  ) +
+  tema_pca2
+```
+
+```{r pca2-grupos-cifras, echo=FALSE}
+niveles <- levels(mapa_grupos$Educacion)
+umbral <- qchisq(0.90, df = 2)
+
+datos_por_grupo <- lapply(niveles, function(g) {
+  as.matrix(mapa_grupos[mapa_grupos$Educacion == g, c("PC1", "PC2")])
+})
+names(datos_por_grupo) <- niveles
+
+# % del grupo A que cae dentro de la elipse del 90 % del grupo B
+pct_en_elipse <- function(a, b) {
+  100 * mean(mahalanobis(a, colMeans(b), cov(b)) <= umbral)
+}
+
+pares <- combn(niveles, 2)
+
+cifras_grupos <- do.call(rbind, lapply(seq_len(ncol(pares)), function(i) {
+  a <- datos_por_grupo[[pares[1, i]]]
+  b <- datos_por_grupo[[pares[2, i]]]
+  dif <- colMeans(a) - colMeans(b)
+  sd_comb <- sqrt((apply(a, 2, var) + apply(b, 2, var)) / 2)
+
+  data.frame(
+    Comparacion = paste(pares[1, i], "vs", pares[2, i]),
+    `Distancia entre promedios` = sqrt(sum(dif^2)),
+    `Diferencia PC1 (en desv. est.)` = abs(dif[1]) / sd_comb[1],
+    `Diferencia PC2 (en desv. est.)` = abs(dif[2]) / sd_comb[2],
+    `% del 1.º dentro de la elipse del 2.º` = pct_en_elipse(a, b),
+    `% del 2.º dentro de la elipse del 1.º` = pct_en_elipse(b, a),
+    check.names = FALSE
+  )
+}))
+
+knitr::kable(
+  cifras_grupos,
+  digits = 2,
+  format.args = list(decimal.mark = ","),
+  caption = "Separación entre grupos de escolaridad en el plano PC1-PC2"
+)
+
+# Tamaño y promedio de cada grupo
+resumen_grupos <- do.call(rbind, lapply(niveles, function(g) {
+  m <- datos_por_grupo[[g]]
+  data.frame(Grupo = g, Clientes = nrow(m),
+             Promedio_PC1 = mean(m[, 1]), Promedio_PC2 = mean(m[, 2]))
+}))
+resumen_grupos %>%
+  kable(
+    format = "html",
+    caption = "Tamaño y promedio de cada grupo de escolaridad",
+    row.names = FALSE,
+    col.names = c("Grupo", "Clientes", "Promedio PC1", "Promedio PC2"),
+    digits = 3,
+    format.args = list(decimal.mark = ","),
+    align = c("l", "r", "r", "r")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "condensed"),
+    full_width = TRUE
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447") %>%
+  row_spec(1:nrow(resumen_grupos), color = "#243447", background = "#FFFFFF")
+```
+
+- Grupo usado: Se coloreó el mapa por nivel de escolaridad, una característica que el banco conoce de antemano y que no interviene en el cálculo del PCA.
+  Se excluyeron 468 clientes con escolaridad no clasificada, por lo que el análisis usa 29.532 clientes: 10.585 de Posgrado, 14.030 de Universitario y 4.917 de Bachillerato.
+
+- ¿Se separan o solo se desplazan?:
+  Solo se desplazan.
+  Las elipses del 90 % se superponen casi por completo y comparten la misma zona de mayor concentración.
+  Los centros de los grupos están muy cerca: la distancia entre promedios es de 0,36 Posgrado vs. Universitario, 0,46 Posgrado vs. Bachillerato y 0,20 Universitario vs. Bachillerato, en las unidades de los ejes.
+  En la PC1 de deuda acumulada las diferencias son mínimas, entre 0,04 y 0,14 desviaciones estándar.
+  En la PC2 pagos frente a facturas Posgrado queda algo más arriba promedio de 0,230, frente a −0,124 en Universitario y −0,139 en Bachillerato, pero la diferencia es de apenas 0,27 a 0,28 desviaciones estándar.
+  Entre Universitario y Bachillerato casi no hay diferencia con 0,02 en la PC2
+
+- Cuánto cae en la zona del otro:
+  Si dos grupos fueran idénticos, cerca del 90 % de uno caería dentro de la elipse del 90 % del otro.
+  Aquí el 88,1 % de Posgrado cae dentro de la elipse de Universitario, y el 94,7 % de Universitario dentro de la de Posgrado.
+  Con Bachillerato, el 86,8 % de Posgrado cae en su elipse y el 96,1 % de Bachillerato en la de Posgrado.
+  Entre Universitario y Bachillerato, los valores son 90,5 % y 93,3 %.
+  Todos están cerca del 90 % esperado para grupos que se mezclan por completo.
+  Que los porcentajes sean mayores en un sentido que en el otro se explica porque Posgrado es el grupo más disperso y su elipse es más grande, no porque los grupos estén más separados.
+
+- Conclusión para el banco: La escolaridad no le sirve para decidir a partir de este mapa: clientes de los tres niveles ocupan prácticamente la misma zona del plano, y la única diferencia visible, que Posgrado tiende a pagar algo más frente a sus facturas, es pequeña frente a la variación que hay dentro de cada grupo. Conocer el nivel de escolaridad de un cliente no permite ubicarlo en una zona distinta del mapa, y por tanto no ayuda a diferenciar su perfil de deuda ni de pagos.
 
 ## 5. La decisión en el mapa (1,0)
 
