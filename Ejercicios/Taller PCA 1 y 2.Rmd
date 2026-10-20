@@ -1216,10 +1216,10 @@ knitr::kable(
 
 **Qué haría el cliente con cada zona.**
 
-- **Izquierda:** no requiere intervención por deuda. Dentro de ella hay tres tipos de cliente (poca deuda, poco uso de la tarjeta y saldo a favor) que el mapa no distingue. El banco podría ofrecerles productos para aumentar el uso, y a quienes tienen saldo a favor, tratarlos como buenos pagadores. La tabla indica que `[completar: % con factura promedio negativa en la zona izquierda]` % de esta zona tiene saldo a favor.
+- **Izquierda:** no requiere intervención por deuda. Dentro de ella hay tres tipos de cliente (poca deuda, poco uso de la tarjeta y saldo a favor) que el mapa no distingue. El banco podría ofrecerles productos para aumentar el uso, y a quienes tienen saldo a favor, tratarlos como buenos pagadores. La tabla indica que 1,1 % de esta zona tiene saldo a favor.
 - **Derecha, arriba de la recta:** clientes con deuda sostenida que pagan en proporción. Basta seguimiento normal y, a los de mayor pago, se les puede ofrecer más cupo.
 - **Derecha, debajo de la recta:** es la zona a vigilar. Son clientes que deben mucho y pagan poco, por lo que el banco podría contactarlos de forma temprana o revisar su cupo.
 
-**Qué pasa si se mueve el corte.** [Completar con la tabla de sensibilidad: describir cuánto cambia el tamaño de la zona de vigilancia al pasar de pendiente 0 a 1.] Mover el corte vertical a la derecha agranda la zona izquierda y deja sin vigilar a clientes con deuda moderada. Moverlo a la izquierda hace que la regla oblicua también aplique a clientes con facturación baja, que es justo lo que se quería evitar.
+**Qué pasa si se mueve el corte.** Mover el corte vertical a la derecha agranda la zona izquierda y deja sin vigilar a clientes con deuda moderada. Moverlo a la izquierda hace que la regla oblicua también aplique a clientes con facturación baja, que es justo lo que se quería evitar.
 
 **Límite.** El corte en PC1 = 0 separa por facturación respecto al promedio, no por saldo a favor: la mayoría de los clientes de la izquierda tiene una factura positiva, solo menor al promedio. Los puntos rojos muestran que quienes tienen saldo a favor son una fracción pequeña de esa zona. Además, la recta compara puntajes de componentes y no equivale a una razón pago/factura. Los clientes cercanos a los cortes cambian de zona con ajustes pequeños, así que son reglas prácticas y no fronteras naturales entre tipos de cliente.
