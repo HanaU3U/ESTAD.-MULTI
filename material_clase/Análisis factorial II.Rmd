@@ -1,0 +1,364 @@
+---
+title: "Notas de Clase: Análisis factorial II — la rotación"
+subtitle: "¿Se pueden nombrar dos habilidades para dos perfiles de cargo?"
+author: "Estadística Multidimensional · Universidad Distrital Francisco José de Caldas"
+date: "Lunes 26 de octubre de 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    code_folding: show
+    df_print: paged
+    fig_width: 9
+    fig_height: 5.5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", fig.width = 9, fig.height = 5.5)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(psych)
+library(GPArotation)
+theme_set(theme_minimal(base_size = 13) + theme(plot.title.position = "plot"))
+coma <- function(x, d = 1) formatC(x, format = "f", digits = d, decimal.mark = ",", big.mark = " ")
+miles <- function(x) formatC(x, format = "d", big.mark = " ")
+```
+
+# Introducción: el cliente insiste
+
+El sábado le dijimos al jefe de selección que la prueba mide **una sola habilidad común**, y que
+escritura e inglés tienen mucho de propio. Nos contesta:
+
+> *«Entiendo, pero ya tengo aprobados dos perfiles de cargo. Si ustedes sacan dos habilidades, ¿no
+> las pueden acomodar para que una sea la analítica y otra la comunicativa? Solo necesito dos nombres.»*
+
+Es una petición razonable, y la técnica tiene una herramienta para eso: **girar la solución** para
+que cada módulo quede en una sola habilidad y se pueda nombrar. La pregunta de hoy:
+
+> **Si giramos la solución de dos habilidades, ¿aparecen dos habilidades con nombre que sostengan dos
+> perfiles de cargo distintos? ¿Y cuántas habilidades se pueden sacar, como máximo, de cinco módulos?**
+
+# Objetivos de aprendizaje
+
+Al terminar la sesión, cada estudiante debe poder:
+
+1. Explicar **qué es girar** una solución y **qué no cambia** al girarla.
+2. Distinguir un giro que mantiene las habilidades **independientes** de uno que las deja **ir
+   juntas**.
+3. **Nombrar** una habilidad mirando sus cargas, y decir cuándo un nombre no se sostiene.
+4. Decir **cuántas habilidades caben** en un número dado de variables.
+5. **Traducir** el resultado a la decisión del cliente: cuántos perfiles de cargo sostiene la prueba.
+
+# La base con la que llegamos
+
+```{r leer}
+saber <- read.csv("PruebaSaber1.csv", sep = ";", fileEncoding = "latin1",
+                  stringsAsFactors = FALSE)
+
+s <- saber |>
+  transmute(
+    cuantitativo = MOD_RAZONA_CUANTITAT_PUNT,
+    lectura      = MOD_LECTURA_CRITICA_PUNT,
+    ciudadanas   = MOD_COMPETEN_CIUDADA_PUNT,
+    ingles       = MOD_INGLES_PUNT,
+    escritura    = MOD_COMUNI_ESCRITA_PUNT,
+    estrato      = FAMI_ESTRATOVIVIENDA
+  )
+s$id <- seq_len(nrow(s))
+
+modulos <- c("cuantitativo", "lectura", "ciudadanas", "ingles", "escritura")
+etiqueta <- c(cuantitativo = "cuantitativo", lectura = "lectura", ciudadanas = "ciudadanas",
+              ingles = "inglés", escritura = "escritura")
+
+s <- s[s$estrato != "Empleado obrero u operario", ]
+s$ingles[s$ingles == 0] <- NA
+for (m in modulos) s[[m]][s$id %in% c(671, 614) & s[[m]] == 0] <- NA
+
+X <- s[complete.cases(s[modulos]), modulos]
+nrow(X)
+```
+
+# Dos habilidades, sin girar
+
+Empezamos donde terminamos el sábado: pedimos dos habilidades y miramos las cargas tal como salen.
+
+```{r sin-girar}
+f_sin <- fa(X, nfactors = 2, fm = "ml", rotate = "none")
+cargas_sin <- round(unclass(f_sin$loadings), 2)
+colnames(cargas_sin) <- c("H1", "H2")
+cargas_sin
+```
+
+> 📋 **Describir:** la primera habilidad carga en todos los módulos, de
+> `r coma(min(cargas_sin[, 1]), 2)` a `r coma(max(cargas_sin[, 1]), 2)`. La segunda tiene cargas
+> pequeñas y mezcladas, entre `r coma(min(cargas_sin[, 2]), 2)` y `r coma(max(cargas_sin[, 2]), 2)`.
+>
+> 🔎 **Analizar:** así no se puede nombrar nada: la primera carga en todos, pegada a lectura, y la
+> segunda no tiene un módulo que mande. **Decisión:** hay que girar la solución para ver si aparece algo con
+> nombre.
+
+# La idea de girar
+
+> 📐 **La matemática, enunciada.** Las cargas de cada módulo son sus coordenadas en un plano cuyos ejes
+> son las dos habilidades. **Girar** es cambiar los ejes sin mover los puntos:
+>
+> $$\text{cargas nuevas} = \text{cargas} \times \text{giro}$$
+>
+> y para cada módulo la parte común no cambia:
+>
+> $$\text{parte común}_i = \text{carga}_{i1}^2 + \text{carga}_{i2}^2 \quad \text{(igual antes y después de girar)}$$
+>
+> **En palabras:** los módulos se quedan quietos; lo que se mueve es **desde dónde los miramos**.
+> Girar no cambia cuánto explica el modelo: solo busca los ejes desde los que **cada módulo cargue en
+> una sola habilidad**, para que cada habilidad se pueda nombrar.
+
+Hay dos maneras de girar:
+
+| Giro | Qué permite | Cuándo tiene sentido |
+|---|---|---|
+| **Que sigan independientes** (varimax) | Las dos habilidades no van juntas | Si uno cree que son capacidades sin relación |
+| **Que puedan ir juntas** (oblimin) | Las dos habilidades pueden ir juntas | Casi siempre en personas: quien razona bien suele leer bien |
+
+```{r girar}
+f_ind <- fa(X, nfactors = 2, fm = "ml", rotate = "varimax")
+f_jun <- fa(X, nfactors = 2, fm = "ml", rotate = "oblimin")
+
+comun <- rbind(sin_girar       = f_sin$communality,
+               independientes  = f_ind$communality,
+               pueden_ir_juntas = f_jun$communality)
+round(100 * comun, 1)
+```
+
+> 📋 **Describir:** la parte común de cada módulo es **exactamente la misma** con los tres giros: por
+> ejemplo, escritura queda en `r coma(100 * f_sin$communality["escritura"])` de cada 100 las tres veces.
+>
+> 🔎 **Analizar:** girar no inventa ni quita información: reparte la misma parte común entre las dos
+> habilidades de otra manera. **Decisión:** podemos girar tranquilos; lo que hay que juzgar es si el
+> resultado **se puede nombrar**.
+
+# ¿Qué aparece al girar?
+
+```{r cargas-giradas}
+tabla <- data.frame(modulo = etiqueta[modulos],
+                    independientes_H1 = round(f_ind$loadings[, 1], 2),
+                    independientes_H2 = round(f_ind$loadings[, 2], 2),
+                    juntas_H1 = round(f_jun$loadings[, 1], 2),
+                    juntas_H2 = round(f_jun$loadings[, 2], 2), row.names = NULL)
+tabla
+c(con_giro_que_permite_ir_juntas_las_dos_van = round(f_jun$Phi[1, 2], 2))
+```
+
+```{r grafico-giro, fig.height = 5.2}
+plano <- bind_rows(
+  data.frame(giro = "Sin girar", modulo = etiqueta[modulos],
+             h1 = f_sin$loadings[, 1], h2 = f_sin$loadings[, 2]),
+  data.frame(giro = "Girada: pueden ir juntas", modulo = etiqueta[modulos],
+             h1 = f_jun$loadings[, 1], h2 = f_jun$loadings[, 2])) |>
+  mutate(giro = factor(giro, levels = c("Sin girar", "Girada: pueden ir juntas")))
+# posición de cada etiqueta, a mano, para que no se encimen
+pos <- data.frame(
+  giro = rep(c("Sin girar", "Girada: pueden ir juntas"), each = 5),
+  modulo = rep(etiqueta[modulos], 2),
+  dx = c(0.02, 0, 0.02, -0.02, -0.06,   0.02, 0, 0.02, 0.02, 0.02),
+  dy = c(0.02, -0.07, -0.02, 0.03, 0,   0.02, 0.07, 0, -0.03, 0.01),
+  hj = c(0, 0.5, 0, 1, 1,               0, 0.5, 0, 0, 0))
+plano <- left_join(plano, pos, by = c("giro", "modulo")) |>
+  mutate(giro = factor(giro, levels = c("Sin girar", "Girada: pueden ir juntas")))
+
+ggplot(plano, aes(h1, h2)) +
+  geom_hline(yintercept = 0, color = "grey60") + geom_vline(xintercept = 0, color = "grey60") +
+  geom_segment(aes(xend = h1, yend = h2), x = 0, y = 0, color = "#2B6CB0",
+               arrow = arrow(length = unit(0.18, "cm"))) +
+  geom_text(aes(x = h1 + dx, y = h2 + dy, label = modulo, hjust = hj), size = 3.8) +
+  facet_wrap(~ giro) +
+  coord_equal(xlim = c(-0.25, 1.2), ylim = c(-0.25, 1.15), clip = "off") +
+  scale_x_continuous(labels = function(x) coma(x, 1)) +
+  scale_y_continuous(labels = function(x) coma(x, 1)) +
+  labs(title = "Los mismos cinco módulos, vistos desde dos pares de ejes",
+       subtitle = "Coordenadas = cargas en la habilidad 1 (horizontal) y en la habilidad 2 (vertical)",
+       x = "Habilidad 1", y = "Habilidad 2")
+```
+
+> 📋 **Describir:** con el giro que mantiene las habilidades independientes, casi todos los módulos
+> siguen cargando en las dos (cuantitativo `r coma(tabla$independientes_H1[1], 2)` y
+> `r coma(tabla$independientes_H2[1], 2)`). Con el giro que las deja ir juntas, **lectura queda sola
+> en una habilidad** (`r coma(tabla$juntas_H2[2], 2)`) y los otros cuatro en la otra, de
+> `r coma(min(tabla$juntas_H1[-2]), 2)` a `r coma(max(tabla$juntas_H1[-2]), 2)`. Y esas dos habilidades
+> van juntas `r coma(f_jun$Phi[1, 2], 2)`.
+>
+> 🔎 **Analizar:** el giro sí produjo algo «nombrable», pero no es lo que el cliente pidió: no hay una
+> habilidad cuantitativa y otra verbal, sino **lectura** frente a **todo lo demás**. Y que vayan juntas
+> `r coma(f_jun$Phi[1, 2], 2)` quiere decir que quien está alto en una casi siempre está alto en la
+> otra. **Decisión:** antes de ponerles nombre, hay que ver si esta separación **es estable**.
+
+# ¿Es estable la segunda habilidad?
+
+Una habilidad de verdad no debería depender del método con que se calcule. Probemos otro método de
+cálculo, con el mismo giro:
+
+```{r estabilidad}
+f_otro <- fa(X, nfactors = 2, fm = "minres", rotate = "oblimin")
+otro <- round(unclass(f_otro$loadings), 2); colnames(otro) <- c("H1", "H2")
+rownames(otro) <- etiqueta[modulos]
+otro
+c(las_dos_van_juntas = round(f_otro$Phi[1, 2], 2))
+```
+
+> 📋 **Describir:** con otro método, la separación cambia: ahora una habilidad es sobre todo
+> **ciudadanas** (`r coma(max(otro[, 1]), 2)`) y la otra sobre todo **cuantitativo**
+> (`r coma(max(otro[, 2]), 2)`), con lectura repartida entre las dos. Las dos siguen yendo juntas
+> `r coma(f_otro$Phi[1, 2], 2)`.
+>
+> 🔎 **Analizar:** **la segunda habilidad cambia de forma según cómo se calcule**: una vez es lectura,
+> otra vez es ciudadanas frente a cuantitativo. Una habilidad que se mueve con el método no es una
+> habilidad de los estudiantes; es un acomodo de los números. Lo único estable es que las dos van
+> juntas casi 0,8. **Decisión:** la prueba no sostiene dos habilidades con nombre.
+
+# ¿Cuántas habilidades caben en cinco módulos?
+
+El cliente podría pedir tres. Hay un límite, y es aritmético.
+
+> 📐 **La matemática, enunciada.** Con $p$ módulos hay $p(p-1)/2$ parejas, es decir, esa cantidad de
+> correlaciones para explicar. Con $k$ habilidades, lo que el modelo deja «libre» para ser puesto a
+> prueba es
+>
+> $$\text{grados de libertad} = \frac{(p - k)^2 - (p + k)}{2}$$
+>
+> **En palabras:** cada habilidad que se agrega gasta información. Cuando lo que queda llega a cero o
+> se vuelve negativo, **el modelo ya no se puede comprobar con los datos**: explica todo porque tiene
+> tantas piezas como datos.
+
+```{r cuantas}
+p <- length(modulos)
+data.frame(habilidades = 1:3,
+           correlaciones_a_explicar = p * (p - 1) / 2,
+           grados_de_libertad = ((p - (1:3))^2 - (p + (1:3))) / 2)
+```
+
+> 📋 **Describir:** con cinco módulos hay 10 correlaciones. Una habilidad deja 5 grados de libertad,
+> dos dejan 1, y tres dan un número negativo.
+>
+> 🔎 **Analizar:** **con cinco módulos caben, como máximo, dos habilidades**, y la segunda ya casi no
+> deja nada para comprobarla. Tres no se pueden sacar. **Decisión:** si el cliente quisiera tres
+> perfiles, la prueba Saber no se los puede dar; necesitaría más pruebas o más variables.
+
+Hay reglas automáticas que proponen un número de habilidades. Una muy usada compara los datos con
+datos revueltos al azar:
+
+```{r paralelo}
+set.seed(26)
+paralelo <- fa.parallel(X, fm = "ml", fa = "fa", plot = FALSE)
+c(la_regla_automatica_sugiere = paralelo$nfact)
+```
+
+> 📋 **Describir:** la regla automática sugiere `r paralelo$nfact` habilidades.
+>
+> 🔎 **Analizar:** con cinco módulos, `r paralelo$nfact` no se pueden sacar: los grados de libertad dan
+> negativo. **Ninguna regla automática pasa por encima de ese límite.** **Decisión:** las reglas
+> automáticas se usan como una opinión más, nunca como la respuesta. (Esta regla se llama análisis
+> paralelo.)
+
+# El costo para el empleador
+
+Supongamos que la empresa hace caso omiso y arma los dos perfiles con las dos habilidades giradas:
+contrata al 20 % más alto de cada una.
+
+```{r costo}
+f_pun <- fa(X, nfactors = 2, fm = "ml", rotate = "oblimin", scores = "regression")
+H <- f_pun$scores
+alto <- function(v) v >= quantile(v, 0.80)
+perfil_1 <- alto(H[, 1]); perfil_2 <- alto(H[, 2])
+c(perfil_1 = sum(perfil_1), perfil_2 = sum(perfil_2),
+  en_los_dos = sum(perfil_1 & perfil_2),
+  de_cada_100_repetidos = round(100 * sum(perfil_1 & perfil_2) / sum(perfil_1), 1))
+```
+
+```{r grafico-costo, fig.height = 3.6}
+data.frame(grupo = c("Solo en el perfil 1", "En los dos perfiles", "Solo en el perfil 2"),
+           n = c(sum(perfil_1 & !perfil_2), sum(perfil_1 & perfil_2), sum(perfil_2 & !perfil_1))) |>
+  mutate(grupo = factor(grupo, levels = grupo)) |>
+  ggplot(aes(n, "", fill = grupo)) +
+  geom_col(width = 0.5, position = position_stack(reverse = TRUE)) +
+  geom_text(aes(label = miles(n)), position = position_stack(vjust = 0.5, reverse = TRUE),
+            color = "white", fontface = "bold", size = 4.6) +
+  scale_fill_manual(values = c("#2B6CB0", "#6B7280", "#C05621"), name = NULL) +
+  scale_x_continuous(labels = miles) +
+  labs(title = "Dos perfiles armados con las dos habilidades giradas",
+       subtitle = "Candidatos en el 20 % más alto de cada perfil",
+       x = "Candidatos", y = NULL) +
+  theme(legend.position = "top")
+```
+
+> 📋 **Describir:** cada perfil escoge `r miles(sum(perfil_1))` candidatos, y
+> `r miles(sum(perfil_1 & perfil_2))` están en los dos: `r coma(100 * sum(perfil_1 & perfil_2) / sum(perfil_1))`
+> de cada 100.
+>
+> 🔎 **Analizar:** los dos perfiles **escogen casi a la misma gente**. La empresa pagaría dos procesos
+> de selección para obtener, en tres de cada cuatro casos, a los mismos candidatos. **Decisión:** un
+> solo perfil de habilidad general, y los requisitos que de verdad distinguen —escritura e inglés— como
+> módulos aparte.
+
+# Qué no es girar
+
+- **No es hacer trampa.** Girar no cambia cuánto explica el modelo ni la parte común de ningún módulo.
+- **No crea habilidades.** Si los datos tienen una sola habilidad fuerte, ningún giro va a producir
+  dos que se sostengan.
+- **El nombre lo ponemos nosotros.** Y un nombre solo vale si la habilidad es estable y si sirve para
+  decidir algo distinto.
+
+# La puerta a lo que viene
+
+| Lo que vimos | Lo que sigue | Cuándo |
+|---|---|---|
+| Resumen (sesiones 3 y 4) y habilidades (5 y 6) | **Taller para entregar**: las dos técnicas sobre su dataset, para su cliente | **Sáb 31 oct** · sin clase |
+| Grupos que se montan en una habilidad | **¿Son distintos estos grupos?** Comparar perfiles completos de dos grupos | **Sáb 7 nov** · taller para entregar |
+
+# Actividad práctica
+
+Con **el dataset de su equipo**:
+
+1. Saquen dos habilidades sin girar y miren si se pueden nombrar.
+2. Gírenlas de las dos maneras (`rotate = "varimax"` y `rotate = "oblimin"`). Comprueben que la parte
+   común de cada variable no cambia.
+3. ¿Cuánto van juntas las dos habilidades con el giro que lo permite?
+4. Cambien el método (`fm = "minres"`). ¿La separación se mantiene?
+5. Con su número de variables, ¿cuántas habilidades caben como máximo?
+
+# Preguntas conceptuales
+
+1. Si girar no cambia la parte común de ningún módulo, ¿para qué se gira?
+2. ¿Por qué en personas casi siempre conviene el giro que deja ir juntas a las habilidades?
+3. Dos habilidades van juntas 0,79. ¿Qué significa eso para quien quiere usarlas como dos perfiles?
+4. ¿Por qué una habilidad que cambia según el método de cálculo no se puede nombrar?
+5. Un equipo tiene 4 variables y quiere sacar 3 habilidades. ¿Qué le dice usted?
+6. ¿Cuál de estas afirmaciones es correcta? **(a)** Girar aumenta la información que explica el
+   modelo. **(b)** Girar cambia los ejes, no los módulos, y la parte común de cada módulo queda igual.
+   **(c)** Con cinco módulos se pueden sacar hasta cinco habilidades. **(d)** Si el giro produce dos
+   habilidades, la prueba mide dos habilidades.
+
+# Conclusión: lo que le entregamos al cliente
+
+Al jefe de selección le respondemos:
+
+- **Girar no cambia lo que la prueba mide**, solo desde dónde lo miramos. Lo intentamos de las dos
+  maneras.
+- **Al girar no aparece una habilidad analítica y otra comunicativa.** Aparece lectura frente al
+  resto, o ciudadanas frente a cuantitativo, según el método: la segunda habilidad no es estable.
+- **Y las dos van juntas casi 0,8:** si arma dos perfiles, tres de cada cuatro candidatos salen
+  escogidos en los dos.
+- **La decisión:** un perfil con la habilidad general y, para los cargos que lo requieran,
+  **escritura e inglés como requisitos aparte**. Con cinco módulos no caben más de dos habilidades, y
+  la prueba no sostiene ni siquiera la segunda.
+
+La técnica de hoy se llama **rotación** en el análisis factorial. Lo que hicimos fue intentar, de
+buena fe, darle al cliente lo que pedía, y mostrarle con números por qué la prueba no se lo da.
+
+# Próxima semana
+
+**Sábado 31 de octubre · Taller para entregar, sin clase.** Resumen y habilidades sobre el dataset de
+su equipo, para el cliente de su caso de negocio. Las instrucciones están en Moodle; se hace con las
+notas de las sesiones 3 a 6.

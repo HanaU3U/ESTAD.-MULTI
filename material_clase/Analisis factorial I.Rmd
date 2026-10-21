@@ -1,0 +1,440 @@
+---
+title: "Notas de Clase: Análisis factorial I"
+subtitle: "¿La prueba mide una habilidad o dos? El encargo del empleador que contrata técnicos"
+author: "Estadística Multidimensional · Universidad Distrital Francisco José de Caldas"
+date: "Sábado 24 de octubre de 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    code_folding: show
+    df_print: paged
+    fig_width: 9
+    fig_height: 5.5
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", fig.width = 9, fig.height = 5.5)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(psych)
+theme_set(theme_minimal(base_size = 13) + theme(plot.title.position = "plot"))
+coma <- function(x, d = 1) formatC(x, format = "f", digits = d, decimal.mark = ",", big.mark = " ")
+miles <- function(x) formatC(x, format = "d", big.mark = " ")
+```
+
+# Introducción: el encargo
+
+Esta vez el cliente no es una institución educativa. Es **una empresa
+que contrata técnicos y tecnólogos** —mantenimiento, sistemas, atención
+al cliente— y que pide la prueba Saber como requisito en sus
+convocatorias. Su jefe de selección nos escribe:
+
+> *«Estoy armando dos perfiles de cargo: uno analítico, para los puestos
+> técnicos, y uno comunicativo, para los de atención. Quiero usar la
+> prueba para escoger. ¿La prueba mide una habilidad cuantitativa y otra
+> verbal, o todo es lo mismo?»*
+
+La pregunta de hoy:
+
+> **¿Cuántas habilidades hay detrás de los cinco puntajes, y qué parte
+> de cada puntaje es habilidad compartida y qué parte es propia de ese
+> módulo?**
+
+La sesión pasada resumimos los cinco módulos y vimos que el mejor
+resumen de un número es el global. Hoy la pregunta es otra: no *cómo
+resumir*, sino **qué hay detrás**.
+
+# Objetivos de aprendizaje
+
+Al terminar la sesión, cada estudiante debe poder:
+
+1.  Explicar la idea de **parte común y parte propia** de una variable.
+2.  Leer una **carga** y decir qué tanto pesa la habilidad común en un
+    módulo.
+3.  Comprobar si **una sola habilidad alcanza** para explicar cómo se
+    mueven juntos los módulos.
+4.  Decir **en qué se diferencia** este análisis del resumen de la
+    sesión pasada.
+5.  **Traducir el resultado a la decisión del cliente**: cuántos
+    perfiles de cargo sostiene la prueba.
+
+# La base con la que llegamos
+
+La misma limpieza de las sesiones pasadas.
+
+```{r leer}
+saber <- read.csv("PruebaSaber1.csv", sep = ";", fileEncoding = "latin1",
+                  stringsAsFactors = FALSE)
+
+s <- saber |>
+  transmute(
+    cuantitativo = MOD_RAZONA_CUANTITAT_PUNT,
+    lectura      = MOD_LECTURA_CRITICA_PUNT,
+    ciudadanas   = MOD_COMPETEN_CIUDADA_PUNT,
+    ingles       = MOD_INGLES_PUNT,
+    escritura    = MOD_COMUNI_ESCRITA_PUNT,
+    global       = PUNT_GLOBAL,
+    estrato      = FAMI_ESTRATOVIVIENDA
+  )
+s$id <- seq_len(nrow(s))
+
+modulos <- c("cuantitativo", "lectura", "ciudadanas", "ingles", "escritura")
+etiqueta <- c(cuantitativo = "cuantitativo", lectura = "lectura", ciudadanas = "ciudadanas",
+              ingles = "inglés", escritura = "escritura")
+
+s <- s[s$estrato != "Empleado obrero u operario", ]          # fila corrida
+s$ingles[s$ingles == 0] <- NA                                 # no presentaron inglés
+for (m in modulos) s[[m]][s$id %in% c(671, 614) & s[[m]] == 0] <- NA   # filas 671 y 614
+
+sc <- s[complete.cases(s[modulos]), ]
+X  <- sc[modulos]
+nrow(X)
+```
+
+Trabajamos con los `r miles(nrow(X))` estudiantes que tienen los cinco
+módulos.
+
+# Lo que ya sabíamos
+
+La sesión pasada dejó dos pistas:
+
+- La primera componente guardaba **52,9 de cada 100** partes de la
+  información, y era el nivel general.
+- **Escritura e inglés iban solos**: la segunda y la tercera componente
+  eran, cada una, casi un solo módulo.
+
+La pregunta que quedó abierta es si esas dos cosas que «van solas» son
+**habilidades distintas** o simplemente **parte propia de cada módulo**:
+lo que mide ese examen y ningún otro.
+
+# La idea: parte común y parte propia
+
+> 📐 **La matemática, enunciada.** Cada módulo, puesto en escala
+> estándar, se parte en dos:
+>
+> $$\text{módulo} = \text{carga} \times \text{habilidad común} + \text{parte propia}$$
+>
+> Y su variación se reparte igual:
+>
+> $$1 = \text{carga}^2 + \text{varianza de la parte propia}$$
+>
+> **En palabras:** la **habilidad común** es lo que los cinco módulos
+> comparten; nadie la ve directamente, se deduce de cómo se mueven
+> juntos. La **carga** dice qué tanto pesa esa habilidad en cada módulo.
+> La **carga al cuadrado** es qué parte de las diferencias entre
+> estudiantes en ese módulo viene de la habilidad común. Lo que sobra es
+> **propio del módulo**: lo que ese examen mide y ningún otro, más el
+> error de medición.
+
+Aquí está la diferencia con la sesión pasada: el resumen de la sesión 3
+metía **todo** en la componente, incluida la parte propia. Este análisis
+**la separa**.
+
+## ¿Hay algo común que buscar?
+
+Antes de buscar una habilidad compartida, conviene comprobar que los
+módulos compartan algo. Si cada módulo fuera independiente, no habría
+nada que buscar.
+
+```{r adecuacion}
+kmo <- KMO(X)
+round(c(general = kmo$MSA, kmo$MSAi), 2)
+```
+
+> 📋 **Describir:** el índice general da `r coma(kmo$MSA, 2)`, y por
+> módulo va de `r coma(min(kmo$MSAi), 2)` a `r coma(max(kmo$MSAi), 2)`.
+> Este índice va de 0 a 1 y mide qué tanto de lo que se mueve junto se
+> puede atribuir a algo compartido; por encima de 0,7 se considera
+> bueno.
+>
+> 🔎 **Analizar:** los cinco módulos comparten lo suficiente para que
+> tenga sentido buscar habilidades comunes. **Decisión:** seguimos. (El
+> índice se llama KMO; no hace falta recordarlo.)
+
+# Una sola habilidad
+
+Empezamos por lo más simple: **una habilidad común** detrás de los
+cinco.
+
+```{r un-factor}
+f1 <- fa(X, nfactors = 1, fm = "ml")
+reparto <- data.frame(modulo = modulos,
+                      carga  = as.numeric(f1$loadings[, 1]),
+                      comun  = as.numeric(f1$communality),
+                      propia = as.numeric(f1$uniquenesses))
+reparto$carga  <- round(reparto$carga, 2)
+reparto$comun  <- round(100 * reparto$comun, 1)
+reparto$propia <- round(100 * reparto$propia, 1)
+reparto
+```
+
+```{r grafico-comun-propia, fig.height = 4.6}
+reparto |>
+  select(modulo, `Habilidad común` = comun, `Parte propia` = propia) |>
+  pivot_longer(-modulo) |>
+  mutate(modulo = factor(etiqueta[modulo], levels = rev(etiqueta[reparto$modulo[order(-reparto$comun)]])),
+         name = factor(name, levels = c("Parte propia", "Habilidad común"))) |>
+  ggplot(aes(value, modulo, fill = name)) +
+  geom_col(width = 0.62) +
+  geom_text(aes(label = coma(value)), position = position_stack(vjust = 0.5),
+            color = "white", fontface = "bold", size = 4.2) +
+  scale_fill_manual(values = c("Habilidad común" = "#2B6CB0", "Parte propia" = "#C05621"),
+                    breaks = c("Habilidad común", "Parte propia"), name = NULL) +
+  scale_x_continuous(labels = function(x) coma(x, 0)) +
+  labs(title = "Qué parte de cada módulo es habilidad común y qué parte es propia",
+       subtitle = "De cada 100 partes de las diferencias entre estudiantes",
+       x = "De cada 100", y = NULL) +
+  theme(legend.position = "top")
+```
+
+> 📋 **Describir:** en lectura,
+> `r coma(reparto$comun[reparto$modulo == "lectura"])` de cada 100
+> partes de las diferencias entre estudiantes vienen de la habilidad
+> común. En ciudadanas,
+> `r coma(reparto$comun[reparto$modulo == "ciudadanas"])`; en
+> cuantitativo,
+> `r coma(reparto$comun[reparto$modulo == "cuantitativo"])`. En inglés
+> baja a `r coma(reparto$comun[reparto$modulo == "ingles"])` y en
+> escritura a `r coma(reparto$comun[reparto$modulo == "escritura"])`:
+> **`r coma(reparto$propia[reparto$modulo == "escritura"])` de cada 100
+> partes de escritura son propias.**
+>
+> 🔎 **Analizar:** la habilidad común pesa mucho en lectura y
+> ciudadanas, y casi nada en escritura. Por eso escritura «iba sola» en
+> la sesión pasada: **no es que mida otra habilidad compartida; es que
+> casi todo lo que mide es suyo**. Lo mismo, en menor grado, inglés.
+> **Decisión:** para el empleador, escritura e inglés no se pueden
+> deducir de los otros tres módulos; si le importan, hay que mirarlos
+> aparte.
+
+# ¿Alcanza con una habilidad?
+
+La prueba de fuego: si de verdad hay una sola habilidad detrás, **ella
+sola tiene que explicar por qué los módulos se mueven juntos**.
+
+> 📐 **La matemática, enunciada.** Con una sola habilidad común, lo que
+> se mueven juntos dos módulos debería ser el producto de sus cargas:
+>
+> $$\text{correlación}(i, j) \approx \text{carga}_i \times \text{carga}_j$$
+>
+> **En palabras:** dos módulos van juntos **solo porque comparten la
+> habilidad**. Si hay otra cosa que los une —una segunda habilidad—, la
+> cuenta no va a cuadrar.
+
+```{r cuadra}
+R <- cor(X)
+L <- as.numeric(f1$loadings[, 1]); names(L) <- modulos
+ejemplo <- c(observada = round(R["lectura", "ciudadanas"], 3),
+             producto_de_cargas = round(unname(L["lectura"] * L["ciudadanas"]), 3))
+ejemplo
+
+error <- R - outer(L, L); diag(error) <- 0
+c(error_maximo = round(max(abs(error)), 3))
+donde <- which(abs(error) == max(abs(error)), arr.ind = TRUE)[1, ]
+c(pareja_con_mas_error = paste(etiqueta[modulos[donde]], collapse = " y "))
+```
+
+> 📋 **Describir:** lectura y ciudadanas van juntas
+> `r coma(ejemplo[1], 3)`; el producto de sus cargas da
+> `r coma(ejemplo[2], 3)`. Revisando las diez parejas de módulos, el
+> error más grande es `r coma(max(abs(error)), 3)`, entre cuantitativo e
+> inglés.
+>
+> 🔎 **Analizar:** **una sola habilidad reproduce casi perfectamente
+> cómo se mueven juntos los cinco módulos.** No queda nada importante
+> sin explicar que pida una segunda habilidad. **Decisión:** la
+> respuesta al jefe de selección empieza a ser clara: la prueba no
+> separa una habilidad cuantitativa de una verbal.
+
+# ¿Y si le pedimos dos?
+
+El cliente quería dos perfiles. Probemos con dos habilidades y veamos
+qué ganamos.
+
+```{r dos-factores}
+f2 <- fa(X, nfactors = 2, fm = "ml", rotate = "oblimin")
+c(comun_con_una  = round(100 * sum(f1$communality) / 5, 1),
+  comun_con_dos  = round(100 * sum(f2$communality) / 5, 1),
+  lectura_comun_con_dos = round(100 * unname(f2$communality["lectura"]), 1),
+  las_dos_van_juntas    = round(f2$Phi[1, 2], 2))
+round(unclass(f2$loadings), 2)
+```
+
+> 📋 **Describir:** con una habilidad, la parte común es
+> `r coma(100 * sum(f1$communality) / 5)` de cada 100; con dos,
+> `r coma(100 * sum(f2$communality) / 5)`. La segunda habilidad cae
+> **casi entera sobre lectura**, que queda con
+> `r coma(100 * f2$communality["lectura"])` de cada 100 como común. Y
+> las dos habilidades van juntas `r coma(f2$Phi[1, 2], 2)`.
+>
+> 🔎 **Analizar:** la segunda habilidad no es «verbal» frente a
+> «cuantitativa»: es **lectura sola**. Una habilidad que se reduce a un
+> módulo no es una habilidad nueva: es el módulo. Y dos habilidades que
+> van juntas `r coma(f2$Phi[1, 2], 2)` son casi la misma. **Decisión:**
+> la prueba no sostiene dos perfiles de cargo. El lunes veremos cómo se
+> gira esta solución para intentar nombrarla, y por qué tampoco así
+> aparece la separación que el cliente esperaba.
+
+# ¿En qué se diferencia del resumen de la sesión 3?
+
+```{r pca-vs-fa}
+pca <- prcomp(X, scale. = TRUE)
+c(el_resumen_guardaba = round(100 * pca$sdev[1]^2 / 5, 1),
+  la_habilidad_comun_explica = round(100 * sum(f1$communality) / 5, 1))
+```
+
+|   | Resumen (sesión 3) | Habilidad común (hoy) |
+|------------------------|------------------------|------------------------|
+| Qué busca | El número que más separa a los estudiantes | Lo que los módulos **comparten** |
+| Qué hace con la parte propia | La mete en el resumen | La **separa** y la reporta aparte |
+| Cuánto guarda aquí | `r coma(100 * pca$sdev[1]^2 / 5)` de cada 100 | `r coma(100 * sum(f1$communality) / 5)` de cada 100 |
+| Pregunta de negocio | ¿Con qué número ordeno? | ¿Cuántas habilidades hay, y qué es propio de cada examen? |
+
+> 📋 **Describir:** con los módulos en escala estándar, como aquí, el
+> resumen guardaba `r coma(100 * pca$sdev[1]^2 / 5)` de cada 100 (52,9
+> sin estandarizar, como en la sesión 3); la habilidad común explica
+> `r coma(100 * sum(f1$communality) / 5)`.
+>
+> 🔎 **Analizar:** la diferencia es justamente la parte propia que el
+> resumen se llevaba de paso. **Ni uno es mejor que el otro**: responden
+> preguntas distintas. **Decisión:** si el cliente quiere ordenar,
+> resumen; si quiere saber qué habilidades hay para armar perfiles,
+> habilidad común.
+
+# El costo para el empleador
+
+Traducimos a candidatos. Supongamos que la empresa contrata al 20 % más
+alto en la **habilidad común**.
+
+```{r costo}
+f1s <- fa(X, nfactors = 1, fm = "ml", scores = "regression")
+habilidad <- f1s$scores[, 1]
+alto <- function(v) v >= quantile(v, 0.80)
+costo <- lapply(c("escritura", "ingles", "cuantitativo", "lectura"), function(m) {
+  mejores <- alto(sc[[m]]); elegidos <- alto(habilidad)
+  data.frame(modulo = m, mejores_del_modulo = sum(mejores),
+             contratados = sum(mejores & elegidos), se_escapan = sum(mejores & !elegidos))
+}) |> bind_rows()
+costo$de_cada_100 <- round(100 * costo$se_escapan / costo$mejores_del_modulo, 1)
+costo
+c(habilidad_y_global_van_juntos = round(cor(habilidad, sc$global), 3))
+```
+
+```{r grafico-costo, fig.height = 4.4}
+costo |>
+  select(modulo, `Los contrata` = contratados, `Se le escapan` = se_escapan) |>
+  pivot_longer(-modulo) |>
+  mutate(modulo = factor(etiqueta[modulo], levels = rev(etiqueta[costo$modulo]))) |>
+  ggplot(aes(value, modulo, fill = name)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = miles(value)), position = position_stack(vjust = 0.5),
+            color = "white", fontface = "bold", size = 4.2) +
+  scale_fill_manual(values = c("#2B6CB0", "#C05621"), name = NULL) +
+  scale_x_continuous(labels = miles) +
+  labs(title = "Los mejores 20 % de cada módulo: ¿los contrata la empresa?",
+       subtitle = "Si escoge al 20 % más alto en la habilidad común",
+       x = "Candidatos", y = NULL) +
+  theme(legend.position = "top")
+```
+
+> 📋 **Describir:** de los `r miles(costo$mejores_del_modulo[1])`
+> mejores en escritura, contratar por la habilidad común deja por fuera
+> a `r miles(costo$se_escapan[1])`: `r coma(costo$de_cada_100[1])` de
+> cada 100. En inglés se escapan `r miles(costo$se_escapan[2])`. En
+> lectura, donde la habilidad común pesa más, solo
+> `r miles(costo$se_escapan[4])`.
+>
+> 🔎 **Analizar:** es la parte propia en candidatos: **el que mejor
+> escribe no es necesariamente el de mayor habilidad común**, y la
+> empresa no lo va a encontrar si escoge por ella. **Decisión:** para un
+> cargo de atención al cliente, donde escribir bien importa, el
+> requisito tiene que ser el módulo de escritura, no el puntaje general.
+
+# Qué no es una habilidad común
+
+- **No es algo que se observe.** Se deduce de cómo se mueven juntos los
+  módulos. Nadie la midió.
+- **No prueba que exista una capacidad en la cabeza del estudiante.**
+  Dice que los puntajes se comportan como si la hubiera. Una buena
+  escuela, más horas de estudio o el nivel del hogar también mueven
+  todos los módulos a la vez.
+- **La parte propia no es «error».** En escritura es casi todo lo que el
+  módulo mide: es información valiosa, solo que no se comparte con los
+  demás.
+
+# La puerta a lo que viene
+
+| Lo que vimos hoy | La pregunta que queda | Dónde se responde |
+|------------------------|------------------------|------------------------|
+| Con dos habilidades, la segunda cae sobre lectura | Si **giramos** la solución, ¿aparecen dos habilidades con nombre? | **Lun 26 oct** · Factorial II: rotación |
+| Una habilidad alcanza con cinco módulos | ¿Cuántas habilidades se pueden sacar como máximo con cinco módulos? | **Lun 26 oct** |
+
+# Actividad práctica
+
+Con **el dataset de su equipo** y **el cliente de su caso de negocio**:
+
+1.  Escojan entre 4 y 10 variables numéricas que crean que comparten
+    algo. Calculen `KMO()`.
+2.  Corran `fa(datos, nfactors = 1, fm = "ml")`. Hagan la gráfica de
+    parte común y parte propia.
+3.  ¿Qué variable es casi toda propia? ¿Qué significa eso para su
+    cliente?
+4.  Comprueben si una habilidad alcanza: comparen las correlaciones con
+    el producto de las cargas.
+5.  Prueben con dos. ¿La segunda es una habilidad con sentido, o es una
+    sola variable?
+
+# Preguntas conceptuales
+
+1.  ¿Qué diferencia hay entre la parte común y la parte propia de un
+    módulo?
+2.  Escritura tiene 15 de cada 100 partes comunes. ¿Significa que el
+    módulo de escritura está mal hecho? ¿Por qué?
+3.  Si la correlación entre dos módulos es casi igual al producto de sus
+    cargas, ¿qué nos dice eso sobre cuántas habilidades hay?
+4.  La segunda habilidad cae casi entera sobre lectura. ¿Por qué no la
+    llamamos «habilidad verbal»?
+5.  ¿Por qué el resumen de la sesión 3 guardaba más de cada 100 que la
+    habilidad común de hoy?
+6.  ¿Cuál de estas afirmaciones es correcta? **(a)** La habilidad común
+    se mide directamente en la prueba. **(b)** La carga al cuadrado es
+    la parte de las diferencias en un módulo que viene de la habilidad
+    común. **(c)** La parte propia es siempre error de medición. **(d)**
+    Si hay dos habilidades, siempre son independientes.
+
+# Conclusión: lo que le entregamos al cliente
+
+Al jefe de selección le respondemos:
+
+- **La prueba mide una sola habilidad común, no dos.** Una habilidad
+  reproduce casi perfectamente cómo se mueven juntos los cinco módulos.
+- **Pero esa habilidad no lo es todo.** Pesa mucho en lectura y
+  ciudadanas, y casi nada en escritura: 85 de cada 100 partes de
+  escritura son propias del módulo. Inglés también tiene mucho propio.
+- **En candidatos:** si contrata por la habilidad general, se le escapan
+  6 de cada 10 de los mejores en escritura.
+- **La decisión:** un perfil con la habilidad general para ordenar, y
+  **escritura e inglés como requisitos aparte** para los cargos donde
+  importan. La prueba no sostiene un perfil «analítico» y otro
+  «comunicativo».
+
+La técnica de hoy se llama **análisis factorial**. Lo que hicimos fue
+separar lo que los módulos comparten de lo que es propio de cada uno, y
+decirle al cliente cuántos perfiles se pueden armar con la prueba.
+
+# Próxima clase
+
+**Lunes 26 de octubre · Análisis factorial II: rotación.**
+
+La pregunta: *el cliente insiste en dos perfiles; si giramos la solución
+de dos habilidades para que cada módulo cargue en una sola, ¿aparecen
+dos habilidades con nombre? ¿Y cuántas se pueden sacar como máximo con
+cinco módulos?*
