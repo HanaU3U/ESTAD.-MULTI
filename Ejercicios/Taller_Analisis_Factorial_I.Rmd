@@ -603,13 +603,24 @@ ggplot(
 
 
 ## 3.¿Qué variable es casi toda propia? ¿Qué significa eso para su cliente?
+
+La variable AGE (edad) es casi toda parte propia: el 99,7 % de su varianza no es explicada por el factor y solo el 0,3 % es parte común. Esto indica que la edad prácticamente no comparte información con las demás variables del dataset. Mientras que los montos facturados se mueven juntos y reflejan una misma dimensión (el nivel de endeudamiento), la edad se comporta de forma independiente a ese factor.
+
+Para el banco taiwanés, esto significa que la edad no puede resumirse ni reemplazarse mediante el factor: aporta una información distinta que no está contenida en las demás variables. Por tanto, si se quiere utilizar para identificar clientes con riesgo de incumplimiento, debe analizarse por separado, como una variable independiente, y no a través del factor.
+
 ## 4.Comprueben si una habilidad alcanza: comparen las correlaciones con el producto de las cargas.
 ## 5.Prueben con dos. ¿La segunda es una habilidad con sentido, o es una sola variable?
 
 # 14 Preguntas conceptuales
 
 ## 1.¿Qué diferencia hay entre la parte común y la parte propia de un módulo?
+
+La parte comun de un módulo representa qué factor tienen en común un conjunto de variables, que no se toma de manera directa sino se deduce de como se comportan juntas. La parte propia es aquella que refiere a lo que la variable mide de manera independiente, más un error de medición.
+
 ## 2.Escritura tiene 15 de cada 100 partes comunes. ¿Significa que el módulo de escritura está mal hecho? ¿Por qué?
+
+No necesariamente. Que solo el 15 % de su varianza sea común indica que el módulo de escritura comparte poco con la habilidad general que miden los demás módulos. El 85 % restante es parte propia: una habilidad específica que el examen mide y que el resto no captura (además del error de medición). Un módulo puede estar perfectamente bien construido y aun así medir algo distinto
+
 ## 3.Si la correlación entre dos módulos es casi igual al producto de sus cargas, ¿qué nos dice eso sobre cuántas habilidades hay?
 ## 4.La segunda habilidad cae casi entera sobre lectura. ¿Por qué no la llamamos «habilidad verbal»?
 ## 5.¿Por qué el resumen de la sesión 3 guardaba más de cada 100 que la habilidad común de hoy?
