@@ -63,10 +63,16 @@ if (!requireNamespace("psych", quietly = TRUE)) {
   install.packages("psych", repos = "https://cloud.r-project.org")
 }
 
-datos_credit <- readr::read_csv(
-  here::here("DATASET", "datos_credit.csv"),
-  show_col_types = FALSE
+datos_credit <- tryCatch(
+  {
+    readr::read_csv(here::here("DATASET", "datos_credit.csv"), show_col_types = FALSE)
+  },
+  error = function(e) {
+    readr::read_csv(here::here("GitHub", "ESTAD.-MULTI", "DATASET", "datos_credit.csv"), show_col_types = FALSE)
+  }
 )
+
+
 
 # Se reemplazan BILL_AMT5 y PAY_AMT5 por LIMIT_BAL y AGE.
 # Las diez variables describen el perfil del cliente y su actividad crediticia.
@@ -609,7 +615,68 @@ La variable AGE (edad) es casi toda parte propia: el 99,7 % de su varianza no es
 Para el banco taiwanés, esto significa que la edad no puede resumirse ni reemplazarse mediante el factor: aporta una información distinta que no está contenida en las demás variables. Por tanto, si se quiere utilizar para identificar clientes con riesgo de incumplimiento, debe analizarse por separado, como una variable independiente, y no a través del factor.
 
 ## 4.Comprueben si una habilidad alcanza: comparen las correlaciones con el producto de las cargas.
+
+```{r comprobar-un-factor}
+R <- cor(datos_kmo)
+cargas <- as.numeric(modelo_fa$loadings[, 1])
+
+# Correlaciones que reproduce el modelo de un factor.
+R_estimada <- outer(cargas, cargas)
+
+# Comparar cada pareja, sin incluir la diagonal.
+pares <- which(upper.tri(R), arr.ind = TRUE)
+
+comparacion <- data.frame(
+  Variable_1 = rownames(R)[pares[, 1]],
+  Variable_2 = colnames(R)[pares[, 2]],
+  Observada = R[pares],
+  Estimada = R_estimada[pares],
+  Residuo = (R - R_estimada)[pares]
+)
+
+comparacion <- comparacion[
+  order(-abs(comparacion$Residuo)), 
+]
+
+knitr::kable(comparacion, digits = 3)
+```
+
+El factor reproduce bastante bien las correlaciones entre los montos facturados, lo que respalda una dimensión común de nivel de facturación. Sin embargo, subestima las relaciones del límite de crédito con el pago de junio y con la edad. Por tanto, un solo factor resume el comportamiento compartido de la facturación, pero no alcanza para explicar adecuadamente todas las relaciones del conjunto.
+Para el banco, este factor puede describir el nivel de facturación de los clientes, pero no representa por sí solo su perfil crediticio completo ni demuestra capacidad para anticipar el incumplimiento.
+
 ## 5.Prueben con dos. ¿La segunda es una habilidad con sentido, o es una sola variable?
+
+```{r comparar-dos-factores}
+modelo_fa_2 <- psych::fa(
+  datos_kmo,
+  nfactors = 2,
+  fm = "ml",
+  rotate = "oblimin"
+)
+
+# Cargas y parte común con uno y dos factores.
+tabla_dos <- data.frame(
+  Variable = colnames(datos_kmo),
+  unclass(modelo_fa_2$loadings),
+  Comun_un_factor = unname(modelo_fa$communality),
+  Comun_dos_factores = unname(modelo_fa_2$communality)
+)
+
+knitr::kable(tabla_dos, digits = 3)
+round(modelo_fa_2$Phi, 3)
+
+# Comprobar si la interpretación se mantiene con otro método.
+modelo_fa_2_minres <- psych::fa(
+  datos_kmo,
+  nfactors = 2,
+  fm = "minres",
+  rotate = "oblimin"
+)
+
+print(modelo_fa_2_minres$loadings, cutoff = 0)
+```
+Con dos factores, el principal sigue representando el nivel de facturación. El segundo aporta poco y presenta su mayor carga en la facturación de septiembre, con cargas menores y de signo contrario en julio y junio. No es estrictamente una sola variable, pero tampoco muestra una dimensión amplia y clara: parece recoger diferencias entre meses.
+Además, al cambiar el método a minres, el segundo factor pasa a concentrarse en el límite de crédito. Esta falta de estabilidad impide atribuirle un significado firme. Para el banco, no hay evidencia suficiente para construir dos perfiles interpretables con esta solución. El factor de facturación sigue siendo útil como descripción parcial, aunque no explique todas las relaciones observadas.
 
 # 14 Preguntas conceptuales
 
