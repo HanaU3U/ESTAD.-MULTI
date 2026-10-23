@@ -618,31 +618,46 @@ Para el banco taiwanés, esto significa que la edad no puede resumirse ni reempl
 
 ```{r comprobar-un-factor}
 R <- cor(datos_kmo)
-cargas <- as.numeric(modelo_fa$loadings[, 1])
+L <- as.numeric(modelo_fa$loadings[, 1])
 
-# Correlaciones que reproduce el modelo de un factor.
-R_estimada <- outer(cargas, cargas)
+producto_cargas <- outer(L, L)
+error <- R - producto_cargas
 
-# Comparar cada pareja, sin incluir la diagonal.
+# Seleccionar cada pareja una sola vez, sin incluir la diagonal.
 pares <- which(upper.tri(R), arr.ind = TRUE)
 
 comparacion <- data.frame(
-  Variable_1 = rownames(R)[pares[, 1]],
-  Variable_2 = colnames(R)[pares[, 2]],
-  Observada = R[pares],
-  Estimada = R_estimada[pares],
-  Residuo = (R - R_estimada)[pares]
+  Pareja = paste(
+    rownames(R)[pares[, 1]],
+    colnames(R)[pares[, 2]],
+    sep = " y "
+  ),
+  observada = R[pares],
+  producto_cargas = producto_cargas[pares],
+  error = error[pares]
 )
 
-comparacion <- comparacion[
-  order(-abs(comparacion$Residuo)), 
-]
+knitr::kable(
+  comparacion,
+  digits = 3,
+  row.names = FALSE
+)
 
-knitr::kable(comparacion, digits = 3)
 ```
+```{r mayor_error}
+# Identificar la mayor diferencia en valor absoluto.
+mayor_error <- which.max(abs(comparacion$error))
 
-El factor reproduce bastante bien las correlaciones entre los montos facturados, lo que respalda una dimensión común de nivel de facturación. Sin embargo, subestima las relaciones del límite de crédito con el pago de junio y con la edad. Por tanto, un solo factor resume el comportamiento compartido de la facturación, pero no alcanza para explicar adecuadamente todas las relaciones del conjunto.
-Para el banco, este factor puede describir el nivel de facturación de los clientes, pero no representa por sí solo su perfil crediticio completo ni demuestra capacidad para anticipar el incumplimiento.
+c(
+  error_maximo = round(abs(comparacion$error[mayor_error]), 3)
+)
+
+c(
+  pareja_con_mas_error = comparacion$Pareja[mayor_error]
+)
+```
+La correlación entre la facturación de septiembre y agosto es muy cercana al producto de sus cargas. Esto indica que el factor común explica bien cómo se mueven juntas estas variables. Sin embargo, la mayor diferencia aparece entre el límite de crédito y el pago de junio, cuya relación queda subestimada por el modelo.
+Por tanto, un solo factor representa bien el nivel de facturación, pero deja algunas relaciones sin explicar. Para el banco, sirve como una descripción parcial del cliente; conviene probar con dos factores antes de concluir si existe otra dimensión con sentido.
 
 ## 5.Prueben con dos. ¿La segunda es una habilidad con sentido, o es una sola variable?
 
@@ -654,29 +669,23 @@ modelo_fa_2 <- psych::fa(
   rotate = "oblimin"
 )
 
-# Cargas y parte común con uno y dos factores.
-tabla_dos <- data.frame(
-  Variable = colnames(datos_kmo),
-  unclass(modelo_fa_2$loadings),
-  Comun_un_factor = unname(modelo_fa$communality),
-  Comun_dos_factores = unname(modelo_fa_2$communality)
+c(
+  comun_con_un_factor = round(
+    100 * mean(modelo_fa$communality), 1
+  ),
+  comun_con_dos_factores = round(
+    100 * mean(modelo_fa_2$communality), 1
+  ),
+  correlacion_entre_factores = round(
+    modelo_fa_2$Phi[1, 2], 2
+  )
 )
 
-knitr::kable(tabla_dos, digits = 3)
-round(modelo_fa_2$Phi, 3)
-
-# Comprobar si la interpretación se mantiene con otro método.
-modelo_fa_2_minres <- psych::fa(
-  datos_kmo,
-  nfactors = 2,
-  fm = "minres",
-  rotate = "oblimin"
-)
-
-print(modelo_fa_2_minres$loadings, cutoff = 0)
+round(unclass(modelo_fa_2$loadings), 2)
 ```
-Con dos factores, el principal sigue representando el nivel de facturación. El segundo aporta poco y presenta su mayor carga en la facturación de septiembre, con cargas menores y de signo contrario en julio y junio. No es estrictamente una sola variable, pero tampoco muestra una dimensión amplia y clara: parece recoger diferencias entre meses.
-Además, al cambiar el método a minres, el segundo factor pasa a concentrarse en el límite de crédito. Esta falta de estabilidad impide atribuirle un significado firme. Para el banco, no hay evidencia suficiente para construir dos perfiles interpretables con esta solución. El factor de facturación sigue siendo útil como descripción parcial, aunque no explique todas las relaciones observadas.
+
+Al incluir dos factores, la parte común aumenta poco. El factor principal sigue concentrándose en los cuatro montos facturados, por lo que representa el nivel de facturación. El segundo presenta cargas pequeñas, con mayor peso en septiembre y valores de signo contrario en julio y junio. No corresponde estrictamente a una sola variable, pero tampoco muestra una dimensión común claramente interpretable.
+Aunque los factores están poco relacionados, eso no basta para justificar dos perfiles distintos. Para el banco, esta solución permite reconocer principalmente una dimensión de facturación; el segundo factor no ofrece una interpretación suficientemente clara para definir otro perfil de cliente.
 
 # 14 Preguntas conceptuales
 
@@ -689,6 +698,9 @@ La parte comun de un módulo representa qué factor tienen en común un conjunto
 No necesariamente. Que solo el 15 % de su varianza sea común indica que el módulo de escritura comparte poco con la habilidad general que miden los demás módulos. El 85 % restante es parte propia: una habilidad específica que el examen mide y que el resto no captura (además del error de medición). Un módulo puede estar perfectamente bien construido y aun así medir algo distinto
 
 ## 3.Si la correlación entre dos módulos es casi igual al producto de sus cargas, ¿qué nos dice eso sobre cuántas habilidades hay?
+
+Indica que el factor común explica aproximadamente la relación entre esos dos módulos. Si esto ocurre en todas las parejas, respalda que una sola habilidad sea suficiente para explicar sus correlaciones. Comprobarlo únicamente en una pareja no permite concluir que todo el conjunto tenga una sola habilidad.
+
 ## 4.La segunda habilidad cae casi entera sobre lectura. ¿Por qué no la llamamos «habilidad verbal»?
 ## 5.¿Por qué el resumen de la sesión 3 guardaba más de cada 100 que la habilidad común de hoy?
 ## 6.¿Cuál de estas afirmaciones es correcta? (a) La habilidad común se mide directamente en la prueba. (b) La carga al cuadrado es la parte de las diferencias en un módulo que viene de la habilidad común. (c) La parte propia es siempre error de medición. (d) Si hay dos habilidades, siempre son independientes.
