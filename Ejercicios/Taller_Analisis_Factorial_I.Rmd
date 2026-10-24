@@ -54,6 +54,7 @@ invisible(lapply(paquetes, library, character.only = TRUE))
 ```
 
 # Actividad práctica
+
 Con el dataset de su equipo y el cliente de su caso de negocio:
 
 ## 1.Escojan entre 4 y 10 variables numéricas que crean que comparten algo. Calculen KMO().Escojan entre 4 y 10 variables numéricas que crean que comparten algo. Calculen KMO().
@@ -512,15 +513,19 @@ tabla_kmo %>%
   )
 ```
 
+Despues de recalcular el KMO al retirlas las tres variables de pagos (PAY_AMT1, PAY_AMT2 y PAY_AMT3), el KMO global pasó de 0,710 a 0,836, alcanzando una adecuación muy buena segun nuestro criterio para explorar un análisis factorial.
+Tambien todas las variables restantes presentan MSA superiores a 0,50.
 
-Despues de recalcular el KMO al retirlas las tres variables de pagos (PAY_AMT1, PAY_AMT2 y PAY_AMT3), el KMO global pasó de 0,710 a 0,836, alcanzando una adecuación muy buena segun nuestro criterio para explorar un análisis factorial. Tambien todas las variables restantes presentan MSA superiores a 0,50.
+Ya con estas siete variables continuaremos con la extracción de factores y examinaremos sus cargas para establecer qué dimensiones representan.
+El KMO, por sí solo, no determina cuántos factores existen ni permite interpretarlos.
 
-Ya con estas siete variables continuaremos con la extracción de factores y examinaremos sus cargas para establecer qué dimensiones representan. El KMO, por sí solo, no determina cuántos factores existen ni permite interpretarlos.
-
-Para el banco taiwanés, con esto se puede avanzar hacia un resumen del perfil del cliente, su cupo, la facturación reciente y el pago de junio (Ya que los pagos recientes fueron los eliminados para este analisis). Podría apoyar la identificación de perfiles para intervención temprana, pero todavía no demuestra capacidad para anticipar el incumplimiento.
-Los pagos de septiembre, agosto y julio se excluyen únicamente de esta solución factorial. Seguen siendo varables a considerar para el general de lo solicitado por el banco, porque su baja adecuación factorial no implica que carezcan de información útil para la decisión del banco.
+Para el banco taiwanés, con esto se puede avanzar hacia un resumen del perfil del cliente, su cupo, la facturación reciente y el pago de junio (Ya que los pagos recientes fueron los eliminados para este analisis).
+Podría apoyar la identificación de perfiles para intervención temprana, pero todavía no demuestra capacidad para anticipar el incumplimiento.
+Los pagos de septiembre, agosto y julio se excluyen únicamente de esta solución factorial.
+Seguen siendo varables a considerar para el general de lo solicitado por el banco, porque su baja adecuación factorial no implica que carezcan de información útil para la decisión del banco.
 
 ## 2.Corran fa(datos, nfactors = 1, fm = "ml"). Hagan la gráfica de parte común y parte propia.
+
 ```{r analisis-factorial-un-factor, message=FALSE, warning=FALSE}
 # Ajustar un factor por máxima verosimilitud con las siete variables.
 modelo_fa <- psych::fa(
@@ -604,15 +609,14 @@ ggplot(
   )
 ```
 
-
-
-
-
 ## 3.¿Qué variable es casi toda propia? ¿Qué significa eso para su cliente?
 
-La variable AGE (edad) es casi toda parte propia: el 99,7 % de su varianza no es explicada por el factor y solo el 0,3 % es parte común. Esto indica que la edad prácticamente no comparte información con las demás variables del dataset. Mientras que los montos facturados se mueven juntos y reflejan una misma dimensión (el nivel de endeudamiento), la edad se comporta de forma independiente a ese factor.
+La variable AGE (edad) es casi toda parte propia: el 99,7 % de su varianza no es explicada por el factor y solo el 0,3 % es parte común.
+Esto indica que la edad prácticamente no comparte información con las demás variables del dataset.
+Mientras que los montos facturados se mueven juntos y reflejan una misma dimensión (el nivel de endeudamiento), la edad se comporta de forma independiente a ese factor.
 
-Para el banco taiwanés, esto significa que la edad no puede resumirse ni reemplazarse mediante el factor: aporta una información distinta que no está contenida en las demás variables. Por tanto, si se quiere utilizar para identificar clientes con riesgo de incumplimiento, debe analizarse por separado, como una variable independiente, y no a través del factor.
+Para el banco taiwanés, esto significa que la edad no puede resumirse ni reemplazarse mediante el factor: aporta una información distinta que no está contenida en las demás variables.
+Por tanto, si se quiere utilizar para identificar clientes con riesgo de incumplimiento, debe analizarse por separado, como una variable independiente, y no a través del factor.
 
 ## 4.Comprueben si una habilidad alcanza: comparen las correlaciones con el producto de las cargas.
 
@@ -644,6 +648,7 @@ knitr::kable(
 )
 
 ```
+
 ```{r mayor_error}
 # Identificar la mayor diferencia en valor absoluto.
 mayor_error <- which.max(abs(comparacion$error))
@@ -656,8 +661,12 @@ c(
   pareja_con_mas_error = comparacion$Pareja[mayor_error]
 )
 ```
-La correlación entre la facturación de septiembre y agosto es muy cercana al producto de sus cargas. Esto indica que el factor común explica bien cómo se mueven juntas estas variables. Sin embargo, la mayor diferencia aparece entre el límite de crédito y el pago de junio, cuya relación queda subestimada por el modelo.
-Por tanto, un solo factor representa bien el nivel de facturación, pero deja algunas relaciones sin explicar. Para el banco, sirve como una descripción parcial del cliente; conviene probar con dos factores antes de concluir si existe otra dimensión con sentido.
+
+La correlación entre la facturación de septiembre y agosto es muy cercana al producto de sus cargas.
+Esto indica que el factor común explica bien cómo se mueven juntas estas variables.
+Sin embargo, la mayor diferencia aparece entre el límite de crédito y el pago de junio, cuya relación queda subestimada por el modelo.
+Por tanto, un solo factor representa bien el nivel de facturación, pero deja algunas relaciones sin explicar.
+Para el banco, sirve como una descripción parcial del cliente; conviene probar con dos factores antes de concluir si existe otra dimensión con sentido.
 
 ## 5.Prueben con dos. ¿La segunda es una habilidad con sentido, o es una sola variable?
 
@@ -684,23 +693,60 @@ c(
 round(unclass(modelo_fa_2$loadings), 2)
 ```
 
-Al incluir dos factores, la parte común aumenta poco. El factor principal sigue concentrándose en los cuatro montos facturados, por lo que representa el nivel de facturación. El segundo presenta cargas pequeñas, con mayor peso en septiembre y valores de signo contrario en julio y junio. No corresponde estrictamente a una sola variable, pero tampoco muestra una dimensión común claramente interpretable.
-Aunque los factores están poco relacionados, eso no basta para justificar dos perfiles distintos. Para el banco, esta solución permite reconocer principalmente una dimensión de facturación; el segundo factor no ofrece una interpretación suficientemente clara para definir otro perfil de cliente.
+Al incluir dos factores, la parte común aumenta poco.
+El factor principal sigue concentrándose en los cuatro montos facturados, por lo que representa el nivel de facturación.
+El segundo presenta cargas pequeñas, con mayor peso en septiembre y valores de signo contrario en julio y junio.
+No corresponde estrictamente a una sola variable, pero tampoco muestra una dimensión común claramente interpretable.
+Aunque los factores están poco relacionados, eso no basta para justificar dos perfiles distintos.
+Para el banco, esta solución permite reconocer principalmente una dimensión de facturación; el segundo factor no ofrece una interpretación suficientemente clara para definir otro perfil de cliente.
 
 # 14 Preguntas conceptuales
 
 ## 1.¿Qué diferencia hay entre la parte común y la parte propia de un módulo?
 
-La parte comun de un módulo representa qué factor tienen en común un conjunto de variables, que no se toma de manera directa sino se deduce de como se comportan juntas. La parte propia es aquella que refiere a lo que la variable mide de manera independiente, más un error de medición.
+La parte comun de un módulo representa qué factor tienen en común un conjunto de variables, que no se toma de manera directa sino se deduce de como se comportan juntas.
+La parte propia es aquella que refiere a lo que la variable mide de manera independiente, más un error de medición.
 
 ## 2.Escritura tiene 15 de cada 100 partes comunes. ¿Significa que el módulo de escritura está mal hecho? ¿Por qué?
 
-No necesariamente. Que solo el 15 % de su varianza sea común indica que el módulo de escritura comparte poco con la habilidad general que miden los demás módulos. El 85 % restante es parte propia: una habilidad específica que el examen mide y que el resto no captura (además del error de medición). Un módulo puede estar perfectamente bien construido y aun así medir algo distinto
+No necesariamente.
+Que solo el 15 % de su varianza sea común indica que el módulo de escritura comparte poco con la habilidad general que miden los demás módulos.
+El 85 % restante es parte propia: una habilidad específica que el examen mide y que el resto no captura (además del error de medición).
+Un módulo puede estar perfectamente bien construido y aun así medir algo distinto
 
 ## 3.Si la correlación entre dos módulos es casi igual al producto de sus cargas, ¿qué nos dice eso sobre cuántas habilidades hay?
 
-Indica que el factor común explica aproximadamente la relación entre esos dos módulos. Si esto ocurre en todas las parejas, respalda que una sola habilidad sea suficiente para explicar sus correlaciones. Comprobarlo únicamente en una pareja no permite concluir que todo el conjunto tenga una sola habilidad.
+Indica que el factor común explica aproximadamente la relación entre esos dos módulos.
+Si esto ocurre en todas las parejas, respalda que una sola habilidad sea suficiente para explicar sus correlaciones.
+Comprobarlo únicamente en una pareja no permite concluir que todo el conjunto tenga una sola habilidad.
 
 ## 4.La segunda habilidad cae casi entera sobre lectura. ¿Por qué no la llamamos «habilidad verbal»?
+
+Porque una habilidad solo merece un nombre amplio cuando varios módulos distintos cargan en ella.
+Si la segunda habilidad cae casi entera sobre lectura, lo que la sostiene es un único módulo, y una habilidad que se reduce a una sola variable no es una habilidad nueva: es la variable misma.
+Para llamarla «habilidad verbal» tendrían que cargar también otros módulos de ese tipo, como escritura o inglés, y no lo hacen.
+Además, si las dos habilidades van juntas con una correlación alta, son casi la misma, por lo que tampoco justificarían dos perfiles distintos.
+
 ## 5.¿Por qué el resumen de la sesión 3 guardaba más de cada 100 que la habilidad común de hoy?
+
+Porque buscan cosas distintas.
+El resumen de la sesión 3 busca el número que más separa a los estudiantes y mete todo en la componente, incluida la parte propia de cada módulo.
+La habilidad común, en cambio, conserva únicamente lo que los módulos comparten y separa la parte propia la específica del módulo más el error.
+Como el resumen se lleva de paso esa parte propia, guarda más de cada 100.
+Ninguno es mejor que el otro: el resumen sirve para ordenar y la habilidad común para saber cuántas habilidades hay y qué es propio de cada módulo.
+
 ## 6.¿Cuál de estas afirmaciones es correcta? (a) La habilidad común se mide directamente en la prueba. (b) La carga al cuadrado es la parte de las diferencias en un módulo que viene de la habilidad común. (c) La parte propia es siempre error de medición. (d) Si hay dos habilidades, siempre son independientes.
+
+La correcta es la **(b)**: la carga al cuadrado es la parte de las diferencias en un módulo que viene de la habilidad común (su parte común).
+
+- 
+
+  (a) es falsa: la habilidad común no se mide directamente, se deduce de cómo se mueven juntos los módulos.
+
+- 
+
+  (c) es falsa: la parte propia es lo que mide ese módulo y ningún otro, más el error de medición; no es solo error.
+
+- 
+
+  (d) es falsa: con una rotación como oblimin las habilidades pueden ir juntas, es decir, estar correlacionadas.
