@@ -1,0 +1,570 @@
+---
+title: "Taller_Analisis_Factorial_I"
+author: |
+  Juan Pablo Mosquera Marin - 20221020026  
+  Ana Laura Morcote Chacon - 20221020010  
+  Hana Sofia Pinilla Manrique - 20221020092  
+  Juan David Amaya Patiño - 20221020057
+date: "2026-10-17"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r paquetes, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl",
+  "ragg",
+  "kableExtra",
+  "knitr",
+  "tidyr",
+  "ggplot2",
+  "ggrepel",
+  "scales",
+  "psych",
+  "GPArotation"
+)
+
+paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(
+    paquetes_faltantes,
+    repos = "https://cloud.r-project.org"
+  )
+}
+
+# Cargar los paquetes (psych y GPArotation se usan con el prefijo ::).
+invisible(lapply(
+  setdiff(paquetes, c("psych", "GPArotation")),
+  library,
+  character.only = TRUE
+))
+
+# Clasificación orientativa del KMO / MSA.
+clasificar_kmo <- function(x) {
+  case_when(
+    is.na(x)  ~ "No disponible",
+    x >= 0.90 ~ "Excelente",
+    x >= 0.80 ~ "Muy buena",
+    x >= 0.70 ~ "Aceptable",
+    x >= 0.60 ~ "Regular",
+    x >= 0.50 ~ "Baja",
+    TRUE      ~ "Inadecuada"
+  )
+}
+
+# Formato numérico con coma decimal para el texto en línea.
+fmt <- function(x, d = 3) format(round(x, d), decimal.mark = ",", nsmall = d)
+```
+
+# Cálculo del KMO con las variables numéricas
+
+```{r kmo-credito, message=FALSE, warning=FALSE}
+datos_credit <- tryCatch(
+  {
+    readr::read_csv(here::here("DATASET", "datos_credit.csv"), show_col_types = FALSE)
+  },
+  error = function(e) {
+    readr::read_csv(here::here("GitHub", "ESTAD.-MULTI", "DATASET", "datos_credit.csv"), show_col_types = FALSE)
+  }
+)
+
+variables_todas <- c(
+  "LIMIT_BAL", "AGE",
+  paste0("BILL_AMT", 1:6),
+  paste0("PAY_AMT", 1:6)
+)
+
+datos_kmo_todas <- as.data.frame(datos_credit[, variables_todas])
+stopifnot(all(vapply(datos_kmo_todas, is.numeric, logical(1))))
+
+datos_kmo_todas <- datos_kmo_todas[complete.cases(datos_kmo_todas), , drop = FALSE]
+matriz_correlaciones_todas <- cor(datos_kmo_todas, method = "pearson")
+
+resultado_kmo_todas <- psych::KMO(matriz_correlaciones_todas)
+
+resultado_kmo_todas
+```
+
+```{r tabla-kmo, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+tabla_kmo <- data.frame(
+  Indicador = c(
+    "KMO global · Conjunto de las variables numéricas",
+    "LIMIT_BAL · Límite de crédito",
+    "AGE · Edad",
+    "BILL_AMT1 · Septiembre",
+    "BILL_AMT2 · Agosto",
+    "BILL_AMT3 · Julio",
+    "BILL_AMT4 · Junio",
+    "BILL_AMT5 · Mayo",
+    "BILL_AMT6 · Abril",
+    "PAY_AMT1 · Septiembre",
+    "PAY_AMT2 · Agosto",
+    "PAY_AMT3 · Julio",
+    "PAY_AMT4 · Junio",
+    "PAY_AMT5 · Mayo",
+    "PAY_AMT6 · Abril"
+  ),
+  Valor = c(
+    resultado_kmo_todas$MSA,
+    unname(resultado_kmo_todas$MSAi[variables_todas])
+  )
+) %>%
+  mutate(Adecuacion = clasificar_kmo(Valor))
+
+tabla_kmo %>%
+  kable(
+    format = "html",
+    caption = "Adecuación para el análisis factorial: KMO global y MSA por variable.",
+    col.names = c("Indicador / variable", "KMO / MSA", "Adecuación"),
+    digits = 3,
+    format.args = list(decimal.mark = ","),
+    align = c("l", "r", "l")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "responsive"),
+    full_width = TRUE,
+    font_size = 15
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447") %>%
+  row_spec(1, bold = TRUE, background = "#E8EFFA", color = "#17365D") %>%
+  row_spec(2:3, background = "#EDE8F5", color = "#513675") %>%
+  row_spec(4:9, background = "#FFF1DE", color = "#754000") %>%
+  row_spec(10:15, background = "#E5F3EE", color = "#175541") %>%
+  column_spec(1, bold = TRUE, width = "8cm") %>%
+  pack_rows(
+    "RESULTADO GLOBAL · Adecuación del conjunto",
+    1, 1,
+    label_row_css = "background-color: #285A91; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "PERFIL DEL CLIENTE · Límite de crédito y edad",
+    2, 3,
+    label_row_css = "background-color: #6B4C91; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "FACTURACIÓN · Montos de los estados de cuenta",
+    4, 9,
+    label_row_css = "background-color: #A65E00; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "PAGOS · Montos efectivamente pagados",
+    10, 15,
+    label_row_css = "background-color: #24735B; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  footnote(
+    general = c(
+      "Criterio orientativo: [0,90; 1] excelente; [0,80; 0,90) muy buena; [0,70; 0,80) aceptable; [0,60; 0,70) regular; [0,50; 0,60) baja; menos de 0,50 inadecuada."
+    ),
+    general_title = "Nota: ",
+    footnote_as_chunk = TRUE
+  )
+```
+
+Dado que el objetivo del banco taiwanés es intervenir tempranamente sobre los clientes con riesgo de incumplimiento de pago, el KMO permite concluir lo siguiente:
+
+- *LIMIT_BAL*, *PAY_AMT6* y *BILL_AMT1* a *BILL_AMT6* presentan una adecuación aceptable o muy buena.
+Por eso son las candidatas a conservar para explorar factores asociados con la información crediticia, los pagos y el endeudamiento.
+
+- *LIMIT_BAL* tiene la mayor adecuación individual (`r fmt(resultado_kmo_todas$MSAi["LIMIT_BAL"])`), lo que asegura su inclusión.
+Sin embargo, una alta adecuación para el análisis factorial no implica que sea la variable con mayor peso para predecir el incumplimiento.
+
+- *AGE* tiene un MSA regular, pero se conserva porque permite perfilar al cliente mediante un atributo propio de él.
+
+- *PAY_AMT1* a *PAY_AMT5* tienen un MSA inferior a 0,50, por lo que no son adecuadas para el análisis factorial.
+Esto no les resta valor para identificar clientes que podrían incumplir.
+
+# KMO sin PAY_AMT1 a PAY_AMT5
+
+```{r kmo-sin-pay-amt1-5, message=FALSE, warning=FALSE}
+# Retirar PAY_AMT1 a PAY_AMT5 y conservar solo PAY_AMT6.
+variables <- c(
+  "LIMIT_BAL",
+  "AGE",
+  paste0("BILL_AMT", 1:6),
+  "PAY_AMT6"
+)
+
+datos_kmo <- as.data.frame(datos_credit[, variables])
+stopifnot(all(vapply(datos_kmo, is.numeric, logical(1))))
+
+datos_kmo <- datos_kmo[complete.cases(datos_kmo), , drop = FALSE]
+matriz_correlaciones <- cor(datos_kmo, method = "pearson")
+
+resultado_kmo <- psych::KMO(matriz_correlaciones)
+
+resultado_kmo
+```
+
+```{r tabla-kmo-seleccion, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+tabla_kmo_sel <- data.frame(
+  Indicador = c(
+    "KMO global · Variables conservadas",
+    "LIMIT_BAL · Límite de crédito",
+    "AGE · Edad",
+    "BILL_AMT1 · Septiembre",
+    "BILL_AMT2 · Agosto",
+    "BILL_AMT3 · Julio",
+    "BILL_AMT4 · Junio",
+    "BILL_AMT5 · Mayo",
+    "BILL_AMT6 · Abril",
+    "PAY_AMT6 · Abril"
+  ),
+  Valor = c(
+    resultado_kmo$MSA,
+    unname(resultado_kmo$MSAi[variables])
+  )
+) %>%
+  mutate(Adecuacion = clasificar_kmo(Valor))
+
+tabla_kmo_sel %>%
+  kable(
+    format = "html",
+    caption = "Adecuación para el análisis factorial con las variables conservadas.",
+    col.names = c("Indicador / variable", "KMO / MSA", "Adecuación"),
+    digits = 3,
+    format.args = list(decimal.mark = ","),
+    align = c("l", "r", "l")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "responsive"),
+    full_width = TRUE,
+    font_size = 15
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447") %>%
+  row_spec(1, bold = TRUE, background = "#E8EFFA", color = "#17365D") %>%
+  row_spec(2:3, background = "#EDE8F5", color = "#513675") %>%
+  row_spec(4:9, background = "#FFF1DE", color = "#754000") %>%
+  row_spec(10, background = "#E5F3EE", color = "#175541") %>%
+  column_spec(1, bold = TRUE, width = "8cm") %>%
+  pack_rows(
+    "RESULTADO GLOBAL · Adecuación del conjunto",
+    1, 1,
+    label_row_css = "background-color: #285A91; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "PERFIL DEL CLIENTE · Límite de crédito y edad",
+    2, 3,
+    label_row_css = "background-color: #6B4C91; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "FACTURACIÓN · Montos de los estados de cuenta",
+    4, 9,
+    label_row_css = "background-color: #A65E00; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  pack_rows(
+    "PAGOS · Montos efectivamente pagados",
+    10, 10,
+    label_row_css = "background-color: #24735B; color: white; font-weight: bold;",
+    indent = FALSE
+  ) %>%
+  footnote(
+    general = "Criterio orientativo: [0,90; 1] excelente; [0,80; 0,90) muy buena; [0,70; 0,80) aceptable; [0,60; 0,70) regular; [0,50; 0,60) baja; menos de 0,50 inadecuada.",
+    general_title = "Nota: ",
+    footnote_as_chunk = TRUE
+  )
+```
+
+Tras retirar las cinco variables de pagos (*PAY_AMT1*, *PAY_AMT2*, *PAY_AMT3*, *PAY_AMT4* y *PAY_AMT5*), el KMO global pasó de `r fmt(resultado_kmo_todas$MSA)` a `r fmt(resultado_kmo$MSA)`, lo que corresponde a una adecuación `r tolower(clasificar_kmo(resultado_kmo$MSA))` según nuestro criterio para explorar un análisis factorial.
+Además, todas las variables restantes presentan un MSA superior a 0,50.
+
+Con estas nueve variables continuaremos con la extracción de factores y el examen de sus cargas, para establecer qué dimensiones representan.
+El KMO, por sí solo, no determina cuántos factores existen ni permite interpretarlos.
+
+# Cálculo de parte común vs. parte propia
+
+Para el modelo de un factor, la varianza de cada variable se divide en una parte común, explicada por el factor, y una parte propia, que corresponde a la varianza específica de la variable y al error.
+
+```{r analisis-factorial-un-factor, message=FALSE, warning=FALSE}
+# Ajustar un factor por máxima verosimilitud con las nueve variables.
+modelo_fa <- psych::fa(
+  datos_kmo,
+  nfactors = 1,
+  fm = "ml",
+  rotate = "none"
+)
+
+print(modelo_fa)
+
+# Parte común: proporción de varianza explicada por el factor.
+# Parte propia: proporción de varianza no explicada por el factor.
+tabla_varianzas <- data.frame(
+  Variable = colnames(datos_kmo),
+  Comun = unname(modelo_fa$communality),
+  Propia = unname(modelo_fa$uniquenesses)
+)
+```
+
+```{r grafica-parte-comun-propia, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=6}
+datos_grafica <- tabla_varianzas %>%
+  pivot_longer(
+    cols = c(Comun, Propia),
+    names_to = "Parte",
+    values_to = "Proporcion"
+  ) %>%
+  mutate(
+    Variable = factor(Variable, levels = rev(colnames(datos_kmo))),
+    Parte = factor(Parte, levels = c("Comun", "Propia"))
+  )
+
+ggplot(
+  datos_grafica,
+  aes(x = Variable, y = Proporcion, fill = Parte)
+) +
+  geom_col(
+    width = 0.7,
+    position = position_stack(reverse = TRUE)
+  ) +
+  geom_text(
+    aes(label = scales::percent(Proporcion, accuracy = 0.1)),
+    position = position_stack(vjust = 0.5, reverse = TRUE),
+    color = "white",
+    fontface = "bold",
+    size = 4
+  ) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c("Comun" = "#285A91", "Propia" = "#A65E00"),
+    labels = c("Parte común", "Parte propia")
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    breaks = seq(0, 1, 0.2),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  labs(
+    title = "Varianza común y propia por variable",
+    subtitle = "Modelo de un factor estimado por máxima verosimilitud",
+    x = NULL,
+    y = "Proporción de la varianza",
+    fill = NULL,
+    caption = paste(
+      "Parte común: varianza explicada por el factor.",
+      "Parte propia: varianza específica y error no explicados por el factor.",
+      sep = "\n"
+    )
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", color = "#243447"),
+    plot.caption = element_text(hjust = 0)
+  )
+```
+
+```{r valores-texto-comun, include=FALSE}
+com_age <- unname(modelo_fa$communality["AGE"])
+```
+
+La variable *AGE* es casi toda parte propia: el `r fmt(100 * (1 - com_age), 1)` % de su varianza no es explicada por el factor y solo el `r fmt(100 * com_age, 1)` % es parte común.
+Esto indica que la edad prácticamente no comparte información con las demás variables.
+Mientras los montos facturados se mueven juntos y reflejan una misma dimensión (el nivel de endeudamiento), la edad se comporta de forma independiente.
+
+Algo similar ocurre con *PAY_AMT6* y *LIMIT_BAL*, que también se explican mayoritariamente por sus propias características y comparten poca información con el factor.
+
+Para el banco, esto significa que la edad no puede resumirse ni reemplazarse mediante el factor, porque aporta información distinta que no está contenida en las demás variables.
+Por tanto, si se desea usarla para identificar clientes con riesgo de incumplimiento, debe analizarse por separado y no a través del factor.
+
+# Análisis de correlación y producto de cargas
+
+Si el modelo de un factor fuera adecuado, la correlación entre dos variables debería ser aproximadamente igual al producto de sus cargas.
+La siguiente tabla compara, para cada pareja de variables, la correlación observada con el producto de cargas y calcula el error de reproducción (observada menos producto de cargas).
+
+```{r tabla-error-reproduccion, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+# Correlación observada y cargas del factor.
+R <- cor(datos_kmo, method = "pearson")
+L <- as.numeric(modelo_fa$loadings[, 1])
+names(L) <- colnames(datos_kmo)
+
+# Correlación que reproduce el factor (producto de cargas) y error.
+reproducida <- outer(L, L)
+error <- R - reproducida
+
+# Todas las parejas distintas (triángulo superior, sin diagonal).
+pares <- which(upper.tri(R), arr.ind = TRUE)
+
+tabla_error <- data.frame(
+  Variable_1      = rownames(R)[pares[, 1]],
+  Variable_2      = colnames(R)[pares[, 2]],
+  Observada       = R[pares],
+  Producto_cargas = reproducida[pares],
+  Error           = error[pares]
+) %>%
+  mutate(Error_abs = abs(Error)) %>%
+  arrange(desc(Error_abs)) %>%
+  select(-Error_abs)
+
+tabla_error %>%
+  kable(
+    format = "html",
+    caption = "Correlación observada vs. producto de cargas (modelo de un factor) para todas las parejas.",
+    col.names = c("Variable 1", "Variable 2", "Observada",
+                  "Producto de cargas", "Error (obs. − prod.)"),
+    digits = 3,
+    format.args = list(decimal.mark = ","),
+    align = c("l", "l", "r", "r", "r")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("hover", "responsive", "striped"),
+    full_width = TRUE,
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447") %>%
+  scroll_box(height = "450px") %>%
+  footnote(
+    general = "Ordenado de mayor a menor error absoluto. Un error positivo indica que el factor subestima la correlación real; uno negativo, que la sobrestima.",
+    general_title = "Nota: ",
+    footnote_as_chunk = TRUE
+  )
+```
+
+```{r mapa-calor-error, echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=7}
+# Recalculado aquí para que el chunk no dependa de otros.
+R <- cor(datos_kmo, method = "pearson")
+L <- as.numeric(modelo_fa$loadings[, 1])
+error <- R - outer(L, L)
+
+orden <- colnames(datos_kmo)
+
+# Solo el triángulo inferior (sin diagonal).
+error_inf <- error
+error_inf[upper.tri(error_inf, diag = TRUE)] <- NA
+
+datos_mapa <- as.data.frame(as.table(error_inf)) %>%
+  setNames(c("Fila", "Columna", "Error")) %>%
+  filter(!is.na(Error)) %>%
+  mutate(
+    Fila     = factor(Fila, levels = orden),
+    Columna  = factor(Columna, levels = orden),
+    Etiqueta = format(round(Error, 2), decimal.mark = ",", nsmall = 2)
+  )
+
+lim <- max(abs(datos_mapa$Error))
+
+ggplot(datos_mapa, aes(x = Columna, y = Fila, fill = Error)) +
+  geom_tile(color = "white", linewidth = 0.8) +
+  geom_text(
+    aes(label = Etiqueta, color = abs(Error) > 0.6 * lim),
+    size = 3.6, fontface = "bold", show.legend = FALSE
+  ) +
+  scale_color_manual(values = c("TRUE" = "white", "FALSE" = "#243447")) +
+  scale_fill_gradient2(
+    low = "#285A91", mid = "white", high = "#A65E00",
+    midpoint = 0, limits = c(-lim, lim),
+    name = "Error\n(obs. − prod.)"
+  ) +
+  scale_x_discrete(limits = orden[-length(orden)]) +
+  scale_y_discrete(limits = rev(orden[-1])) +
+  coord_fixed() +
+  labs(
+    title = "Error de reproducción del modelo de un factor",
+    subtitle = "Correlación observada menos producto de cargas, por pareja de variables",
+    x = NULL, y = NULL,
+    caption = paste(
+      "Naranja: el factor subestima la correlación real (error positivo).",
+      "Azul: el factor la sobrestima (error negativo).",
+      "Blanco: el factor reproduce bien la relación.",
+      sep = "\n"
+    )
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 11),
+    plot.title = element_text(face = "bold", color = "#243447"),
+    plot.caption = element_text(hjust = 0)
+  )
+```
+
+```{r valores-texto-error, include=FALSE}
+obs_b12  <- R["BILL_AMT1", "BILL_AMT2"]
+prod_b12 <- L["BILL_AMT1"] * L["BILL_AMT2"]
+
+error_abs   <- abs(error)
+diag(error_abs) <- 0
+donde       <- which(error_abs == max(error_abs), arr.ind = TRUE)[1, ]
+error_max   <- max(error_abs)
+pareja_max  <- colnames(datos_kmo)[donde]
+```
+
+El mapa de calor muestra que el factor reproduce mejor las relaciones entre las variables que más comparten con él, es decir, los montos facturados.
+Por ejemplo, para *BILL_AMT1* y *BILL_AMT2* el producto de cargas es `r fmt(prod_b12)` frente a una correlación observada de `r fmt(obs_b12)` (error de `r fmt(obs_b12 - prod_b12)`), una diferencia moderada.
+
+El mayor error es de `r fmt(error_max)` y corresponde a la pareja *`r pareja_max[1]`* y *`r pareja_max[2]`*.
+Esto es coherente con el análisis de parte común y parte propia, pues son variables que comparten poco con el factor.
+
+# Cálculo con un segundo factor
+
+A continuación se evalúa si un segundo factor mejora la representación de las correlaciones, en particular las de las variables que el primer factor explica peor.
+
+```{r comparar-dos-factores, message=FALSE, warning=FALSE}
+modelo_fa_2 <- psych::fa(
+  datos_kmo,
+  nfactors = 2,
+  fm = "ml",
+  rotate = "oblimin"
+)
+
+# Comparación global: un factor vs. dos factores.
+c(
+  comun_con_un_factor        = round(100 * mean(modelo_fa$communality), 1),
+  comun_con_dos_factores     = round(100 * mean(modelo_fa_2$communality), 1),
+  rmsr_un_factor             = round(modelo_fa$rms, 3),
+  rmsr_dos_factores          = round(modelo_fa_2$rms, 3),
+  correlacion_entre_factores = round(modelo_fa_2$Phi[1, 2], 2)
+)
+
+# Cargas (patrón) con dos factores, ordenadas por factor dominante.
+cargas_2 <- round(unclass(modelo_fa_2$loadings), 2)
+cargas_2[order(apply(abs(cargas_2), 1, which.max), -apply(abs(cargas_2), 1, max)), ]
+```
+
+```{r valores-texto-dos-factores, include=FALSE}
+com1   <- 100 * mean(modelo_fa$communality)
+com2   <- 100 * mean(modelo_fa_2$communality)
+rmsr1  <- modelo_fa$rms
+rmsr2  <- modelo_fa_2$rms
+phi12  <- modelo_fa_2$Phi[1, 2]
+max_ml2 <- max(abs(unclass(modelo_fa_2$loadings)[, 2]))
+```
+
+Al pasar de uno a dos factores, la comunalidad promedio cambió de `r fmt(com1, 1)` % a `r fmt(com2, 1)` % y el RMSR de `r fmt(rmsr1)` a `r fmt(rmsr2)`.
+La correlación entre los factores es de `r fmt(phi12, 2)`.
+
+El segundo factor (ML2) es débil y difícil de interpretar: ninguna de sus cargas alcanza 0,40 (el máximo, en valor absoluto, es `r fmt(max_ml2, 2)`).
+Aun así, muestra un patrón de signos.
+Las cargas son positivas en los meses recientes (*BILL_AMT1* y *BILL_AMT2*) y negativas en los más antiguos (*BILL_AMT5* y *BILL_AMT6*).
+Esto sugiere un contraste entre la facturación reciente y la antigua, es decir, una posible tendencia de crecimiento o disminución de la deuda.
+Es una lectura tentativa, ya que con cargas tan bajas ML2 representa más un matiz dentro del bloque de facturación que un factor independiente.
+
+Además, *LIMIT_BAL*, *PAY_AMT6* y *AGE* siguen sin cargar de forma relevante en ninguno de los dos factores, por lo que el segundo factor no resuelve su bajo ajuste.
+
+Por lo anterior, no se incorpora un segundo factor en este análisis: la mejora en el RMSR (de `r fmt(rmsr1)` a `r fmt(rmsr2)`) y en la comunalidad promedio no justifica añadir un factor que apenas puede interpretarse.
