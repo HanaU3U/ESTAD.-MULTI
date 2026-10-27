@@ -1,0 +1,71 @@
+---
+title: "PCA_Numericas"
+output: html_document
+author: |
+  Juan Pablo Mosquera Marin - 20221020026  
+  Ana Laura Morcote Chacon - 20221020010  
+  Hana Sofia Pinilla Manrique - 20221020092  
+  Juan David Amaya Patiño - 20221020057
+date: "2026-10-27"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r paquetes, include=FALSE}
+paquetes <- c(
+  "readr",
+  "corrplot",
+  "dplyr",
+  "rlang",
+  "here",
+  "readxl",
+  "ragg",
+  "kableExtra",
+  "tidyr",
+  "ggplot2",
+  "ggrepel"
+)
+
+paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+
+if (length(paquetes_faltantes) > 0) {
+  install.packages(
+    paquetes_faltantes,
+    repos = "https://cloud.r-project.org"
+  )
+}
+
+
+# Esto es lo que faltaba: cargar los paquetes
+invisible(lapply(paquetes, library, character.only = TRUE))
+```
+
+```{r kmo-credito, message=FALSE, warning=FALSE}
+if (!requireNamespace("psych", quietly = TRUE)) {
+  install.packages("psych", repos = "https://cloud.r-project.org")
+}
+
+#cargar el dataset wazaaaa
+datos_credit <- tryCatch(
+  {
+    readr::read_csv(here::here("DATASET", "datos_credit.csv"), show_col_types = FALSE)
+  },
+  error = function(e) {
+    readr::read_csv(here::here("GitHub", "ESTAD.-MULTI", "DATASET", "datos_credit.csv"), show_col_types = FALSE)
+  }
+)
+```
