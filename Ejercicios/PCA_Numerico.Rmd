@@ -1,6 +1,5 @@
 ---
-title: "PCA_Numericas"
-output: html_document
+title: "PCA de todas las variables numéricas del crédito"
 author: |
   Juan Pablo Mosquera Marin - 20221020026  
   Ana Laura Morcote Chacon - 20221020010  
@@ -22,50 +21,461 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-```
-
-```{r paquetes, include=FALSE}
-paquetes <- c(
-  "readr",
-  "corrplot",
-  "dplyr",
-  "rlang",
-  "here",
-  "readxl",
-  "ragg",
-  "kableExtra",
-  "tidyr",
-  "ggplot2",
-  "ggrepel"
-)
-
-paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
-
-if (length(paquetes_faltantes) > 0) {
-  install.packages(
-    paquetes_faltantes,
-    repos = "https://cloud.r-project.org"
-  )
+# Evita escapes Unicode en las etiquetas gráficas si Windows inicia con locale C.
+if (.Platform$OS.type == "windows" && !l10n_info()[["UTF-8"]]) {
+  invisible(Sys.setlocale("LC_CTYPE", "Spanish_Colombia.utf8"))
 }
-
-
-# Esto es lo que faltaba: cargar los paquetes
-invisible(lapply(paquetes, library, character.only = TRUE))
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", fig.width = 10, fig.height = 6)
+paquetes <- c("ggplot2", "ggrepel", "corrplot", "tidyr", "dplyr", "knitr")
+faltan <- paquetes[!vapply(paquetes, requireNamespace, logical(1), quietly = TRUE)]
+if (length(faltan)) stop("Instale los paquetes necesarios: ", paste(faltan, collapse = ", "))
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+theme_set(theme_minimal(base_size = 12))
+fmt <- function(x, d = 2) formatC(x, format = "f", digits = d,
+                                 decimal.mark = ",", big.mark = ".")
+tabla <- function(x, digits = 3) knitr::kable(x, digits = digits)
 ```
 
-```{r kmo-credito, message=FALSE, warning=FALSE}
-if (!requireNamespace("psych", quietly = TRUE)) {
-  install.packages("psych", repos = "https://cloud.r-project.org")
+# El encargo y el alcance
+
+El cliente es un banco que necesita resumir los perfiles de sus clientes para orientar una revisión de sus cuentas.
+
+La pregunta central es: **¿cuánto se pierde al reducir todas las variables a uno o dos indicadores y qué clientes quedan fuera de una revisión basada solo en el primero?**
+
+Se incluyen **todas las columnas almacenadas como numéricas**; esto incluye categorías codificadas (`SEX`, `EDUCATION`, `MARRIAGE`), estados de pago (`PAY_0`, `PAY_2` a `PAY_6`) y la respuesta binaria `default payment next month` (más adelante, se hace la comparación para las que son estrictamente numéricas, sin tener en cuenta las que son categorias codificadas ni `default payment next month`).
+El PCA trata sus códigos como números y supone distancias iguales entre códigos; por tanto, su interpretación depende de esa codificación.
+
+
+# Recorderis de la revisión de los datos
+
+```{r lectura}
+# Funciona al tejer desde Ejercicios o al ejecutar desde la raíz del repositorio.
+rutas <- c(file.path("..", "DATASET", "datos_credit.csv"),
+           file.path("DATASET", "datos_credit.csv"))
+ruta <- rutas[file.exists(rutas)][1]
+if (is.na(ruta)) stop("No se encontró DATASET/datos_credit.csv desde el directorio actual.")
+datos_credit <- read.csv(ruta, check.names = FALSE, stringsAsFactors = FALSE)
+variables <- names(datos_credit)[vapply(datos_credit, is.numeric, logical(1))]
+X_original <- datos_credit[variables]
+validas <- apply(as.matrix(X_original), 1, function(fila) all(is.finite(fila)))
+X <- X_original[validas, , drop = FALSE]
+id_fila <- which(validas) # Identificador auxiliar: no entra al PCA.
+stopifnot(nrow(X) > 1, ncol(X) > 1, all(vapply(X, sd, numeric(1)) > 0))
+respuesta <- "default payment next month"
+stopifnot(all(c("BILL_AMT1", "PAY_0", "AGE", "SEX", respuesta) %in% variables))
+n <- nrow(X); p <- ncol(X)
+control <- data.frame(registros_originales = nrow(datos_credit),
+                      variables_numericas = p,
+                      celdas_faltantes = sum(is.na(X_original)),
+                      filas_excluidas = sum(!validas),
+                      registros_analizados = n,
+                      filas_identicas = sum(duplicated(X_original)))
+tabla(control)
+resumen <- data.frame(variable = variables,
+                     minimo = vapply(X, min, numeric(1)),
+                     media = vapply(X, mean, numeric(1)),
+                     desviacion = vapply(X, sd, numeric(1)),
+                     maximo = vapply(X, max, numeric(1)), row.names = NULL)
+tabla(resumen)
+```
+
+**Resultado.** Se analizan `r fmt(n, 0)` registros y `r p` variables; no hay faltantes ni variables constantes.
+Hay `r sum(duplicated(X_original))` filas idénticas, que se conservan: sin identificador de cliente no puede afirmarse que sean registros duplicados por error.
+Tampoco se eliminan ceros, importes negativos o valores extremos automáticamente.
+Las escalas difieren mucho: se mezclan importes, edad y códigos; **se debe estandarizar** para que las unidades monetarias no dominen el análisis.
+
+# PCA de **TODAS** las variables númericas
+
+## Parte I. Construcción e interpretación del PCA
+
+### 1. ¿Qué variables se repiten y cuál va más sola?
+
+```{r correlaciones, fig.width=12, fig.height=11}
+R <- cor(X)
+corrplot::corrplot(R, method = "color", type = "lower", diag = FALSE,
+                   tl.col = "black", tl.cex = 0.65, tl.srt = 45,
+                   col = colorRampPalette(c("#B35806", "white", "#2166AC"))(200))
+ix <- which(upper.tri(R), arr.ind = TRUE)
+pares <- data.frame(variable_1 = rownames(R)[ix[, 1]],
+                    variable_2 = colnames(R)[ix[, 2]], correlacion = R[ix])
+pares <- pares[order(-abs(pares$correlacion)), ]
+tabla(head(pares, 6))
+independencia <- data.frame(variable = variables,
+                            media_correlacion_absoluta = (rowSums(abs(R)) - 1) / (p - 1))
+independencia <- independencia[order(independencia$media_correlacion_absoluta), ]
+tabla(head(independencia, 5))
+```
+
+**Análisis.** Las facturas mensuales son las más redundantes: `BILL_AMT1` y `BILL_AMT2` tienen correlación `r fmt(R["BILL_AMT1", "BILL_AMT2"])`.
+Los estados de pago también forman un bloque relacionado.
+`SEX` es la variable más aislada según el promedio de correlaciones absolutas (`r fmt(independencia$media_correlacion_absoluta[1], 3)`).
+Tiene sentido resumir los bloques relacionados, pero no esperar que dos ejes representen bien todas las variables.
+
+### 2. ¿Qué es una componente y por qué estandarizar?
+
+Cada variable se transforma en $z_{ij}=(x_{ij}-\bar{x}_j)/s_j$.
+Una componente es $C_{ik}=\sum_{j=1}^{p}w_{jk}z_{ij}$, con $\sum_j w_{jk}^2=1$.
+La primera maximiza la varianza de esa combinación; las siguientes maximizan la varianza restante y son ortogonales a las anteriores.
+Aquí «información» significa **varianza**, no capacidad de predecir incumplimiento.
+
+```{r pca}
+pca <- prcomp(X, center = TRUE, scale. = TRUE)
+pca_sin_estandarizar <- prcomp(X, center = TRUE, scale. = FALSE)
+# Orientación reproducible: C1 crece con facturas, C2 con estados de pago,
+# C3 con edad. Se cambian juntos los pesos y las puntuaciones.
+anclas <- c("BILL_AMT1", "PAY_0", "AGE")
+for (k in seq_along(anclas)) {
+  signo <- ifelse(pca$rotation[anclas[k], k] < 0, -1, 1)
+  pca$rotation[, k] <- signo * pca$rotation[, k]
+  pca$x[, k] <- signo * pca$x[, k]
 }
-
-#cargar el dataset wazaaaa
-datos_credit <- tryCatch(
-  {
-    readr::read_csv(here::here("DATASET", "datos_credit.csv"), show_col_types = FALSE)
-  },
-  error = function(e) {
-    readr::read_csv(here::here("GitHub", "ESTAD.-MULTI", "DATASET", "datos_credit.csv"), show_col_types = FALSE)
-  }
-)
+Z <- scale(X, center = pca$center, scale = pca$scale)
+lambda <- pca$sdev^2
+porcentaje <- 100 * lambda / sum(lambda)
+acumulado <- cumsum(porcentaje)
+k80 <- which(acumulado > 80)[1]
+comparacion <- data.frame(
+  metodo = c("Sin estandarizar", "Estandarizado"),
+  porcentaje_C1 = c(100 * pca_sin_estandarizar$sdev[1]^2 /
+                      sum(pca_sin_estandarizar$sdev^2), porcentaje[1]))
+tabla(comparacion)
+# Comprobaciones de conservación de varianza, ortogonalidad y reconstrucción.
+stopifnot(abs(sum(lambda) - sum(apply(Z, 2, var))) < 1e-8,
+          max(abs(crossprod(pca$rotation) - diag(p))) < 1e-8,
+          max(abs(Z - pca$x %*% t(pca$rotation))) < 1e-8)
+tabla(data.frame(varianza_original = sum(vapply(X, var, numeric(1))),
+                 varianza_PCA_sin_escalar = sum(pca_sin_estandarizar$sdev^2),
+                 varianza_estandarizada = sum(apply(Z, 2, var)),
+                 varianza_PCA_estandarizado = sum(lambda)))
 ```
+
+**Análisis.** Sin estandarizar, C1 concentra el `r fmt(comparacion$porcentaje_C1[1])` % de la varianza en unidades originales; estandarizando conserva el `r fmt(porcentaje[1])` %.
+La diferencia refleja el efecto de las escalas, no que el primer método sea mejor.
+El PCA elegido trabaja sobre la matriz de correlaciones y reparte `r p` unidades de varianza total.
+No se aplican logaritmos ni recortes: se mantiene la base original y se reconoce que los extremos pueden influir en el resultado.
+
+### 3. ¿Cuánta información guarda y cuántas componentes conservar?
+
+```{r reparto}
+reparto <- data.frame(componente = seq_len(p), autovalor = lambda,
+                      porcentaje = porcentaje, acumulado = acumulado)
+tabla(reparto)
+```
+
+```{r grafico-reparto}
+ggplot(reparto, aes(componente, porcentaje)) +
+  geom_col(fill = "#2166AC") +
+  geom_line(aes(y = acumulado), color = "#B35806", linewidth = 0.8) +
+  geom_point(aes(y = acumulado), color = "#B35806") +
+  geom_hline(yintercept = 80, linetype = "dashed") +
+  scale_x_continuous(breaks = seq_len(p)) +
+  labs(title = "Varianza individual y acumulada", x = "Componente", y = "Porcentaje",
+       subtitle = "Barras: porcentaje individual; línea: porcentaje acumulado")
+ggplot(reparto, aes(componente, autovalor)) +
+  geom_line() + geom_point(color = "#2166AC") +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  scale_x_continuous(breaks = seq_len(p)) +
+  labs(title = "Gráfico de sedimentación", x = "Componente", y = "Autovalor")
+```
+
+**Respuesta.** C1 conserva el `r fmt(porcentaje[1])` %, las dos primeras el `r fmt(acumulado[2])` % y las tres primeras el `r fmt(acumulado[3])` %.
+Se necesitan **`r k80` componentes** para superar el 80 % (`r fmt(acumulado[k80])` %); nueve conservan el `r fmt(acumulado[k80 - 1])` %.
+El codo inicial permite visualizar dos ejes dominantes, pero no justifica descartar el resto.
+El criterio de autovalor mayor que uno conservaría `r sum(lambda > 1)` componentes, con solo el `r fmt(acumulado[sum(lambda > 1)])` %: no cumple el objetivo del 80 %.
+
+### 4. ¿Qué mide cada componente?
+
+```{r pesos}
+pesos <- pca$rotation
+# Se muestran los pesos de todas las variables en los tres primeros ejes.
+tabla(data.frame(variable = variables, pesos[, 1:3], row.names = NULL))
+pesos_largos <- data.frame(variable = variables, pesos[, 1:3], row.names = NULL) |>
+  pivot_longer(-variable, names_to = "componente", values_to = "peso")
+```
+
+```{r grafico-pesos, fig.height=9, fig.width=12}
+ggplot(pesos_largos, aes(peso, factor(variable, levels = rev(variables)), fill = peso > 0)) +
+  geom_col(show.legend = FALSE) + geom_vline(xintercept = 0, color = "grey50") +
+  facet_wrap(~ componente) +
+  scale_fill_manual(values = c("#B35806", "#2166AC")) +
+  labs(title = "Pesos de las tres primeras componentes", x = "Peso", y = NULL)
+```
+
+**C1: volumen de facturación con historial de pago.** Dominan las seis facturas, con pesos positivos entre `r fmt(min(pesos[paste0("BILL_AMT", 1:6), 1]), 3)` y `r fmt(max(pesos[paste0("BILL_AMT", 1:6), 1]), 3)`.
+Los estados de pago también aportan positivamente; no es un indicador puro de deuda ni de riesgo.
+
+**C2: estados de pago altos frente a límite y pagos.** Los seis estados tienen pesos positivos, mientras que `LIMIT_BAL` pesa `r fmt(pesos["LIMIT_BAL", 2], 3)` y los importes pagados tienen pesos negativos.
+Un valor alto describe un contraste de estados de pago más altos con menor límite y menores pagos; no equivale por sí mismo a una probabilidad de incumplimiento.
+
+**C3: edad y situación sociodemográfica frente a pagos.** Destacan `AGE` (`r fmt(pesos["AGE", 3], 3)`), `MARRIAGE` (`r fmt(pesos["MARRIAGE", 3], 3)`) y `EDUCATION` (`r fmt(pesos["EDUCATION", 3], 3)`), junto con pagos de signo negativo.
+Su lectura depende de la codificación de las categorías.
+El signo de cada eje es arbitrario: invertirlo no cambia la varianza ni la geometría del PCA.
+
+```{r indicador-existente}
+comparar_indicador <- data.frame(
+  indicador = c("LIMIT_BAL", respuesta),
+  correlacion_C1 = cor(pca$x[, 1], as.matrix(X[c("LIMIT_BAL", respuesta)]))[1, ])
+tabla(comparar_indicador)
+```
+
+**¿Existe un equivalente al puntaje global de las notas?** No hay un puntaje global de crédito en este archivo.
+El límite de crédito solo correlaciona `r fmt(cor(pca$x[, 1], X$LIMIT_BAL), 3)` con C1; no es un sustituto del resumen multivariado.
+Tampoco el PCA construye automáticamente un puntaje de riesgo validado.
+
+### 5. ¿A quién deja fuera un único número?
+
+Como ejercicio de revisión retrospectiva, se compara seleccionar el 20 % superior de C1 con revisar los valores altos de `PAY_0`, `BILL_AMT1` y `PAY_AMT1`.
+Son tres motivos distintos de revisión, no tres definiciones de incumplimiento.
+Se usa el percentil 80 con inclusión de empates; en una variable discreta puede seleccionar más del 20 %.
+
+```{r costo}
+alto <- function(v) v >= quantile(v, 0.80, names = FALSE)
+detecta <- alto(pca$x[, 1])
+cobertura <- bind_rows(lapply(c("PAY_0", "BILL_AMT1", "PAY_AMT1"), function(v) {
+  objetivo <- alto(X[[v]])
+  data.frame(variable = v, umbral = quantile(X[[v]], 0.80, names = FALSE),
+             casos_objetivo = sum(objetivo), incluidos = sum(objetivo & detecta),
+             fuera = sum(objetivo & !detecta),
+             porcentaje_fuera = 100 * sum(objetivo & !detecta) / sum(objetivo))
+}))
+tabla(cobertura)
+```
+
+```{r grafico-costo, fig.height=4}
+cobertura |> select(variable, incluidos, fuera) |>
+  pivot_longer(-variable, names_to = "resultado", values_to = "casos") |>
+  ggplot(aes(casos, variable, fill = resultado)) +
+  geom_col() + geom_text(aes(label = casos), position = position_stack(vjust = 0.5),
+                         color = "white") +
+  scale_fill_manual(values = c(fuera = "#B35806", incluidos = "#2166AC")) +
+  labs(title = "Cobertura al revisar solo el 20 % superior de C1", x = "Clientes", y = NULL,
+       fill = NULL)
+casos_discordantes <- sum(pca$x[, 1] <= 0 & alto(X$PAY_0))
+```
+
+**Respuesta.** De `r fmt(cobertura$casos_objetivo[1], 0)` clientes con `PAY_0` en el tramo superior, la selección por C1 deja fuera `r fmt(cobertura$fuera[1], 0)` (`r fmt(cobertura$porcentaje_fuera[1])` %).
+Además, `r fmt(casos_discordantes, 0)` tienen C1 igual o inferior al promedio, pese a ese estado de pago alto.
+Con facturas altas quedan fuera `r fmt(cobertura$fuera[2], 0)` y con pagos altos `r fmt(cobertura$fuera[3], 0)`.
+**Decisión:** C1 resume sobre todo facturación; para revisar atrasos se deben conservar los estados de pago y examinar C2.
+
+## Parte II. Mapa de clientes y biplot
+
+### 1. Referencia: ¿cómo se ve una separación clara?
+
+Se reproduce brevemente el ejemplo de `iris` de las notas como referencia visual; no interviene en el PCA de crédito.
+
+```{r referencia-iris, fig.height=4}
+pca_iris <- prcomp(iris[, 1:4], scale. = TRUE)
+mapa_iris <- data.frame(C1 = pca_iris$x[, 1], C2 = pca_iris$x[, 2], especie = iris$Species)
+ggplot(mapa_iris, aes(C1, C2, color = especie)) + geom_point(alpha = 0.7) +
+  coord_equal() + labs(title = "Referencia: separación de setosa en iris", color = "Especie")
+```
+
+En `iris`, las dos componentes conservan el `r fmt(100 * sum(pca_iris$sdev[1:2]^2) / sum(pca_iris$sdev^2))` %.
+Setosa aparece apartada; en crédito no debe suponerse una separación semejante solo porque dos grupos tengan promedios distintos.
+
+### 2. ¿Qué tanto guarda el mapa de clientes?
+
+```{r mapa}
+mapa <- data.frame(id_fila = id_fila, C1 = pca$x[, 1], C2 = pca$x[, 2],
+                   sexo = factor(X$SEX),
+                   incumplimiento = factor(X[[respuesta]], levels = c(0, 1),
+                                           labels = c("Sin incumplimiento", "Con incumplimiento")))
+set.seed(19)
+indices_muestra <- sample(seq_len(n), min(3000, n))
+muestra <- mapa[indices_muestra, ]
+etiq_x <- paste0("C1: facturación (", fmt(porcentaje[1]), " %)")
+etiq_y <- paste0("C2: estados de pago frente a límite y pagos (", fmt(porcentaje[2]), " %)")
+ggplot(muestra, aes(C1, C2)) + geom_point(alpha = 0.25, size = 0.9) +
+  coord_equal() + labs(title = "Clientes en las dos primeras componentes",
+                       subtitle = "Muestra reproducible de 3.000; PCA calculado con toda la base",
+                       x = etiq_x, y = etiq_y)
+```
+
+**Respuesta.** El plano conserva el `r fmt(acumulado[2])` % y omite el `r fmt(100 - acumulado[2])` % de la varianza.
+A la derecha aumenta principalmente la facturación; hacia arriba aumenta el contraste de estados de pago frente a límite y pagos.
+La nube presenta concentración central y observaciones extremas; este mapa no demuestra la existencia de tipos naturales de clientes.
+Las distancias del plano son solo una aproximación a las distancias entre las 24 variables estandarizadas.
+
+### 3. Las flechas: dirección, ángulos y calidad de representación
+
+Como el PCA está estandarizado, $a_{jk}=w_{jk}\sqrt{\lambda_k}$ es la correlación entre la variable $j$ y la componente $k$.
+La calidad en el plano es $a_{j1}^2+a_{j2}^2$: una flecha corta indica que el plano representa mal esa variable, no que carezca de importancia.
+
+```{r flechas}
+coordenadas <- sweep(pesos[, 1:2, drop = FALSE], 2, pca$sdev[1:2], "*")
+flechas <- data.frame(variable = variables, x = coordenadas[, 1], y = coordenadas[, 2],
+                      calidad_plano = rowSums(coordenadas^2), row.names = NULL)
+tabla(flechas)
+angulo <- function(a, b) {
+  coseno <- sum(a * b) / sqrt(sum(a^2) * sum(b^2))
+  acos(max(-1, min(1, coseno))) * 180 / pi
+}
+A <- outer(seq_len(p), seq_len(p), Vectorize(function(i, j)
+  angulo(coordenadas[i, ], coordenadas[j, ])))
+dimnames(A) <- list(variables, variables)
+# Matriz completa disponible en A; se muestran pares representativos.
+pares_angulos <- data.frame(v1 = c("BILL_AMT1", "PAY_0", "PAY_AMT1", "BILL_AMT1"),
+                            v2 = c("BILL_AMT2", "PAY_2", "PAY_AMT2", "PAY_0"))
+pares_angulos$angulo <- mapply(function(a, b) A[a, b], pares_angulos$v1, pares_angulos$v2)
+pares_angulos$correlacion_original <- mapply(function(a, b) R[a, b],
+                                             pares_angulos$v1, pares_angulos$v2)
+tabla(pares_angulos)
+```
+
+```{r biplot, fig.height=9, fig.width=12}
+# Escalamiento común de flechas solo para hacerlas visibles sobre las puntuaciones.
+escala_flechas <- 4
+ggplot(muestra, aes(C1, C2)) +
+  geom_point(alpha = 0.18, size = 0.7, color = "grey40") +
+  geom_segment(data = flechas, inherit.aes = FALSE,
+               aes(x = 0, y = 0, xend = escala_flechas * x, yend = escala_flechas * y),
+               arrow = grid::arrow(length = grid::unit(0.15, "cm")), color = "#B35806") +
+  ggrepel::geom_text_repel(data = flechas, inherit.aes = FALSE,
+                           aes(escala_flechas * x, escala_flechas * y, label = variable),
+                           seed = 19, size = 3, max.overlaps = Inf, box.padding = 0.6,
+                           max.time = 5, max.iter = 100000) +
+  coord_equal(xlim = c(-6, 9), ylim = c(-6, 8)) +
+  labs(title = "Biplot: clientes y variables",
+       subtitle = "Acercamiento central; flechas multiplicadas por 4; muestra de 3.000 clientes",
+                       x = etiq_x, y = etiq_y)
+```
+
+El biplot amplía la región central para facilitar la lectura de las 24 flechas; los extremos fuera de la ventana siguen incluidos en el cálculo y aparecen en el mapa anterior.
+
+**Análisis.** Las facturas apuntan juntas: `BILL_AMT1` y `BILL_AMT2` forman `r fmt(A["BILL_AMT1", "BILL_AMT2"])` grados y su correlación real es `r fmt(R["BILL_AMT1", "BILL_AMT2"])`.
+Los estados de pago forman otro bloque.
+`SEX`, `MARRIAGE`, `AGE` y `EDUCATION` tienen flechas cortas; su estructura queda principalmente fuera del plano.
+No hay una única variable aislada que domine C2, como escritura en las notas.
+
+**Límite de los ángulos.** Los pagos `PAY_AMT1` y `PAY_AMT2` forman solo `r fmt(A["PAY_AMT1", "PAY_AMT2"])` grados, pero su correlación real es `r fmt(R["PAY_AMT1", "PAY_AMT2"])`.
+El plano representa apenas el `r fmt(100 * flechas$calidad_plano[flechas$variable == "PAY_AMT1"])` % y el `r fmt(100 * flechas$calidad_plano[flechas$variable == "PAY_AMT2"])` % de esas variables.
+Por eso, un ángulo pequeño no basta: hay que contrastarlo con la matriz de correlaciones y la calidad de representación.
+
+### 4. ¿Los grupos conocidos se separan o solo se desplazan?
+
+```{r grupos, fig.height=6}
+resumen_grupos <- mapa |> group_by(incumplimiento) |>
+  summarise(n = n(), media_C1 = mean(C1), media_C2 = mean(C2),
+            sd_C1 = sd(C1), sd_C2 = sd(C2), .groups = "drop")
+tabla(resumen_grupos)
+ggplot(muestra, aes(C1, C2, color = incumplimiento)) +
+  geom_point(alpha = 0.3, size = 0.8) +
+  stat_ellipse(data = mapa, level = 0.90, type = "norm", linewidth = 0.7) +
+  coord_equal() + labs(title = "Mapa coloreado por incumplimiento observado",
+                       subtitle = "Elipses normales de referencia, no fronteras de clasificación",
+                       x = etiq_x, y = etiq_y, color = NULL) +
+  theme(legend.position = "bottom")
+tabla(mapa |> group_by(sexo) |>
+        summarise(n = n(), media_C1 = mean(C1), media_C2 = mean(C2), .groups = "drop"))
+ggplot(muestra, aes(C1, C2, color = sexo)) + geom_point(alpha = 0.3, size = 0.8) +
+  stat_ellipse(data = mapa, level = 0.90, type = "norm", linewidth = 0.7) +
+  coord_equal() + labs(title = "Mapa por código de SEX", x = etiq_x, y = etiq_y,
+                       color = "Código SEX")
+```
+
+**Respuesta.** Los clientes con incumplimiento tienen media C2 de `r fmt(resumen_grupos$media_C2[2])`, frente a `r fmt(resumen_grupos$media_C2[1])` en los demás.
+La diferencia es `r fmt(diff(resumen_grupos$media_C2))`, frente a una desviación global de C2 de `r fmt(sd(mapa$C2))`; las nubes se superponen.
+Esta comparación es parcialmente circular porque el incumplimiento entró al PCA: **no demuestra capacidad predictiva**.
+
+Por `SEX`, las medias C1 son `r fmt(mean(mapa$C1[X$SEX == 1]))` y `r fmt(mean(mapa$C1[X$SEX == 2]))`, frente a una desviación global de `r fmt(sd(mapa$C1))`.
+El `r fmt(100 * mean(mapa$C1[X$SEX == 1] > median(mapa$C1[X$SEX == 2])))` % del grupo 1 supera la mediana del grupo 2: no hay separación limpia.
+Las elipses son referencias basadas en media y covarianza bajo una aproximación normal; no garantizan contener exactamente el 90 % observado.
+
+### 5. La decisión: cortes descriptivos para organizar revisiones
+
+Se proponen dos cortes ilustrativos: C1 mayor que una desviación estándar para revisar facturación alta y C2 mayor que una desviación estándar para revisar el perfil de estados de pago.
+Los cortes los define el analista; no son grupos descubiertos automáticamente ni reglas de aprobación de crédito.
+
+```{r zonas}
+corte1 <- sd(mapa$C1); corte2 <- sd(mapa$C2)
+mapa$zona <- case_when(
+  mapa$C1 > corte1 & mapa$C2 > corte2 ~ "Ambas revisiones",
+  mapa$C1 > corte1 ~ "Solo facturación",
+  mapa$C2 > corte2 ~ "Solo estados de pago",
+  TRUE ~ "Sin señal por estos cortes")
+orden_zonas <- c("Ambas revisiones", "Solo facturación", "Solo estados de pago",
+                 "Sin señal por estos cortes")
+mapa$zona <- factor(mapa$zona, levels = orden_zonas)
+zonas <- mapa |> group_by(zona) |>
+  summarise(clientes = n(), porcentaje = 100 * n() / nrow(mapa), .groups = "drop")
+tabla(zonas)
+solo_estados <- mapa$zona == "Solo estados de pago"
+fuera_C1 <- 100 * mean(!detecta[solo_estados])
+```
+
+```{r mapa-decision, fig.height=7}
+ggplot(mapa[indices_muestra, ], aes(C1, C2, color = zona)) +
+  geom_point(alpha = 0.5, size = 0.9) +
+  geom_vline(xintercept = corte1, linetype = "dashed") +
+  geom_hline(yintercept = corte2, linetype = "dashed") +
+  scale_color_manual(values = c("#9B2C2C", "#2166AC", "#B35806", "grey65"), drop = FALSE) +
+  coord_equal() + labs(title = "Cuatro zonas de revisión retrospectiva",
+                       subtitle = "Cortes: una desviación estándar por encima de la media",
+                       x = etiq_x, y = etiq_y, color = NULL) +
+  theme(legend.position = "bottom")
+```
+
+**Respuesta.** Los cortes son C1 > `r fmt(corte1)` y C2 > `r fmt(corte2)`.
+Hay `r fmt(sum(mapa$zona == "Solo facturación"), 0)` clientes solo en facturación, `r fmt(sum(solo_estados), 0)` solo en estados de pago y `r fmt(sum(mapa$zona == "Ambas revisiones"), 0)` en ambas.
+Los `r fmt(sum(mapa$zona == "Sin señal por estos cortes"), 0)` restantes no activan estos cortes; eso **no implica ausencia de riesgo**.
+El `r fmt(fuera_C1)` % de los clientes de «Solo estados de pago» quedaría fuera del 20 % superior de C1.
+Si se reducen los cupos, se deben elevar los umbrales o priorizar un número explícito de casos, tratando los empates; no basta dividir por dos los valores de los cortes.
+
+### 6. Comprobación sin el resultado futuro
+
+```{r sensibilidad}
+X_sin_respuesta <- X[setdiff(variables, respuesta)]
+pca_sin_respuesta <- prcomp(X_sin_respuesta, center = TRUE, scale. = TRUE)
+pct_sin <- 100 * pca_sin_respuesta$sdev^2 / sum(pca_sin_respuesta$sdev^2)
+tabla(data.frame(analisis = c("Todas las variables numéricas", "Sin incumplimiento futuro"),
+                 variables = c(p, ncol(X_sin_respuesta)),
+                 C1_pct = c(porcentaje[1], pct_sin[1]),
+                 plano_pct = c(acumulado[2], sum(pct_sin[1:2])),
+                 componentes_para_80 = c(k80, which(cumsum(pct_sin) > 80)[1])))
+```
+
+El plano sin respuesta conserva el `r fmt(sum(pct_sin[1:2]))` %; sigue siendo un resumen parcial.
+Los porcentajes se refieren a totales de varianza distintos (24 y 23 variables).
+Esta comprobación no convierte las zonas anteriores en reglas predictivas: para una aplicación futura hay que recalcular los ejes y cortes sin la respuesta, ajustar el procedimiento en entrenamiento y evaluar en datos separados.
+
+# PCA con las variables estrictamente númericas
+
+## Respuestas conceptuales de Componentes principales I
+
+1. **¿Por qué se pueden resumir variables que se mueven juntas?** Comparten variación, como las facturas mensuales. Con variables no correlacionadas y estandarizadas, cada eje aporta la misma varianza y no existe una dirección que concentre gran parte del total.
+
+2. **¿Guardar 53 de cada 100 es mucho o poco?** Depende de la decisión y de qué se pierde. Aquí C1 conserva solo `r fmt(porcentaje[1])` % y omite perfiles de estados de pago; resulta insuficiente para una revisión integral.
+
+3. **Si C1 coincide con un indicador global, ¿para qué calcularla?** Para comprobar esa coincidencia y cuantificar la variación omitida. Aquí no existe ese global y `LIMIT_BAL` no coincide con C1.
+
+4. **¿Por qué una variable puede aparecer sola en C2?** Porque aporta variación poco compartida con el bloque principal, como escritura en las notas. En crédito C2 es un contraste entre varios estados de pago, límite y pagos; `SEX`, aunque aislada, no domina ese eje.
+
+5. **¿Qué pasa al mezclar precios y calificaciones sin estandarizar?** Las variables con mayor varianza numérica dominan. Un 99 % en C1 puede deberse a las unidades, no a un buen resumen de todas las dimensiones. Por eso aquí se usa `scale. = TRUE`.
+
+6. **¿Cuál afirmación es correcta?** La **(b)**: C1 es la combinación de norma unitaria que maximiza la varianza. No demuestra una causa general, no decide qué información es útil y sus signos no indican bondad o maldad.
+
+## Respuestas conceptuales de Componentes principales II
+
+1. **¿Qué permitiría hablar de tipos como setosa?** Nubes claramente separadas por zonas de baja densidad y una separación estable al examinar otras dimensiones. Los cortes de revisión de crédito no prueban tipos naturales.
+
+2. **¿Qué indica un ángulo de 7 grados?** Direcciones similares en el plano. Sugiere asociación positiva si ambas variables están bien representadas; con flechas cortas puede ser engañoso, como ocurre con los importes pagados.
+
+3. **¿Por qué una diferencia de promedios no basta para asignar intervenciones?** Porque puede ser pequeña respecto a la dispersión y coexistir con fuerte superposición. En crédito, el código de sexo no determina la posición individual; corresponde revisar el comportamiento de cada cuenta.
+
+4. **¿Por qué el mapa puede guardar menos que el de iris y qué se pierde?** Depende de la concentración de los autovalores, no solo del número de variables. Crédito combina bloques diferentes: el plano omite el `r fmt(100 - acumulado[2])` %, con poca representación de edad, categorías y pagos, mientras iris concentra más variación en sus dos primeros ejes.
+
+5. **¿Qué cambia con la mitad de cupos?** Se vuelve más exigente la selección y aumentan los casos fuera de revisión. Se deben recalcular los conteos y la cobertura con nuevos umbrales o un cupo fijo; el PCA no determina ese presupuesto.
+
+6. **¿Cuál afirmación es correcta?** La **(b)**: un biplot muestra casos y variables en el mismo dibujo. Diferencias de medias no implican separación, los ángulos no miden importancia y el mapa no crea automáticamente grupos de atención.
+
+## Conclusión para el cliente
+
+Las facturas comparten mucha información, pero el conjunto de las 24 variables no se resume adecuadamente con un único indicador.
+C1 conserva el `r fmt(porcentaje[1])` %, el mapa el `r fmt(acumulado[2])` % y hacen falta `r k80` componentes para superar el 80 %.
+El mapa permite describir facturación y estados de pago, aunque representa mal varias características y no muestra grupos claramente separados.
+Usar solo C1 deja fuera el `r fmt(cobertura$porcentaje_fuera[1])` % del tramo alto de `PAY_0`.
+Se recomienda conservar los indicadores originales para cada motivo de revisión y utilizar el PCA como apoyo descriptivo; cualquier decisión futura requiere excluir la respuesta y validar el procedimiento.
