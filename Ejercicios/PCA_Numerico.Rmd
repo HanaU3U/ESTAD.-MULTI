@@ -129,10 +129,12 @@ Aquí «información» significa **varianza**, no capacidad de predecir incumpli
 pca <- prcomp(X, center = TRUE, scale. = TRUE)
 pca_sin_estandarizar <- prcomp(X, center = TRUE, scale. = FALSE)
 # Orientación reproducible: C1 crece con facturas, C2 con estados de pago,
-# C3 con edad. Se cambian juntos los pesos y las puntuaciones.
+# C3 con edad; desde C4, el mayor peso absoluto se orienta positivo.
+# Se cambian juntos los pesos y las puntuaciones.
 anclas <- c("BILL_AMT1", "PAY_0", "AGE")
-for (k in seq_along(anclas)) {
-  signo <- ifelse(pca$rotation[anclas[k], k] < 0, -1, 1)
+for (k in seq_len(ncol(pca$rotation))) {
+  ancla <- if (k <= 3) anclas[k] else rownames(pca$rotation)[which.max(abs(pca$rotation[, k]))]
+  signo <- ifelse(pca$rotation[ancla, k] < 0, -1, 1)
   pca$rotation[, k] <- signo * pca$rotation[, k]
   pca$x[, k] <- signo * pca$x[, k]
 }
@@ -192,31 +194,104 @@ El criterio de autovalor mayor que uno conservaría `r sum(lambda > 1)` componen
 
 ### 4. ¿Qué mide cada componente?
 
+Se interpretan **las 24 componentes**, incluidas las que quedan fuera del resumen del 80 %.
+Los pesos se muestran completos y los gráficos contienen como máximo tres ejes.
+La orientación de C1–C3 se mantiene; desde C4 se hace positivo el peso de mayor magnitud, cambiando también las puntuaciones.
+Los nombres describen contrastes, no causas; en las categorías se interpretan códigos, no cantidades.
+
 ```{r pesos}
 pesos <- pca$rotation
-# Se muestran los pesos de todas las variables en los tres primeros ejes.
-tabla(data.frame(variable = variables, pesos[, 1:3], row.names = NULL))
-pesos_largos <- data.frame(variable = variables, pesos[, 1:3], row.names = NULL) |>
-  pivot_longer(-variable, names_to = "componente", values_to = "peso")
+# Presentación de todas las componentes en bloques de hasta tres.
+mostrar_componentes <- function(pesos, porcentajes, titulos, lecturas, prefijo) {
+  stopifnot(ncol(pesos) == length(titulos), length(titulos) == length(lecturas))
+  for (inicio in seq(1, ncol(pesos), by = 3)) {
+    indices <- inicio:min(inicio + 2, ncol(pesos))
+    cat("\n\n#### ", prefijo, ": C", inicio, " a C", max(indices), "\n\n", sep = "")
+    print(knitr::kable(data.frame(variable = rownames(pesos),
+                                 pesos[, indices, drop = FALSE], row.names = NULL), digits = 3))
+    cat("\n\n")
+    largos <- data.frame(variable = rownames(pesos), pesos[, indices, drop = FALSE], row.names = NULL) |>
+      pivot_longer(-variable, names_to = "componente", values_to = "peso")
+    largos$componente <- factor(largos$componente, levels = colnames(pesos)[indices],
+                                labels = paste0("C", indices, " (", fmt(porcentajes[indices]), " %)"))
+    print(ggplot(largos, aes(peso, factor(variable, levels = rev(rownames(pesos))), fill = peso > 0)) +
+      geom_col(show.legend = FALSE) + geom_vline(xintercept = 0, color = "grey50") +
+      facet_wrap(~ componente, nrow = 1) +
+      scale_x_continuous(limits = c(-1, 1)) +
+      scale_fill_manual(values = c("#B35806", "#2166AC")) +
+      labs(title = paste0(prefijo, ": pesos de C", inicio, " a C", max(indices)),
+           x = "Peso sobre la variable estandarizada", y = NULL))
+    cat("\n\n")
+    for (k in indices) {
+      principales <- head(order(abs(pesos[, k]), decreasing = TRUE), 4)
+      evidencia <- paste0("`", rownames(pesos)[principales], "` (",
+                           fmt(pesos[principales, k], 3), ")", collapse = "; ")
+      cat("**C", k, ": ", titulos[k], " (", fmt(porcentajes[k]), " %).** ",
+          lecturas[k], " Pesos de mayor magnitud: ", evidencia, ".\n\n", sep = "")
+    }
+  }
+  invisible(NULL)
+}
+titulos_todas <- c(
+  "Facturación con historial de pago",
+  "Estados de pago frente a límite y pagos",
+  "Edad y códigos sociodemográficos frente a pagos",
+  "Edad y pagos frente al código de estado civil",
+  "Códigos de sexo y educación frente al incumplimiento",
+  "Sexo e incumplimiento frente a educación y estado civil",
+  "Incumplimiento y educación frente a límite e historial",
+  "Pagos 5 y 6 frente a pagos 1 y 3",
+  "Pago 4 frente a pagos 6, 1 y 2",
+  "Pagos 6 y 4 frente a pagos 5 y 2",
+  "Pago 3 frente a otros pagos",
+  "Pago 1 frente a pago 2",
+  "Estados 0 y 2 frente a incumplimiento y estados 6 y 5",
+  "Código de estado civil y edad, con aporte del límite",
+  "Límite frente a edad",
+  "Contraste entre estados 0 y 6 frente a 3 y 2",
+  "Estado 4 frente a estados 2 y 6",
+  "Facturas 1 y 2 frente a 5 y 6",
+  "Estados 3 y 6 frente a 2 y 5",
+  "Estado 5 frente a 4 y 6",
+  "Facturas 3 y 4 frente a 1 y 6",
+  "Contrastes alternados entre facturas",
+  "Factura 5 frente a 6 y 4",
+  "Factura 2 frente a 3 y 1"
+)
+lecturas_todas <- c(
+  "Las seis facturas dominan y los estados de pago también suman en la misma dirección. Describe principalmente volumen facturado, no una medida pura de riesgo.",
+  "Los estados de pago tienen pesos positivos, mientras que límite y pagos tienen pesos negativos. Un valor alto expresa ese contraste; no equivale a una probabilidad de incumplimiento.",
+  "Edad y EDUCATION se oponen a MARRIAGE y a varios pagos. Combina diferencias de edad, códigos y pagos; la lectura de las categorías depende de su codificación.",
+  "Edad y pagos, especialmente PAY_AMT2 y PAY_AMT3, tienen pesos positivos y MARRIAGE negativo. A diferencia de C3, edad y pagos se mueven en el mismo sentido dentro de esta combinación.",
+  "SEX y EDUCATION tienen pesos positivos; incumplimiento y límite, negativos. Es un contraste descriptivo de códigos, no evidencia de que sexo o educación causen incumplimiento.",
+  "SEX e incumplimiento suman positivamente, frente a EDUCATION y MARRIAGE. Recoge otra combinación de esas variables, distinta de C5; no representa una jerarquía de categorías.",
+  "Predomina el incumplimiento, acompañado por EDUCATION y PAY_0, frente al límite y a estados como PAY_5 y PAY_6. Como usa el resultado futuro, no puede interpretarse como capacidad predictiva.",
+  "PAY_AMT5 y PAY_AMT6 tienen pesos positivos y PAY_AMT1 y PAY_AMT3 negativos; EDUCATION también aporta positivamente. Refleja diferencias en la distribución de pagos entre meses, con participación del código educativo.",
+  "PAY_AMT4 domina positivamente y contrasta con PAY_AMT6, PAY_AMT1 y PAY_AMT2. Distingue perfiles con un pago relativamente destacado en el mes 4.",
+  "PAY_AMT6 y PAY_AMT4 se oponen a PAY_AMT5 y PAY_AMT2. Describe otra distribución mensual de los pagos, sin demostrar una tendencia temporal sostenida.",
+  "PAY_AMT3 domina frente a PAY_AMT4, PAY_AMT2 y PAY_AMT1. Separa diferencias particulares del pago del mes 3 que no recoge el nivel general.",
+  "El contraste principal es PAY_AMT1 positivo frente a PAY_AMT2 negativo. Distingue clientes con diferente reparto entre esos dos pagos, aunque tengan un volumen parecido.",
+  "PAY_0 y PAY_2 suman positivamente frente al incumplimiento y a PAY_6 y PAY_5. Su signo negativo para el resultado no implica protección: es una combinación residual de varias variables.",
+  "MARRIAGE y AGE tienen pesos positivos, acompañados por LIMIT_BAL. Recoge variación sociodemográfica que no quedó en los ejes anteriores; no ordena personas por calidad crediticia.",
+  "LIMIT_BAL domina positivamente y AGE tiene signo negativo; EDUCATION también suma. Distingue niveles de límite respecto a edad y código educativo, sin afirmar causalidad.",
+  "PAY_0 y PAY_6 se oponen principalmente a PAY_3 y PAY_2. Describe diferencias dentro del historial codificado, no una cantidad monetaria ni una evolución uniforme.",
+  "PAY_4 es positivo y PAY_2 y PAY_6 negativos. Identifica diferencias particulares entre esos registros del historial, adicionales a su nivel común.",
+  "BILL_AMT1 y BILL_AMT2 se oponen a BILL_AMT5 y BILL_AMT6. Resume diferencias entre tramos de facturación, en lugar del volumen general recogido en C1.",
+  "PAY_3 y PAY_6 contrastan con PAY_2 y PAY_5. Aporta un detalle adicional del historial; su bajo porcentaje no permite tratarlo como un perfil principal.",
+  "PAY_5 domina positivamente frente a PAY_4 y PAY_6, con aporte positivo de PAY_3. Distingue diferencias locales entre registros del historial.",
+  "Las facturas 3 y 4 tienen pesos positivos y las 1 y 6 negativos. Es un detalle de la forma del historial de facturación, de aporte muy pequeño al total.",
+  "BILL_AMT3 y BILL_AMT2, junto con BILL_AMT6, se oponen a BILL_AMT4, BILL_AMT1 y BILL_AMT5. Describe pequeñas diferencias entre facturas muy relacionadas; no un nuevo nivel general de deuda.",
+  "BILL_AMT5 domina frente a BILL_AMT6 y BILL_AMT4, con aporte positivo de BILL_AMT2. Aísla una diferencia pequeña del mes 5 dentro de un bloque muy redundante.",
+  "BILL_AMT2 y BILL_AMT4 contrastan con BILL_AMT3 y BILL_AMT1. Es la dirección de menor variación y completa la representación de los datos, sin justificar por sí sola una decisión de negocio."
+)
 ```
 
-```{r grafico-pesos, fig.height=9, fig.width=12}
-ggplot(pesos_largos, aes(peso, factor(variable, levels = rev(variables)), fill = peso > 0)) +
-  geom_col(show.legend = FALSE) + geom_vline(xintercept = 0, color = "grey50") +
-  facet_wrap(~ componente) +
-  scale_fill_manual(values = c("#B35806", "#2166AC")) +
-  labs(title = "Pesos de las tres primeras componentes", x = "Peso", y = NULL)
+```{r grafico-pesos, fig.height=9, fig.width=12, results='asis'}
+mostrar_componentes(pesos, porcentaje, titulos_todas, lecturas_todas, "PCA de 24 variables")
 ```
 
-**C1: volumen de facturación con historial de pago.** Dominan las seis facturas, con pesos positivos entre `r fmt(min(pesos[paste0("BILL_AMT", 1:6), 1]), 3)` y `r fmt(max(pesos[paste0("BILL_AMT", 1:6), 1]), 3)`.
-Los estados de pago también aportan positivamente; no es un indicador puro de deuda ni de riesgo.
-
-**C2: estados de pago altos frente a límite y pagos.** Los seis estados tienen pesos positivos, mientras que `LIMIT_BAL` pesa `r fmt(pesos["LIMIT_BAL", 2], 3)` y los importes pagados tienen pesos negativos.
-Un valor alto describe un contraste de estados de pago más altos con menor límite y menores pagos; no equivale por sí mismo a una probabilidad de incumplimiento.
-
-**C3: edad y situación sociodemográfica frente a pagos.** Destacan `AGE` (`r fmt(pesos["AGE", 3], 3)`), `MARRIAGE` (`r fmt(pesos["MARRIAGE", 3], 3)`) y `EDUCATION` (`r fmt(pesos["EDUCATION", 3], 3)`), junto con pagos de signo negativo.
-Su lectura depende de la codificación de las categorías.
-El signo de cada eje es arbitrario: invertirlo no cambia la varianza ni la geometría del PCA.
+Las últimas componentes completan la variación del dataset; su aporte pequeño no equivale automáticamente a ruido ni a falta de utilidad para una revisión específica.
+Para resumir más del 80 % bastan las diez primeras, pero aquí se documentan las 24.
 
 ```{r indicador-existente}
 comparar_indicador <- data.frame(
@@ -508,8 +583,9 @@ Conviene resumir las facturas, pero esa redundancia no se extiende por igual a e
 pca_cuant <- prcomp(X_cuant, center = TRUE, scale. = TRUE)
 pca_cuant_raw <- prcomp(X_cuant, center = TRUE, scale. = FALSE)
 # C1 se orienta hacia facturas, C2 hacia pagos y C3 hacia edad.
-for (k in 1:3) {
-  ancla <- c("BILL_AMT1", "PAY_AMT1", "AGE")[k]
+for (k in seq_len(ncol(pca_cuant$rotation))) {
+  ancla <- if (k <= 3) c("BILL_AMT1", "PAY_AMT1", "AGE")[k] else
+    rownames(pca_cuant$rotation)[which.max(abs(pca_cuant$rotation[, k]))]
   signo <- ifelse(pca_cuant$rotation[ancla, k] < 0, -1, 1)
   pca_cuant$rotation[, k] <- signo * pca_cuant$rotation[, k]
   pca_cuant$x[, k] <- signo * pca_cuant$x[, k]
@@ -564,26 +640,50 @@ El plano es una visualización parcial, no un sustituto completo de las 14 medic
 
 ## 4. Pesos: ¿qué mide cada componente?
 
-```{r cuant-pesos, fig.width=12, fig.height=7}
-tabla(data.frame(variable = variables_cuant, pesos_cuant[, 1:3], row.names = NULL))
-data.frame(variable = variables_cuant, pesos_cuant[, 1:3], row.names = NULL) |>
-  pivot_longer(-variable, names_to = "componente", values_to = "peso") |>
-  ggplot(aes(peso, factor(variable, levels = rev(variables_cuant)), fill = peso > 0)) +
-  geom_col(show.legend = FALSE) + geom_vline(xintercept = 0, color = "grey50") +
-  facet_wrap(~ componente) + scale_fill_manual(values = c("#B35806", "#2166AC")) +
-  labs(title = "Pesos de las tres primeras componentes cuantitativas", x = "Peso", y = NULL)
+Se interpretan **las 14 componentes** con el mismo criterio de orientación y con gráficos de hasta tres ejes.
+Las seis primeras superan el 80 %, pero las restantes muestran diferencias adicionales que también se describen.
+
+```{r cuant-lecturas}
+titulos_cuant <- c(
+  "Volumen de facturación",
+  "Pagos y límite frente a facturación",
+  "Edad, con aporte del límite",
+  "Pagos 5 y 6 frente a pagos 1 y 2",
+  "Pago 6 frente a pago 4",
+  "Pagos 5 y 2 frente a 4 y 6",
+  "Pago 3 frente a pagos 4, 2 y 1",
+  "Pago 1 frente a pago 2",
+  "Límite frente a edad y pagos 6 y 5",
+  "Facturas 1 y 2 frente a 5 y 6",
+  "Facturas 3 y 4 frente a 1 y 6",
+  "Contrastes alternados entre facturas",
+  "Factura 5 frente a 6 y 4",
+  "Factura 2 frente a 3 y 1"
+)
+lecturas_cuant <- c(
+  "Dominan las seis facturas con pesos positivos. Pagos y límite también suman, pero menos, y la edad casi no participa; no es una medida de incumplimiento.",
+  "Los seis pagos y el límite tienen signo positivo y las facturas negativo. Un valor alto describe pagos y límite altos frente a facturas; es una combinación estandarizada, no una tasa de cobertura de deuda.",
+  "AGE domina y LIMIT_BAL también suma, frente a varios pagos de signo negativo. La edad aparece principalmente aquí porque comparte poca variación con las facturas.",
+  "PAY_AMT5 y PAY_AMT6 son positivos; PAY_AMT1, PAY_AMT2 y AGE negativos. Distingue la distribución mensual de pagos y contiene una diferencia adicional de edad.",
+  "PAY_AMT6 domina frente a PAY_AMT4 y PAY_AMT3, con aporte positivo de PAY_AMT1. Identifica perfiles con distinto reparto de pagos, más allá de su nivel conjunto.",
+  "PAY_AMT5 y PAY_AMT2 se oponen a PAY_AMT4 y PAY_AMT6. Este contraste también debe conservarse para superar el objetivo del 80 %; las tres primeras componentes no lo sustituyen.",
+  "PAY_AMT3 domina positivamente frente a PAY_AMT4, PAY_AMT2 y PAY_AMT1. Aunque queda fuera del resumen del 80 %, añade una diferencia relevante para revisar pagos particulares.",
+  "El contraste principal es PAY_AMT1 positivo frente a PAY_AMT2 negativo. Distingue clientes con diferente reparto entre esos pagos y amplía el detalle respecto al resumen de seis componentes.",
+  "LIMIT_BAL domina positivamente, frente a AGE, PAY_AMT6 y PAY_AMT5. Recoge una dimensión del límite que no queda completamente representada en los primeros ejes.",
+  "BILL_AMT1 y BILL_AMT2 se oponen a BILL_AMT5 y BILL_AMT6. Describe diferencias entre tramos de facturación, no el volumen común de las facturas.",
+  "BILL_AMT3 y BILL_AMT4 son positivas y BILL_AMT1 y BILL_AMT6 negativas. Recoge pequeñas diferencias internas del historial de facturación.",
+  "BILL_AMT3 y BILL_AMT2, junto con BILL_AMT6, contrastan con BILL_AMT4, BILL_AMT1 y BILL_AMT5. Su aporte pequeño refleja detalles dentro de un bloque muy relacionado.",
+  "BILL_AMT5 domina frente a BILL_AMT6 y BILL_AMT4, con aporte positivo de BILL_AMT2. Aísla una diferencia particular del mes 5; no representa un perfil general de cliente.",
+  "BILL_AMT2 y BILL_AMT4 se oponen a BILL_AMT3 y BILL_AMT1. Completa las diferencias de facturación con el menor aporte de varianza del análisis."
+)
 ```
 
-**C1: volumen de facturación.** Los pesos de las seis facturas, entre `r fmt(min(pesos_cuant[paste0("BILL_AMT", 1:6), 1]), 3)` y `r fmt(max(pesos_cuant[paste0("BILL_AMT", 1:6), 1]), 3)`, dominan el eje.
-Todos los pesos son positivos, pero pagos y límite aportan menos y la edad casi no interviene.
+```{r cuant-pesos, fig.width=12, fig.height=7, results='asis'}
+mostrar_componentes(pesos_cuant, pct_cuant, titulos_cuant, lecturas_cuant, "PCA de 14 variables")
+```
 
-**C2: pagos y límite frente a facturación.** Los pagos pesan positivamente, entre `r fmt(min(pesos_cuant[paste0("PAY_AMT", 1:6), 2]), 3)` y `r fmt(max(pesos_cuant[paste0("PAY_AMT", 1:6), 2]), 3)`; el límite también tiene signo positivo y las facturas negativo.
-Valores altos describen pagos y límite altos frente al volumen facturado; valores bajos describen el contraste opuesto.
-Es una combinación lineal estandarizada, no una tasa de cobertura de deuda ni una medida directa de atraso.
-
-**C3: edad, con aporte del límite.** `AGE` pesa `r fmt(pesos_cuant["AGE", 3], 3)` y `LIMIT_BAL` pesa `r fmt(pesos_cuant["LIMIT_BAL", 3], 3)`.
-La edad aparece principalmente aquí porque comparte poca variación con facturas y pagos.
-Invertir simultáneamente pesos y puntuaciones de un eje no cambia el resultado: el signo es una convención.
+Las componentes posteriores a C6 no son innecesarias por definición: C7–C9 todavía distinguen pagos y límite, mientras las últimas detallan diferencias entre facturas muy relacionadas.
+La selección de seis responde al objetivo de conservar más del 80 %, no a que las demás carezcan de significado.
 
 ```{r cuant-indicador}
 tabla(data.frame(indicador = "LIMIT_BAL", correlacion_con_C1 = cor(X_cuant$LIMIT_BAL, pca_cuant$x[, 1])))
@@ -747,4 +847,11 @@ Excluir la respuesta elimina su participación en el ajuste, pero no convierte e
 Los porcentajes de ambos análisis se refieren a conjuntos distintos de variables; un porcentaje mayor no significa conservar más información absoluta.
 
 
-#Conclusiones generales
+# Conclusiones generales
+
+**Un solo número no describe bien a cada cliente.** Los montos facturados suelen parecerse entre meses, pero los pagos, la edad y el límite de crédito aportan diferencias que ese resumen puede ocultar.
+
+**El mapa de dos ejes muestra solo parte de la historia:** cerca del 55 % usando únicamente mediciones cuantitativas. Para conservar más del 80 % se necesitan 6 indicadores.
+
+**Las diferencias entre meses también importan.** Dos clientes pueden tener facturas parecidas y pagar de forma distinta.
+
