@@ -568,3 +568,146 @@ Es una lectura tentativa, ya que con cargas tan bajas ML2 representa más un mat
 Además, *LIMIT_BAL*, *PAY_AMT6* y *AGE* siguen sin cargar de forma relevante en ninguno de los dos factores, por lo que el segundo factor no resuelve su bajo ajuste.
 
 Por lo anterior, no se incorpora un segundo factor en este análisis: la mejora en el RMSR (de `r fmt(rmsr1)` a `r fmt(rmsr2)`) y en la comunalidad promedio no justifica añadir un factor que apenas puede interpretarse.
+
+# Rotación de la solución de dos factores
+
+Para verificar la desición se procederá a realizar el análisis con giros de factores.
+
+
+## Girando Factores
+
+```{r cargas-giradas}
+f_sin <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "none")
+f_ind <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "varimax")
+f_jun <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "oblimin")
+tabla_giro <- data.frame(
+  variable          = colnames(datos_kmo),
+  independientes_F1 = round(f_ind$loadings[, 1], 2),
+  independientes_F2 = round(f_ind$loadings[, 2], 2),
+  correlac_F1       = round(f_jun$loadings[, 1], 2),
+  correlac_F2       = round(f_jun$loadings[, 2], 2),
+  row.names = NULL
+)
+tabla_giro
+
+c(correlacion_entre_factores_oblimin = round(f_jun$Phi[1, 2], 2))
+```
+
+```{r grafico-giro, echo=FALSE, message=FALSE, warning=FALSE, fig.width=11, fig.height=5.5}
+plano_de <- function(f, nombre) {
+  data.frame(
+    giro     = nombre,
+    variable = colnames(datos_kmo),
+    f1       = f$loadings[, 1],
+    f2       = f$loadings[, 2]
+  )
+}
+
+niveles <- c("Sin girar", "Giro independiente (varimax)", "Giro con correlación (oblimin)")
+
+plano <- bind_rows(
+  plano_de(f_sin, niveles[1]),
+  plano_de(f_ind, niveles[2]),
+  plano_de(f_jun, niveles[3])
+) %>%
+  mutate(giro = factor(giro, levels = niveles))
+
+ggplot(plano, aes(f1, f2)) +
+  geom_hline(yintercept = 0, color = "grey60") +
+  geom_vline(xintercept = 0, color = "grey60") +
+  geom_segment(
+    aes(xend = f1, yend = f2), x = 0, y = 0, color = "#285A91",
+    arrow = arrow(length = unit(0.18, "cm"))
+  ) +
+  ggrepel::geom_text_repel(aes(label = variable), size = 3.3, max.overlaps = Inf) +
+  facet_wrap(~ giro) +
+  coord_equal(xlim = c(-0.4, 1.1), ylim = c(-0.4, 1.1)) +
+  scale_x_continuous(labels = function(x) fmt(x, 1)) +
+  scale_y_continuous(labels = function(x) fmt(x, 1)) +
+  labs(
+    title = "Las mismas nueve variables, vistas desde tres pares de ejes",
+    subtitle = "Coordenadas = cargas en el factor 1 (horizontal) y en el factor 2 (vertical)",
+    x = "Factor 1", y = "Factor 2"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face = "bold", color = "#243447"))
+```
+
+
+Al comparar los dos giros se obtienen lecturas distintas. Con el giro que mantiene los factores independientes (varimax), los montos facturados cargan de forma parecida en ambos factores, es decir, siguen moviéndose juntos y no se separan. Por su parte, PAY_AMT6, LIMIT_BAL y AGE quedan muy cerca del origen, lo que confirma su bajo aporte a los factores. Además, las tres apuntan hacia la misma dirección.
+
+Con el giro que permite correlación (oblimin), los montos facturados sí se reparten entre los dos ejes, mientras que PAY_AMT6, LIMIT_BAL y AGE siguen cerca del origen. Las facturas más recientes se acercan al factor 2, las más antiguas al factor 1, y las intermedias quedan en medio [confirma cuáles con el gráfico]. Esto sugiere que el giro permite describir mejor el factor de facturación que ya habíamos identificado: no como un único nivel de endeudamiento, sino con una dimensión de tiempo.
+
+Sin embargo, los factores están correlacionados en r fmt(f_jun$Phi[1, 2], 2). Por eso la separación entre facturación reciente y antigua debe leerse con cautela: ambos factores describen en gran parte lo mismo.
+
+
+## Estabilidad Segundo Factor
+
+```{r estabilidad}
+f_otro <- psych::fa(datos_kmo, nfactors = 2, fm = "minres", rotate = "oblimin")
+otro <- round(unclass(f_otro$loadings), 2)
+colnames(otro) <- c("F1", "F2")
+otro
+
+c(correlacion_entre_factores_minres = round(f_otro$Phi[1, 2], 2))
+```
+
+Al cambiar el método de extracción a minres, la estructura cambia para los BILL_AMT igual deja el F1 en los valores que se tenian pero en el F2 los deja en casi 0, quitandoles el poco peso pero que igual representaban. La mayor carga se concentra en LIMIT_BAL, y el segundo factor aumenta levemente hacia PAY_AMT6 y AGE, aunque sin ser significativo. Esto indica que estas tres variables describen aspectos distintos del cliente y que, respecto al segundo factor, no comparten nada en común.
+
+Como la separación en dos factores cambia según el método de cálculo, no es estable y no se puede nombrar con confianza. En conjunto, el conjunto de datos no es adecuado para un análisis con dos factores y se resume mejor con uno solo: el nivel de endeudamiento reflejado en la facturación.
+
+## Traslape entre los dos perfiles
+
+Clientes que quedan en el 20 % más alto de cada factor (puntajes con el giro oblimin).
+
+```{r traslape}
+f_pun <- psych::fa(
+  datos_kmo, nfactors = 2, fm = "ml", rotate = "oblimin", scores = "regression"
+)
+H <- f_pun$scores
+
+alto <- function(v) v >= quantile(v, 0.80)
+perfil_1 <- alto(H[, 1])
+perfil_2 <- alto(H[, 2])
+
+c(
+  perfil_1              = sum(perfil_1),
+  perfil_2              = sum(perfil_2),
+  en_los_dos            = sum(perfil_1 & perfil_2),
+  de_cada_100_repetidos = round(100 * sum(perfil_1 & perfil_2) / sum(perfil_1), 1)
+)
+```
+
+```{r grafico-traslape, echo=FALSE, fig.width=9, fig.height=3.6}
+miles <- function(x) formatC(x, format = "d", big.mark = ".")
+
+data.frame(
+  grupo = c("Solo en el perfil 1", "En los dos perfiles", "Solo en el perfil 2"),
+  n = c(sum(perfil_1 & !perfil_2), sum(perfil_1 & perfil_2), sum(perfil_2 & !perfil_1))
+) %>%
+  mutate(grupo = factor(grupo, levels = grupo)) %>%
+  ggplot(aes(n, "", fill = grupo)) +
+  geom_col(width = 0.5, position = position_stack(reverse = TRUE)) +
+  geom_text(
+    aes(label = miles(n)),
+    position = position_stack(vjust = 0.5, reverse = TRUE),
+    color = "white", fontface = "bold", size = 4.6
+  ) +
+  scale_fill_manual(values = c("#285A91", "#6B7280", "#A65E00"), name = NULL) +
+  scale_x_continuous(labels = miles) +
+  labs(
+    title = "Dos perfiles armados con los dos factores girados",
+    subtitle = "Clientes en el 20 % más alto de cada factor",
+    x = "Clientes", y = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "top", plot.title = element_text(face = "bold", color = "#243447"))
+```
+
+<!-- Describir / Analizar / Decisión: escribe aquí tu análisis -->
+
+
+## Conclusión
+
+<!-- Escribe aquí la conclusión para el banco -->
+
