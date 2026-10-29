@@ -58,11 +58,10 @@ tabla <- function(x, digits = 3) knitr::kable(x, digits = digits)
 
 # 1. Propósito y recorrido del trabajo
 
-Este trabajo compara cómo cambia la representación de los clientes al modificar la codificación de las variables categóricas. Se conserva como contexto el banco taiwanés y su interés por la intervención temprana; el PCA se utiliza aquí para examinar perfiles, pérdida de variación y cobertura de reglas descriptivas.
+Este trabajo compara cómo cambia la representación de los clientes al modificar la codificación de las variables categóricas. Se conserva como contexto el banco taiwanés y su interés por la intervención temprana.
 
 El recorrido parte de una exploración con one-hot completo, continúa con la primera recodificación y la codificación mixta, y termina comparando mapas, grupos y zonas de revisión sobre los mismos clientes. La comprobación final retira el impago futuro para distinguir la exploración retrospectiva de un análisis que podría construirse con información disponible antes del resultado.
 
-> **Criterio de lectura.** En este documento, información significa varianza de las columnas utilizadas. Los porcentajes de diferentes codificaciones no comparten necesariamente la misma ponderación ni el mismo total. Conservar más varianza no equivale a detectar más incumplidos.
 
 # 2. Exploración inicial: one-hot completo
 
