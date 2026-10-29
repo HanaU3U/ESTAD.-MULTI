@@ -1,0 +1,1540 @@
+---
+title: "PCA con mas cosas"
+author: |
+  Juan Pablo Mosquera Marin - 20221020026  
+  Ana Laura Morcote Chacon - 20221020010  
+  Hana Sofia Pinilla Manrique - 20221020092  
+  Juan David Amaya Patiño - 20221020057
+date: "2026-10-27"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+# Evita escapes Unicode en las etiquetas gráficas si Windows inicia con locale C.
+if (.Platform$OS.type == "windows" && !l10n_info()[["UTF-8"]]) {
+  invisible(Sys.setlocale("LC_CTYPE", "Spanish_Colombia.utf8"))
+}
+knitr::opts_chunk$set(echo = FALSE, include = TRUE, eval = TRUE,
+                      warning = FALSE, message = FALSE,
+                      results = "markup", fig.show = "asis", fig.keep = "all",
+                      fig.align = "center", fig.width = 10, fig.height = 6)
+paquetes <- c("ggplot2", "ggrepel", "corrplot", "tidyr", "dplyr", "knitr", "kableExtra", "htmltools")
+faltan <- paquetes[!vapply(paquetes, requireNamespace, logical(1), quietly = TRUE)]
+if (length(faltan)) stop("Instale los paquetes necesarios: ", paste(faltan, collapse = ", "))
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+theme_set(theme_minimal(base_size = 12))
+fmt <- function(x, d = 2) formatC(x, format = "f", digits = d,
+                                 decimal.mark = ",", big.mark = ".")
+tabla <- function(x, digits = 3) knitr::kable(x, digits = digits)
+```
+
+<style>
+.main-container { max-width: 1500px; }
+.toc-content { line-height: 1.7; }
+.toc-content h1 { margin-top: 2.6em; padding-top: .6em; border-top: 2px solid #dce5ed; color: #243447; }
+.toc-content h2 { margin-top: 1.8em; color: #285a71; }
+.toc-content h3 { margin-top: 1.3em; color: #425466; }
+.toc-content p { margin-bottom: 1em; }
+.toc-content table { width: 100%; margin: 1.4em 0; font-variant-numeric: tabular-nums; }
+.toc-content th, .toc-content td { overflow-wrap: anywhere; vertical-align: top; padding: 8px 6px; }
+.toc-content caption { color: #243447; font-weight: 600; text-align: left; padding-bottom: 10px; }
+.toc-content img { max-width: 100%; height: auto; }
+.toc-content blockquote { background: #f3f7fa; border-left: 4px solid #285a71; padding: 12px 18px; }
+@media print { .toc-content h1, .toc-content h2, .toc-content h3 { break-after: avoid; } }
+</style>
+
+# 1. Propósito y recorrido del trabajo
+
+Este trabajo compara cómo cambia la representación de los clientes al modificar la codificación de las variables categóricas. Se conserva como contexto el banco taiwanés y su interés por la intervención temprana; el PCA se utiliza aquí para examinar perfiles, pérdida de variación y cobertura de reglas descriptivas.
+
+El recorrido parte de una exploración con one-hot completo, continúa con la primera recodificación y la codificación mixta, y termina comparando mapas, grupos y zonas de revisión sobre los mismos clientes. La comprobación final retira el impago futuro para distinguir la exploración retrospectiva de un análisis que podría construirse con información disponible antes del resultado.
+
+> **Criterio de lectura.** En este documento, información significa varianza de las columnas utilizadas. Los porcentajes de diferentes codificaciones no comparten necesariamente la misma ponderación ni el mismo total. Conservar más varianza no equivale a detectar más incumplidos.
+
+# 2. Exploración inicial: one-hot completo
+
+## 2.1. Configuración y reparto de la varianza
+
+Esta primera exploración no incluye la respuesta futura. Por tanto, su comparación con los modelos posteriores también debe considerar esa diferencia de alcance.
+
+```{r bloque-1, echo=FALSE}
+library(knitr)
+library(kableExtra)
+
+# 1. Cargar la base conservando los nombres originales.
+rutas <- c(
+  file.path("DATASET", "datos_credit.csv"),
+  file.path("..", "DATASET", "datos_credit.csv")
+)
+
+ruta <- rutas[file.exists(rutas)][1]
+
+if (is.na(ruta)) {
+  stop("No se encontró DATASET/datos_credit.csv.")
+}
+
+datos_credit <- read.csv(
+  ruta,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+# 2. Definir las variables originales que entran al análisis.
+variables_cuantitativas <- c(
+  "LIMIT_BAL", "AGE",
+  paste0("BILL_AMT", 1:6),
+  paste0("PAY_AMT", 1:6)
+)
+
+variables_categoricas <- c(
+  "SEX", "EDUCATION", "MARRIAGE",
+  "PAY_0", paste0("PAY_", 2:6)
+)
+
+# 3. Conservar la recodificación definida en el diccionario.
+datos_credit$EDUCATION[
+  datos_credit$EDUCATION %in% c(0, 5, 6)
+] <- 4
+
+datos_credit$MARRIAGE[
+  datos_credit$MARRIAGE %in% 0
+] <- 3
+
+# ID y default payment next month no entran al PCA.
+predictores <- datos_credit[
+  c(variables_cuantitativas, variables_categoricas)
+]
+
+# 4. Seleccionar filas completas y con mediciones finitas.
+filas_validas <- complete.cases(predictores) &
+  apply(
+    as.matrix(predictores[variables_cuantitativas]),
+    1,
+    function(x) all(is.finite(x))
+  )
+
+predictores <- predictores[filas_validas, , drop = FALSE]
+
+# 5. Crear una indicadora por categoría observada.
+bloques_indicadores <- lapply(variables_categoricas, function(variable) {
+
+  categoria <- factor(predictores[[variable]])
+  niveles <- levels(categoria)
+
+  bloque <- vapply(
+    niveles,
+    function(nivel) as.numeric(categoria == nivel),
+    numeric(nrow(predictores))
+  )
+
+  colnames(bloque) <- paste0(variable, "_categoria_", niveles)
+  bloque
+})
+
+indicadores <- do.call(cbind, bloques_indicadores)
+
+# 6. Unir las variables cuantitativas y las indicadoras.
+datos_codificados <- cbind(
+  as.matrix(predictores[variables_cuantitativas]),
+  indicadores
+)
+
+# Eliminar columnas constantes: no pueden estandarizarse.
+columnas_variables <- apply(datos_codificados, 2, sd) > 0
+
+datos_codificados <- datos_codificados[
+  , columnas_variables, drop = FALSE
+]
+
+# 7. Estandarizar y ejecutar el PCA.
+# Cada columna queda con media 0 y desviación estándar 1.
+pca_codificado <- prcomp(
+  datos_codificados,
+  center = TRUE,
+  scale. = TRUE
+)
+
+# 8. Calcular la varianza individual y acumulada.
+autovalores <- pca_codificado$sdev^2
+porcentajes <- 100 * autovalores / sum(autovalores)
+acumulados <- cumsum(porcentajes)
+
+numero_80 <- which(acumulados > 80)[1]
+
+tabla_componentes <- data.frame(
+  Componente = paste0("PC", seq_along(autovalores)),
+  Autovalor = autovalores,
+  Individual = porcentajes,
+  Acumulada = acumulados,
+  Estandarizacion = "Sí"
+)
+
+resumen <- data.frame(
+  Caracteristica = c(
+    "Clientes analizados",
+    "Variables cuantitativas originales",
+    "Variables categóricas originales",
+    "Columnas finales después de codificar",
+    "Centrado",
+    "Estandarización",
+    "Componentes necesarias para superar el 80 %"
+  ),
+  Resultado = c(
+    nrow(predictores),
+    length(variables_cuantitativas),
+    length(variables_categoricas),
+    ncol(datos_codificados),
+    "Sí: media cero",
+    "Sí: desviación estándar uno en todas las columnas",
+    numero_80
+  )
+)
+
+tabla_resumen <- kable(
+  resumen,
+  format = "html",
+  row.names = FALSE,
+  col.names = c("Característica", "Resultado"),
+  caption = "Configuración del PCA con codificación one-hot"
+) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped", "condensed"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447")
+
+tabla_resultados <- kable(
+  tabla_componentes,
+  format = "html",
+  row.names = FALSE,
+  col.names = c(
+    "Componente", "Autovalor",
+    "Varianza individual (%)", "Varianza acumulada (%)",
+    "Datos estandarizados"
+  ),
+  digits = 4,
+  format.args = list(decimal.mark = ","),
+  caption = "Varianza explicada por todas las componentes"
+) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped", "hover", "condensed"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#24735B") %>%
+  row_spec(numero_80, bold = TRUE, background = "#FFF1DE")
+
+```
+
+```{r salida-2, echo=FALSE}
+htmltools::browsable(
+  htmltools::tagList(
+    htmltools::HTML(as.character(tabla_resumen)),
+    htmltools::tags$br(),
+    htmltools::HTML(as.character(tabla_resultados))
+  )
+)
+```
+
+## 2.2. Interpretación y decisión sobre esta representación
+
+Este PCA se realizo con el objetivo de hacer una simple recodificacion de las variables categoricas con OneHot Encoding, para darnos una idea si esta forma de hacerlo podria ser una opcion, lo cual se vio que no es asi porque:
+
+La disminución del porcentaje del PC1 con respecto al análisis anterior no significa, en si que el PCA haya empeorado. Pero si cambió la representación porque ahora hay 14 columnas cuantitativas y 73 indicadoras (un aumento exagerado de 63 columnas). Por lo cual las indicadoras aportan aproximadamente 83,91 % de la varianza inicial, y las variables con más categorías tienen mayor peso total.
+
+Asi que después de aplicar OneHot y estandarizar las 87 columnas, la primera componente conserva el 10,93 % de la varianza y se necesitan 32 componentes para superar el 80%, lo que hace que esta codificacion requiera minimo de 32 componetes, lo que es un absurdo debido a que esta cantidad de componentes es incluso mayor al numero de variables originales que es 24, y tambien frente a la cantidad de componentes necesarios para el anterior analis que fueron necesarios solo diez componetes para superar el 80%. Estos porcentajes lo que describen es la variación de las columnas codificadas y no indican capacidad para predecir incumplimiento.
+
+> **Alcance de la comparación.** Que se necesiten más componentes que variables originales no invalida matemáticamente el one-hot: cada categoría aporta una dirección de contraste. La dificultad práctica es que este esquema, al estandarizar cada indicadora, asigna más peso inicial a las variables con más categorías y ofrece un resumen menos compacto para el objetivo del trabajo.
+
+# 3. Primera codificación: una columna por variable
+
+## 3.1. Configuración y varianza explicada
+
+```{r bloque-3, echo=FALSE}
+library(knitr)
+library(kableExtra)
+
+# 1. Cargar la base.
+rutas <- c(
+  file.path("DATASET", "datos_credit.csv"),
+  file.path("..", "DATASET", "datos_credit.csv")
+)
+
+ruta <- rutas[file.exists(rutas)][1]
+if (is.na(ruta)) stop("No se encontró DATASET/datos_credit.csv.")
+
+datos_credit <- read.csv(
+  ruta,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+# Conservar los datos originales.
+datos_recodificados <- datos_credit
+
+# 2. SEX: conservar 1 = Hombre y 2 = Mujer.
+
+# 3. EDUCATION:
+# Otros = 0, Secundaria = 1, Universidad = 2, Posgrado = 3.
+educacion_original <- datos_credit$EDUCATION
+educacion_original[educacion_original %in% c(0, 5, 6)] <- 4
+
+equivalencias_educacion <- c(
+  "1" = 3,
+  "2" = 2,
+  "3" = 1,
+  "4" = 0
+)
+
+datos_recodificados$EDUCATION <- unname(
+  equivalencias_educacion[as.character(educacion_original)]
+)
+
+# 4. MARRIAGE: conservar 1 = Casado, 2 = Soltero, 3 = Otros.
+datos_recodificados$MARRIAGE[
+  datos_recodificados$MARRIAGE %in% 0
+] <- 3
+
+# 5. Historial: agrupar -2, -1 y 0 en 0.
+# Los positivos conservan los meses de atraso.
+variables_historial <- c("PAY_0", paste0("PAY_", 2:6))
+
+for (variable in variables_historial) {
+  valores <- datos_recodificados[[variable]]
+  valores[valores %in% c(-2, -1, 0)] <- 0
+  datos_recodificados[[variable]] <- valores
+}
+
+# 6. Incluir las 24 variables, también la respuesta binaria.
+# Se excluye únicamente ID.
+variable_binaria <- "default payment next month"
+
+variables_pca <- c(
+  "LIMIT_BAL", "SEX", "EDUCATION", "MARRIAGE", "AGE",
+  variables_historial,
+  paste0("BILL_AMT", 1:6),
+  paste0("PAY_AMT", 1:6),
+  variable_binaria
+)
+
+X_original <- datos_recodificados[variables_pca]
+
+stopifnot(
+  all(vapply(X_original, is.numeric, logical(1))),
+  all(na.omit(X_original[[variable_binaria]]) %in% c(0, 1))
+)
+
+# Conservar filas completas y finitas.
+filas_validas <- apply(
+  as.matrix(X_original),
+  1,
+  function(fila) all(is.finite(fila))
+)
+
+X <- X_original[filas_validas, , drop = FALSE]
+
+if (nrow(X) < 2) {
+  stop("No hay suficientes observaciones válidas.")
+}
+
+if (any(vapply(X, sd, numeric(1)) == 0)) {
+  stop("Existen variables constantes que no pueden estandarizarse.")
+}
+
+# 7. PCA: todas las columnas, incluida la binaria,
+# se centran y estandarizan.
+pca_recodificado <- prcomp(
+  X,
+  center = TRUE,
+  scale. = TRUE
+)
+
+# 8. Varianza explicada.
+autovalores <- pca_recodificado$sdev^2
+porcentajes <- 100 * autovalores / sum(autovalores)
+acumulados <- cumsum(porcentajes)
+numero_80 <- which(acumulados > 80)[1]
+
+resumen <- data.frame(
+  Caracteristica = c(
+    "Clientes analizados",
+    "Filas excluidas",
+    "Variables incluidas",
+    "Respuesta binaria incluida",
+    "Codificación",
+    "Centrado y estandarización",
+    "Componentes para superar el 80 %"
+  ),
+  Resultado = c(
+    nrow(X),
+    sum(!filas_validas),
+    ncol(X),
+    "default payment next month: una columna 0–1",
+    "Una columna por variable, con recodificaciones acordadas",
+    "Sí: media cero y desviación estándar uno",
+    numero_80
+  )
+)
+
+reparto <- data.frame(
+  Componente = paste0("PC", seq_along(autovalores)),
+  Autovalor = autovalores,
+  Individual = porcentajes,
+  Acumulada = acumulados
+)
+
+tabla_resumen <- kable(
+  resumen,
+  format = "html",
+  row.names = FALSE,
+  col.names = c("Característica", "Resultado"),
+  caption = "PCA recodificado con respuesta binaria incluida"
+) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped", "condensed"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447")
+
+tabla_componentes <- kable(
+  reparto,
+  format = "html",
+  row.names = FALSE,
+  col.names = c(
+    "Componente", "Autovalor",
+    "Varianza individual (%)", "Varianza acumulada (%)"
+  ),
+  digits = 4,
+  format.args = list(decimal.mark = ","),
+  caption = "Varianza explicada por componente"
+) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped", "hover", "condensed"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#24735B") %>%
+  row_spec(numero_80, bold = TRUE, background = "#FFF1DE")
+
+```
+
+```{r salida-4, echo=FALSE}
+htmltools::browsable(
+  htmltools::tagList(
+    htmltools::HTML(as.character(tabla_resumen)),
+    htmltools::tags$br(),
+    htmltools::HTML(as.character(tabla_componentes))
+  )
+)
+```
+
+## 3.2. Decisiones de recodificación y sus implicaciones
+
+Para este PCA se conservaron las 14 variables cuantitativas y se incorporaron nueve variables categóricas codificadas, manteniendo una columna por variable. Solo se excluyo el identificador `ID` . Los cambios se realizaron sobre una copia para conservar la base original.
+
+### Sexo: conservación del código binario
+
+En **`SEX`** se mantuvo `1 = Hombre` y `2 = Mujer`. Cambiar a `0` y `1` no modificaría el PCA estandarizado, porque ambos esquemas producen los mismos valores después de centrar y estandarizar. Se conservaron los códigos para mantener la correspondencia con el diccionario, sin interpretarlos como una jerarquía.
+
+### Escolaridad: orden de los niveles conocidos
+
+En **`EDUCATION`** se asignó `0 = Otros`, `1 = Secundaria`, `2 = Universidad` y `3 = Posgrado`. Así, un número mayor representa mayor nivel académico entre los niveles conocidos. Los códigos originales `0`, `5` y `6` se agruparon primero en “Otros”. La ubicación de “Otros” en cero es una decisión arbitraria: no significa menor escolaridad, aunque el PCA la tratará como inferior a las demás categorías y asumirá intervalos iguales entre códigos.
+
+### Estado civil: límite de la codificación nominal
+
+En **`MARRIAGE`** se conservaron `1 = Casado`, `2 = Soltero` y `3 = Otros`, agrupando el código original `0` en “Otros”, según la depuración del diccionario. No se propuso un orden nuevo porque estas categorías no tienen una jerarquía natural. Sin embargo, conservar los códigos tampoco elimina la limitación: el PCA impondrá un orden y distancias numéricas que no tienen una interpretación sustantiva.
+
+### Historial: agrupación de los códigos especiales
+
+En el **historial de pagos** (`PAY_0`, `PAY_2`, `PAY_3`, `PAY_4`, `PAY_5` y `PAY_6`) se agruparon los códigos `-2`, `-1` y `0` en un único valor `0`, interpretado como “sin atraso positivo codificado”. Los valores positivos se conservaron para mantener su correspondencia con los meses de atraso. Esta decisión evita ordenar los tres estados especiales, pero pierde sus diferencias; el nuevo cero no equivale necesariamente a pago puntual ni a ausencia de riesgo.
+
+### Estandarización de las columnas
+
+Finalmente, todas las variables se centraron y estandarizaron mediante Z-score, restando su media y dividiendo entre su desviación estándar. Esto iguala su varianza inicial, pero no corrige las posiciones ni las distancias arbitrarias de las categorías codificadas.
+
+## 3.3. Alcance del resumen para el banco
+
+En esta primera codificación, PC1 conserva el 24,71 % de la varianza y las dos primeras componentes acumulan 41,79 %. Por tanto, un mapa de dos ejes mostraría menos de la mitad de la variación del conjunto.
+
+Para superar el 80 % se necesitan las primeras 11 componentes, que conservan 82,19 %. Esto significa que las 24 variables pueden resumirse en 11 componentes conservando aproximadamente 82 de cada 100 partes de su variación, bajo la codificación y estandarización elegidas. No significa conservar el 82 % de la capacidad para identificar incumplidos.
+
+## 3.4. El costo de decidir con un único indicador
+
+### Cobertura de tres motivos de revisión
+
+La comparación pregunta qué se omite al seleccionar únicamente el tramo superior de C1. Atraso, facturas altas y pagos altos son motivos distintos de revisión; no constituyen tres definiciones del impago futuro.
+
+```{r bloque-5, echo=FALSE}
+
+# 1. Orientar C1 hacia mayor facturación.
+# Se aplica el mismo signo a puntuaciones y pesos, sin modificar el PCA original.
+variables_factura <- paste0("BILL_AMT", 1:6)
+
+signo_c1 <- if (
+  sum(pca_recodificado$rotation[variables_factura, 1]) < 0
+) -1 else 1
+
+c1_revision <- signo_c1 * pca_recodificado$x[, 1]
+pesos_c1_revision <- signo_c1 * pca_recodificado$rotation[, 1]
+
+stopifnot(length(c1_revision) == nrow(X))
+
+# 2. Seleccionar valores iguales o superiores al percentil 80.
+# Los empates pueden hacer que se seleccione más del 20%.
+alto <- function(v) {
+  v >= quantile(v, 0.80, names = FALSE)
+}
+
+detecta <- alto(c1_revision)
+
+# 3. Comparar la selección por C1 con tres motivos de revisión.
+variables_revision <- c("PAY_0", "BILL_AMT1", "PAY_AMT1")
+
+etiquetas_revision <- c(
+  PAY_0 = "Estado de atraso · Septiembre",
+  BILL_AMT1 = "Facturación alta · Septiembre",
+  PAY_AMT1 = "Pagos altos · Septiembre"
+)
+
+cobertura_recodificada <- bind_rows(
+  lapply(variables_revision, function(variable) {
+
+    objetivo <- alto(X[[variable]])
+
+    data.frame(
+      Variable = variable,
+      Umbral = quantile(X[[variable]], 0.80, names = FALSE),
+      Objetivo = sum(objetivo),
+      Incluidos = sum(objetivo & detecta),
+      Fuera = sum(objetivo & !detecta),
+      Porcentaje_fuera = 100 * sum(objetivo & !detecta) /
+        sum(objetivo)
+    )
+  })
+)
+
+# 4. Tabla de cobertura.
+tabla_cobertura <- cobertura_recodificada %>%
+  kable(
+    format = "html",
+    row.names = FALSE,
+    caption = "Cobertura al seleccionar el tramo superior de C1",
+    col.names = c(
+      "Variable", "Umbral P80", "Casos objetivo",
+      "Incluidos", "Fuera", "Fuera (%)"
+    ),
+    digits = 2,
+    format.args = list(big.mark = ".", decimal.mark = ",")
+  ) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped", "hover", "condensed"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447") %>%
+  column_spec(6, bold = TRUE, background = "#FFF1DE")
+
+```
+
+```{r salida-6, echo=FALSE}
+htmltools::browsable(
+  htmltools::tagList(
+    htmltools::HTML(as.character(tabla_cobertura)),
+    htmltools::tags$p(
+      sprintf(
+        paste0(
+          "La regla de C1 selecciona %s clientes (%.2f%%). ",
+          "Se incluyen los empates en el percentil 80."
+        ),
+        format(sum(detecta), big.mark = ".", scientific = FALSE),
+        100 * mean(detecta)
+      )
+    )
+  )
+)
+
+# 5. Gráfico de incluidos y excluidos para cada motivo.
+datos_grafico <- cobertura_recodificada %>%
+  select(Variable, Incluidos, Fuera) %>%
+  pivot_longer(
+    cols = c(Incluidos, Fuera),
+    names_to = "Resultado",
+    values_to = "Clientes"
+  ) %>%
+  mutate(
+    Variable = factor(
+      Variable,
+      levels = rev(variables_revision),
+      labels = unname(etiquetas_revision[rev(variables_revision)])
+    ),
+    Resultado = factor(Resultado, levels = c("Incluidos", "Fuera"))
+  )
+
+```
+
+### Clientes incluidos y omitidos
+
+```{r salida-7, echo=FALSE}
+ggplot(datos_grafico, aes(Clientes, Variable, fill = Resultado)) +
+  geom_col(
+    width = 0.65,
+    position = position_stack(reverse = TRUE)
+  ) +
+  geom_text(
+    aes(
+      label = ifelse(
+        Clientes > 0,
+        format(Clientes, big.mark = ".", scientific = FALSE),
+        ""
+      )
+    ),
+    position = position_stack(vjust = 0.5, reverse = TRUE),
+    color = "white",
+    fontface = "bold",
+    size = 4
+  ) +
+  scale_fill_manual(
+    values = c(Incluidos = "#2166AC", Fuera = "#B35806"),
+    labels = c("Incluidos por C1", "Fuera de la selección")
+  ) +
+  scale_x_continuous(
+    labels = function(x) format(x, big.mark = ".", scientific = FALSE),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = "¿A quién deja fuera un único número?",
+    subtitle = "PCA recodificado · Selección por el percentil 80 de C1",
+    x = "Clientes de cada grupo objetivo",
+    y = NULL,
+    fill = NULL,
+    caption = paste(
+      "Tres motivos distintos de revisión, no definiciones de incumplimiento.",
+      "La respuesta futura está incluida en este PCA: análisis retrospectivo.",
+      sep = "\n"
+    )
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    panel.grid.major.y = element_blank(),
+    plot.caption = element_text(hjust = 0)
+  )
+```
+
+### Qué implica la cobertura para la decisión
+
+Al seleccionar únicamente el 20 % superior de PC1 prioriza la facturación alta, pero deja fuera a la mayoría de los clientes con atraso en septiembre.
+
+- Atraso (PAY_0 ≥ 1): Por tanto, esta selección tiene poca cobertura del atraso observado.
+- Facturación alta (BILL_AMT1): Es el grupo mejor representado por la selección.
+- Pagos altos (PAY_AMT1): Casi la mitad no aparece al revisar solo PC1.
+
+Estos resultados son coherentes con una primera componente vinculada principalmente con el volumen de facturación. Tener facturas altas no equivale a presentar atraso, y realizar pagos altos constituye otro motivo de revisión.
+
+Para el banco, la conclusión seria, Si revisamos únicamente a los clientes con PC1 más alta, encontramos a la mayoría de quienes tienen facturas elevadas, pero omitimos aproximadamente a 85 de cada 100 clientes con atraso en septiembre. Por ello, este indicador no sustituye la revisión del historial de pagos. Ademas que el ejercicio describe cobertura de grupos observados; no mide detección de impago del mes siguiente.
+
+# 4. Codificación mixta: one-hot para sexo y estado civil
+
+## 4.1. Configuración y varianza explicada
+
+```{r bloque-8, echo=FALSE}
+# 1. Cargar la base original.
+rutas <- c(
+  file.path("DATASET", "datos_credit.csv"),
+  file.path("..", "DATASET", "datos_credit.csv")
+)
+
+ruta <- rutas[file.exists(rutas)][1]
+if (is.na(ruta)) stop("No se encontró DATASET/datos_credit.csv.")
+
+datos_credit <- read.csv(
+  ruta,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+datos_mixtos <- datos_credit
+
+# 2. EDUCATION: Otros = 0, Secundaria = 1,
+# Universidad = 2 y Posgrado = 3.
+educacion_original <- datos_credit$EDUCATION
+educacion_original[educacion_original %in% c(0, 5, 6)] <- 4
+
+equivalencias_educacion <- c(
+  "1" = 3,
+  "2" = 2,
+  "3" = 1,
+  "4" = 0
+)
+
+datos_mixtos$EDUCATION <- unname(
+  equivalencias_educacion[as.character(educacion_original)]
+)
+
+# 3. MARRIAGE: integrar el código original 0 en Otros.
+datos_mixtos$MARRIAGE[datos_mixtos$MARRIAGE %in% 0] <- 3
+
+# 4. Historial: agrupar -2, -1 y 0 en 0.
+variables_historial <- c("PAY_0", paste0("PAY_", 2:6))
+
+for (variable in variables_historial) {
+  valores <- datos_mixtos[[variable]]
+  valores[valores %in% c(-2, -1, 0)] <- 0
+  datos_mixtos[[variable]] <- valores
+}
+
+# 5. Definir las columnas de cada tratamiento.
+variables_cuantitativas <- c(
+  "LIMIT_BAL", "AGE",
+  paste0("BILL_AMT", 1:6),
+  paste0("PAY_AMT", 1:6)
+)
+
+variables_onehot <- c("SEX", "MARRIAGE")
+variable_binaria <- "default payment next month"
+
+variables_directas <- c(
+  variables_cuantitativas,
+  "EDUCATION",
+  variables_historial,
+  variable_binaria
+)
+
+# ID queda excluido.
+datos_seleccionados <- datos_mixtos[
+  c(variables_directas, variables_onehot)
+]
+
+stopifnot(
+  all(vapply(datos_seleccionados, is.numeric, logical(1))),
+  all(na.omit(datos_seleccionados[[variable_binaria]]) %in% c(0, 1)),
+  all(na.omit(datos_seleccionados$SEX) %in% c(1, 2)),
+  all(na.omit(datos_seleccionados$MARRIAGE) %in% c(1, 2, 3))
+)
+
+# 6. Conservar filas completas y finitas.
+filas_validas <- apply(
+  as.matrix(datos_seleccionados),
+  1,
+  function(fila) all(is.finite(fila))
+)
+
+datos_seleccionados <- datos_seleccionados[
+  filas_validas, , drop = FALSE
+]
+
+if (nrow(datos_seleccionados) < 2) {
+  stop("No hay suficientes observaciones válidas.")
+}
+
+# 7. One-hot completo: una columna por categoría observada.
+nombres_categorias <- list(
+  SEX = c("1" = "Hombre", "2" = "Mujer"),
+  MARRIAGE = c("1" = "Casado", "2" = "Soltero", "3" = "Otros")
+)
+
+bloques_indicadores <- lapply(variables_onehot, function(variable) {
+
+  categoria <- factor(datos_seleccionados[[variable]])
+  niveles <- levels(categoria)
+
+  bloque <- vapply(
+    niveles,
+    function(nivel) as.numeric(categoria == nivel),
+    numeric(nrow(datos_seleccionados))
+  )
+
+  colnames(bloque) <- paste0(
+    variable, "_", unname(nombres_categorias[[variable]][niveles])
+  )
+
+  bloque
+})
+
+indicadores_mixtos <- do.call(cbind, bloques_indicadores)
+
+# Matriz final: columnas directas más indicadoras.
+X_mixto <- cbind(
+  as.matrix(datos_seleccionados[variables_directas]),
+  indicadores_mixtos
+)
+
+# Eliminar columnas constantes antes de estandarizar.
+columnas_variables <- apply(X_mixto, 2, sd) > 0
+columnas_excluidas <- colnames(X_mixto)[!columnas_variables]
+
+X_mixto <- X_mixto[, columnas_variables, drop = FALSE]
+
+if (!variable_binaria %in% colnames(X_mixto)) {
+  stop("La respuesta binaria es constante y no puede estandarizarse.")
+}
+
+# 8. PCA centrado y estandarizado.
+pca_mixto <- prcomp(
+  X_mixto,
+  center = TRUE,
+  scale. = TRUE
+)
+
+# 9. Varianza individual y acumulada.
+autovalores_mixtos <- pca_mixto$sdev^2
+porcentajes_mixtos <- 100 * autovalores_mixtos /
+  sum(autovalores_mixtos)
+acumulados_mixtos <- cumsum(porcentajes_mixtos)
+
+numero_80_mixto <- which(acumulados_mixtos > 80)[1]
+
+resumen_mixto <- data.frame(
+  Caracteristica = c(
+    "Clientes analizados",
+    "Filas excluidas",
+    "Variables cuantitativas",
+    "Variables con one-hot",
+    "Escolaridad",
+    "Historial de pagos",
+    "Respuesta binaria",
+    "Columnas finales",
+    "Columnas constantes excluidas",
+    "Centrado y estandarización",
+    "Componentes para superar el 80 %"
+  ),
+  Resultado = c(
+    nrow(X_mixto),
+    sum(!filas_validas),
+    length(variables_cuantitativas),
+    "SEX y MARRIAGE",
+    "Otros = 0; Secundaria = 1; Universidad = 2; Posgrado = 3",
+    "-2, -1 y 0 agrupados en 0; positivos sin cambios",
+    "Incluida como una columna 0–1",
+    ncol(X_mixto),
+    length(columnas_excluidas),
+    "Sí: media cero y desviación estándar uno por columna",
+    numero_80_mixto
+  )
+)
+
+reparto_mixto <- data.frame(
+  Componente = paste0("PC", seq_along(autovalores_mixtos)),
+  Autovalor = autovalores_mixtos,
+  Individual = porcentajes_mixtos,
+  Acumulada = acumulados_mixtos
+)
+
+tabla_resumen_mixto <- kable(
+  resumen_mixto,
+  format = "html",
+  row.names = FALSE,
+  col.names = c("Característica", "Resultado"),
+  caption = "PCA con codificación mixta"
+) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped", "condensed"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447")
+
+tabla_componentes_mixto <- kable(
+  reparto_mixto,
+  format = "html",
+  row.names = FALSE,
+  col.names = c(
+    "Componente", "Autovalor",
+    "Varianza individual (%)", "Varianza acumulada (%)"
+  ),
+  digits = 4,
+  format.args = list(decimal.mark = ","),
+  caption = "Varianza explicada por componente"
+) %>%
+  kable_styling(
+    full_width = TRUE,
+    bootstrap_options = c("striped", "hover", "condensed"),
+    font_size = 14
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#24735B") %>%
+  row_spec(numero_80_mixto, bold = TRUE, background = "#FFF1DE")
+
+```
+
+```{r salida-9, echo=FALSE}
+htmltools::browsable(
+  htmltools::tagList(
+    htmltools::HTML(as.character(tabla_resumen_mixto)),
+    htmltools::tags$br(),
+    htmltools::HTML(as.character(tabla_componentes_mixto)),
+    htmltools::tags$p(
+      "El one-hot completo genera dependencias entre indicadoras; ",
+      "pueden aparecer componentes finales con varianza prácticamente cero. ",
+      "La estandarización iguala la varianza por columna, no por variable original. ",
+      "La respuesta futura está incluida: el análisis es retrospectivo."
+    )
+  )
+)
+```
+
+## 4.2. Qué cambia y por qué
+
+Para este PCA se conservaron las **14 variables cuantitativas**, las nueve variables categóricas y la respuesta binaria `default payment next month`. Se aplicó una codificación mixta: one-hot para **`SEX`** y **`MARRIAGE`**, y las recodificaciones acordadas para escolaridad e historial de pagos. Solo se excluyó el identificador `ID`. Los cambios se realizaron sobre una copia para conservar la base original.
+
+### Sexo: dos columnas indicadoras
+
+En **`SEX`** se sustituyeron los códigos originales por dos columnas indicadoras: `SEX_Hombre` y `SEX_Mujer`. Cada columna toma el valor `1` cuando el cliente pertenece a esa categoría y `0` cuando no. Esto representa explícitamente las categorías sin asignarles una jerarquía. Sin embargo, al ser una variable binaria, una sola indicadora sería suficiente: conservar ambas genera redundancia y, al estandarizarlas por separado, da al sexo dos unidades de varianza inicial.
+
+
+### Estado civil: representación sin jerarquía
+
+En **`MARRIAGE`** se reemplazaron los códigos por tres columnas indicadoras: `MARRIAGE_Casado`, `MARRIAGE_Soltero` y `MARRIAGE_Otros`. El código original `0` se agrupó previamente en “Otros”. Se eligió one-hot porque el estado civil no tiene un orden natural: esta representación evita situar a Soltero entre Casado y Otros o imponer distancias numéricas entre esas categorías.
+
+
+### Inclusión de la respuesta futura
+
+La variable **`default payment next month`** se conservó en una sola columna con `0 = No` y `1 = Sí`. Como el resultado futuro participa en la construcción de las componentes, este PCA tiene un alcance descriptivo y retrospectivo; no permite demostrar capacidad para predecir incumplimiento.
+
+### Estandarización y peso de cada variable original
+
+Finalmente, todas las columnas se centraron y estandarizaron mediante Z-score, restando su media y dividiendo entre su desviación estándar. Con todas las categorías presentes, se obtienen **27 columnas**. Esta estandarización iguala la varianza inicial por columna, no por variable original: **`SEX`** aporta dos columnas y **`MARRIAGE`** tres. Además, el one-hot completo genera dependencias entre indicadoras, Sin embargo, la varianza total aumenta de 24 a 27 unidades porque cada columna estandarizada aporta una unidad inicial
+
+## 4.3. Comparación del reparto de varianza
+
+Con la codificación mixta, siguen siendo necesarias 11 componentes para superar el 80 %, aunque cambia la distribución de la varianza:
+
+| Indicador | Primera codificación | Codificación mixta |
+| --- | --- | --- |
+| Columnas analizadas | 24 | 27 |
+| Varianza de PC1 | 24,71 % | 21,97 % |
+| Acumulado de PC1 y PC2 | 41,79 % | 37,18 % |
+| Componentes para superar el 80 % | 11 | 11 |
+| Acumulado con 11 componentes | 82,19 % | 80,91 % |
+
+La disminución del porcentaje de PC1 no significa que el análisis haya empeorado. Su autovalor permanece casi igual: pasa de 5,9297 a 5,9327.Por eso PC1 representa una proporción menor.
+
+# 5. Comparación de los mapas de clientes
+
+## 5.1. Una base común para ambos ajustes
+
+Se comparan los mismos registros y se orientan los signos con las mismas referencias: las facturas para C1 y los estados de atraso para C2. Esto facilita contrastar ambos modelos; fijar el signo no obliga a que sus componentes sean idénticas.
+
+```{r bloque-10, echo=FALSE}
+# Reconstruir ambos PCA desde la misma base para garantizar
+# iguales observaciones y evitar sobrescribir análisis anteriores.
+rutas <- c(
+  file.path("DATASET", "datos_credit.csv"),
+  file.path("..", "DATASET", "datos_credit.csv")
+)
+ruta <- rutas[file.exists(rutas)][1]
+if (is.na(ruta)) stop("No se encontró DATASET/datos_credit.csv.")
+
+base_comparacion <- read.csv(
+  ruta, check.names = FALSE, stringsAsFactors = FALSE
+)
+
+historial_cmp <- c("PAY_0", paste0("PAY_", 2:6))
+facturas_cmp <- paste0("BILL_AMT", 1:6)
+respuesta_cmp <- "default payment next month"
+
+variables_cmp <- c(
+  "LIMIT_BAL", "SEX", "EDUCATION", "MARRIAGE", "AGE",
+  historial_cmp, facturas_cmp, paste0("PAY_AMT", 1:6),
+  respuesta_cmp
+)
+
+# Recodificaciones compartidas.
+educacion_cmp <- base_comparacion$EDUCATION
+educacion_cmp[educacion_cmp %in% c(0, 5, 6)] <- 4
+
+base_comparacion$EDUCATION <- unname(
+  c("1" = 3, "2" = 2, "3" = 1, "4" = 0)[
+    as.character(educacion_cmp)
+  ]
+)
+
+base_comparacion$MARRIAGE[
+  base_comparacion$MARRIAGE %in% 0
+] <- 3
+
+for (v in historial_cmp) {
+  base_comparacion[[v]][
+    base_comparacion[[v]] %in% c(-2, -1, 0)
+  ] <- 0
+}
+
+stopifnot(
+  all(vapply(base_comparacion[variables_cmp], is.numeric, logical(1))),
+  all(na.omit(base_comparacion$SEX) %in% c(1, 2)),
+  all(na.omit(base_comparacion$MARRIAGE) %in% c(1, 2, 3)),
+  all(na.omit(base_comparacion[[respuesta_cmp]]) %in% c(0, 1))
+)
+
+validas_cmp <- apply(
+  as.matrix(base_comparacion[variables_cmp]),
+  1, function(x) all(is.finite(x))
+)
+
+ids_cmp <- which(validas_cmp)
+base_cmp <- base_comparacion[validas_cmp, , drop = FALSE]
+
+# Primera codificación: una columna por variable.
+X_label_cmp <- as.matrix(base_cmp[variables_cmp])
+
+# Codificación mixta: SEX y MARRIAGE con one-hot completo.
+crear_indicadoras_cmp <- function(v, etiquetas) {
+  niveles <- sort(unique(base_cmp[[v]]))
+  bloque <- vapply(
+    niveles,
+    function(k) as.numeric(base_cmp[[v]] == k),
+    numeric(nrow(base_cmp))
+  )
+  colnames(bloque) <- paste0(
+    v, "_", unname(etiquetas[as.character(niveles)])
+  )
+  bloque
+}
+
+X_mixto_cmp <- cbind(
+  as.matrix(base_cmp[setdiff(variables_cmp, c("SEX", "MARRIAGE"))]),
+  crear_indicadoras_cmp(
+    "SEX", c("1" = "Hombre", "2" = "Mujer")
+  ),
+  crear_indicadoras_cmp(
+    "MARRIAGE", c("1" = "Casado", "2" = "Soltero", "3" = "Otros")
+  )
+)
+
+matrices_cmp <- list(
+  "Primera codificación" = X_label_cmp,
+  "Codificación mixta" = X_mixto_cmp
+)
+
+stopifnot(all(vapply(
+  matrices_cmp,
+  function(x) all(apply(x, 2, sd) > 0),
+  logical(1)
+)))
+
+# Orientar C1 hacia facturas y C2 hacia estados de atraso.
+orientar_cmp <- function(modelo) {
+  anclas <- list(facturas_cmp, historial_cmp)
+
+  for (k in 1:2) {
+    signo <- if (sum(modelo$rotation[anclas[[k]], k]) < 0) -1 else 1
+    modelo$rotation[, k] <- signo * modelo$rotation[, k]
+    modelo$x[, k] <- signo * modelo$x[, k]
+  }
+  modelo
+}
+
+modelos_cmp <- lapply(matrices_cmp, function(x) {
+  orientar_cmp(prcomp(x, center = TRUE, scale. = TRUE))
+})
+
+formato_cmp <- function(x, decimales = 2) {
+  formatC(
+    x, format = "f", digits = decimales,
+    decimal.mark = ",", big.mark = "."
+  )
+}
+
+tabla_cmp <- function(x, titulo) {
+  salida <- kable(
+    x, format = "html", row.names = FALSE,
+    caption = titulo, digits = 3,
+    format.args = list(decimal.mark = ",", big.mark = ".")
+  ) %>%
+    kable_styling(
+      full_width = TRUE,
+      bootstrap_options = c("striped", "hover", "condensed"),
+      font_size = 13
+    ) %>%
+    row_spec(0, bold = TRUE, color = "white", background = "#243447")
+
+  htmltools::browsable(htmltools::HTML(as.character(salida)))
+}
+
+resumen_modelos_cmp <- bind_rows(lapply(names(modelos_cmp), function(nombre) {
+  modelo <- modelos_cmp[[nombre]]
+  pct <- 100 * modelo$sdev^2 / sum(modelo$sdev^2)
+  k80 <- which(cumsum(pct) > 80)[1]
+
+  data.frame(
+    Analisis = nombre,
+    Clientes = nrow(modelo$x),
+    Columnas = nrow(modelo$rotation),
+    PC1_pct = pct[1],
+    PC2_pct = pct[2],
+    Plano_pct = sum(pct[1:2]),
+    Fuera_del_plano_pct = 100 - sum(pct[1:2]),
+    Componentes_80 = k80,
+    Acumulado_80_pct = cumsum(pct)[k80]
+  )
+}))
+
+mapas_cmp <- bind_rows(lapply(names(modelos_cmp), function(nombre) {
+  modelo <- modelos_cmp[[nombre]]
+  data.frame(
+    Analisis = nombre,
+    id_fila = ids_cmp,
+    C1 = modelo$x[, 1],
+    C2 = modelo$x[, 2],
+    sexo = factor(
+      base_cmp$SEX, levels = c(1, 2),
+      labels = c("Hombre", "Mujer")
+    ),
+    incumplimiento = factor(
+      base_cmp[[respuesta_cmp]], levels = c(0, 1),
+      labels = c("Sin incumplimiento", "Con incumplimiento")
+    )
+  )
+}))
+
+set.seed(19)
+ids_muestra_cmp <- sample(ids_cmp, min(3000, length(ids_cmp)))
+muestra_cmp <- mapas_cmp %>% filter(id_fila %in% ids_muestra_cmp)
+
+theme_set(theme_minimal(base_size = 12))
+
+```
+
+```{r salida-11, echo=FALSE}
+tabla_cmp(
+  resumen_modelos_cmp,
+  "Comparación de los PCA · Todas las columnas estandarizadas"
+)
+```
+
+### Qué significa la diferencia de porcentajes
+
+La primera codificación conserva el 41,79 % en el plano y la mixta el 37,18 %. La diferencia no permite afirmar que el primer mapa sea superior: el one-hot modifica el peso de sexo y estado civil y aumenta la varianza total inicial. Los dos mapas dejan fuera más de la mitad de la variación; por ello, la cercanía de dos clientes en el plano no garantiza perfiles similares en las dimensiones omitidas. Las once componentes responden al objetivo de superar el 80 %, mientras que las dos primeras se utilizan para visualizar.
+
+```{r bloque-12, echo=FALSE}
+```
+
+## 5.2. Mapa de las dos primeras componentes
+
+```{r salida-13, echo=FALSE}
+ggplot(muestra_cmp, aes(C1, C2)) +
+  geom_point(alpha = 0.22, size = 0.7, color = "#243447") +
+  facet_wrap(~ Analisis, ncol = 2) +
+  coord_equal() +
+  labs(
+    title = "Mapa de clientes: comparación de codificaciones",
+    subtitle = "Mismos clientes y misma muestra en ambos paneles",
+    x = "C1 · Orientada hacia mayor facturación",
+    y = "C2 · Orientada hacia mayores códigos de atraso",
+    caption = paste(
+      "Muestra de hasta 3.000 clientes; ajuste con toda la base válida.",
+      "Los porcentajes corresponden a matrices con distinta ponderación.",
+      sep = "\n"
+    )
+  )
+```
+
+### Qué significa la forma del mapa
+
+Las nubes de ambos modelos conservan una estructura visual semejante: una concentración de clientes y prolongaciones conectadas. No se observan fronteras naturales suficientes para convertir los perfiles en tipos separados. El banco puede utilizar las direcciones para organizar revisiones, pero tendría que definir los umbrales; el PCA no los descubre automáticamente. La muestra es la misma en ambos paneles, por lo que la similitud no se explica por haber dibujado clientes diferentes.
+
+La orientación positiva de C1 se vincula con mayor facturación y la de C2 con mayores códigos de atraso. Son combinaciones de varias columnas, no una factura individual ni una probabilidad de incumplimiento. La lectura de estas dos direcciones no se extiende automáticamente a las componentes posteriores.
+
+# 6. Grupos conocidos: desplazamiento y superposición
+
+## 6.1. Incumplimiento observado
+
+```{r bloque-14, echo=FALSE}
+resumen_grupos_cmp <- mapas_cmp %>%
+  group_by(Analisis, incumplimiento) %>%
+  summarise(
+    Clientes = n(),
+    Media_C1 = mean(C1),
+    Media_C2 = mean(C2),
+    SD_C1 = sd(C1),
+    SD_C2 = sd(C2),
+    .groups = "drop"
+  )
+
+```
+
+```{r salida-15, echo=FALSE}
+tabla_cmp(
+  resumen_grupos_cmp,
+  "Grupos por incumplimiento observado · Toda la base"
+)
+
+```
+
+### Qué significan los promedios y las dispersiones
+
+La principal diferencia entre quienes incumplen y quienes no lo hacen aparece en C2: sus medias se separan aproximadamente 2,31 unidades en ambas codificaciones, mientras que la diferencia en C1 es pequeña. Esto indica que la dimensión vinculada con estados de atraso distingue los promedios de estos grupos más que el volumen de facturación. La dispersión de los incumplidos en C2 es alta, de modo que su promedio no describe de manera uniforme a todos sus integrantes.
+
+```{r salida-16, echo=FALSE}
+ggplot(muestra_cmp, aes(C1, C2, color = incumplimiento)) +
+  geom_point(alpha = 0.25, size = 0.7) +
+  stat_ellipse(
+    data = mapas_cmp,
+    level = 0.90, type = "norm", linewidth = 0.8
+  ) +
+  facet_wrap(~ Analisis, ncol = 2) +
+  coord_equal(xlim = c(-6, 9), ylim = c(-6, 8)) +
+  scale_color_manual(values = c("#2166AC", "#B2182B")) +
+  labs(
+    title = "Comparación por incumplimiento observado",
+    subtitle = "Elipses calculadas con toda la base; acercamiento central",
+    x = "C1", y = "C2", color = NULL,
+    caption = paste(
+      "La respuesta participó en ambos PCA: comparación retrospectiva.",
+      "Las elipses normales son referencias, no fronteras de clasificación.",
+      sep = "\n"
+    )
+  ) +
+  theme(legend.position = "bottom")
+
+resumen_sexo_cmp <- mapas_cmp %>%
+  group_by(Analisis, sexo) %>%
+  summarise(
+    Clientes = n(),
+    Media_C1 = mean(C1),
+    Media_C2 = mean(C2),
+    .groups = "drop"
+  )
+
+```
+
+### Qué permite concluir la superposición
+
+Las elipses se desplazan principalmente en la dirección de C2, pero comparten una región amplia. Por tanto, una diferencia de promedios no proporciona una frontera que identifique a todos los clientes de cada grupo. La semejanza entre paneles muestra que el cambio de codificación nominal altera poco esta lectura del plano.
+
+La respuesta futura participó en ambos ajustes: parte de la asociación con el incumplimiento está incorporada en la construcción de los ejes. Esta figura debe interpretarse como exploración retrospectiva, no como evidencia de predicción. Las elipses normales son referencias de dispersión; no garantizan contener exactamente al 90 % observado.
+
+## 6.2. Sexo de los clientes
+
+```{r salida-17, echo=FALSE}
+tabla_cmp(resumen_sexo_cmp, "Grupos por sexo · Toda la base")
+
+```
+
+### Qué implica el cambio en las medias por sexo
+
+La diferencia entre las medias de hombres y mujeres en C2 aumenta de aproximadamente 0,29 a 0,42 unidades con la codificación mixta. Esto debe leerse teniendo en cuenta que sexo pasa de una columna estandarizada a dos indicadoras estandarizadas, por lo que cambia su peso en el ajuste. Una mayor distancia entre promedios no demuestra que la nueva codificación haya descubierto una separación más útil para decidir.
+
+```{r salida-18, echo=FALSE}
+ggplot(muestra_cmp, aes(C1, C2, color = sexo)) +
+  geom_point(alpha = 0.25, size = 0.7) +
+  stat_ellipse(
+    data = mapas_cmp,
+    level = 0.90, type = "norm", linewidth = 0.8
+  ) +
+  facet_wrap(~ Analisis, ncol = 2) +
+  coord_equal(xlim = c(-6, 9), ylim = c(-6, 8)) +
+  scale_color_manual(values = c("#2166AC", "#B35806")) +
+  labs(
+    title = "Comparación por sexo",
+    subtitle = "Elipses calculadas con toda la base; acercamiento central",
+    x = "C1", y = "C2", color = NULL,
+    caption = "SEX participa en ambos ajustes, con distinta representación y peso."
+  ) +
+  theme(legend.position = "bottom")
+
+# Diferencias entre centros y superposición sobre C1.
+contrastes_grupos_cmp <- bind_rows(lapply(names(modelos_cmp), function(nombre) {
+  mapa <- mapas_cmp %>% filter(Analisis == nombre)
+
+  bind_rows(lapply(c("incumplimiento", "sexo"), function(variable) {
+    grupos <- levels(mapa[[variable]])
+    g1 <- mapa[[variable]] == grupos[1]
+    g2 <- mapa[[variable]] == grupos[2]
+
+    d1 <- mean(mapa$C1[g2]) - mean(mapa$C1[g1])
+    d2 <- mean(mapa$C2[g2]) - mean(mapa$C2[g1])
+
+    data.frame(
+      Analisis = nombre,
+      Agrupacion = variable,
+      Grupo_1 = grupos[1],
+      Grupo_2 = grupos[2],
+      Diferencia_C1_G2_menos_G1 = d1,
+      Diferencia_C2_G2_menos_G1 = d2,
+      Diferencia_C1_en_SD_global = d1 / sd(mapa$C1),
+      Diferencia_C2_en_SD_global = d2 / sd(mapa$C2),
+      Distancia_centros_plano = sqrt(d1^2 + d2^2),
+      G1_sobre_mediana_C1_G2_pct =
+        100 * mean(mapa$C1[g1] > median(mapa$C1[g2]))
+    )
+  }))
+}))
+
+```
+
+### Qué significa el solapamiento por sexo
+
+Las nubes y sus elipses se superponen ampliamente en los dos paneles. La variación entre clientes del mismo sexo es mucho mayor que el desplazamiento de sus centros; conocer el sexo no permite asignar de forma clara un perfil de facturación o atraso en este plano. Esta conclusión se limita a la representación de dos ejes, no demuestra igualdad de perfiles en todas las dimensiones ni justifica decisiones individuales basadas en el grupo.
+
+## 6.3. Distancias entre centros y superposición en C1
+
+```{r salida-19, echo=FALSE}
+tabla_cmp(
+  contrastes_grupos_cmp,
+  "Distancia entre centros y superposición en C1"
+)
+```
+
+### Cómo valorar las diferencias entre grupos
+
+Expresar las diferencias en desviaciones estándar globales permite contrastarlas con la variación del eje. Por incumplimiento, la diferencia en C2 ronda 1,14 desviaciones estándar en ambos modelos, frente a unas 0,16 en C1. Por sexo, las diferencias son menores: aproximadamente 0,14 y 0,21 desviaciones en C2. Así, el desplazamiento por incumplimiento es más marcado que el desplazamiento por sexo, aunque ninguno de estos valores demuestra separación completa.
+
+La distancia entre centros resume solo los promedios y no incorpora por sí sola la superposición de las nubes. Asimismo, el porcentaje de un grupo que supera la mediana del otro describe únicamente C1; no es exactitud de clasificación ni prueba de separación en el plano completo.
+
+# 7. Zonas descriptivas de revisión
+
+## 7.1. Definición de los cortes
+
+```{r bloque-20, echo=FALSE}
+orden_zonas_cmp <- c(
+  "Ambas revisiones",
+  "Solo C1 alta",
+  "Solo C2 alta",
+  "Sin señal por estos cortes"
+)
+
+# Una desviación estándar por encima de la media en cada modelo.
+# Los cortes son descriptivos; los ejes deben interpretarse con sus pesos.
+mapas_zonas_cmp <- mapas_cmp %>%
+  group_by(Analisis) %>%
+  mutate(
+    Corte_C1 = mean(C1) + sd(C1),
+    Corte_C2 = mean(C2) + sd(C2),
+    Seleccion_C1_P80 = C1 >= quantile(C1, 0.80, names = FALSE),
+    Zona = case_when(
+      C1 > Corte_C1 & C2 > Corte_C2 ~ "Ambas revisiones",
+      C1 > Corte_C1 ~ "Solo C1 alta",
+      C2 > Corte_C2 ~ "Solo C2 alta",
+      TRUE ~ "Sin señal por estos cortes"
+    ),
+    Zona = factor(Zona, levels = orden_zonas_cmp)
+  ) %>%
+  ungroup()
+
+cortes_cmp <- mapas_zonas_cmp %>%
+  distinct(Analisis, Corte_C1, Corte_C2)
+
+zonas_cmp <- mapas_zonas_cmp %>%
+  group_by(Analisis, Zona, .drop = FALSE) %>%
+  summarise(Clientes = n(), .groups = "drop") %>%
+  group_by(Analisis) %>%
+  mutate(Porcentaje = 100 * Clientes / sum(Clientes)) %>%
+  ungroup()
+
+```
+
+```{r salida-21, echo=FALSE}
+tabla_cmp(cortes_cmp, "Cortes utilizados en cada PCA")
+```
+
+### Qué representan los umbrales
+
+Los cortes de C1 son aproximadamente 2,44 y los de C2 aproximadamente 2,03 en ambas codificaciones. Se eligieron como una desviación estándar por encima de la media para identificar puntuaciones relativamente altas, no porque exista un cambio de riesgo demostrado en esos valores. Si el banco cambia su capacidad de revisión, debe ajustar la regla y volver a contar los casos; estas distribuciones no permiten asumir un número fijo de clientes a partir del corte.
+
+## 7.2. Clientes en cada zona
+
+```{r salida-22, echo=FALSE}
+tabla_cmp(zonas_cmp, "Clientes por zona de revisión retrospectiva")
+
+fuera_c1_cmp <- mapas_zonas_cmp %>%
+  filter(Zona == "Solo C2 alta") %>%
+  group_by(Analisis) %>%
+  summarise(
+    Clientes_solo_C2 = n(),
+    Fuera_C1_P80 = sum(!Seleccion_C1_P80),
+    Fuera_C1_P80_pct = 100 * mean(!Seleccion_C1_P80),
+    .groups = "drop"
+  )
+
+```
+
+### Qué significa la distribución de clientes
+
+En ambos modelos, alrededor del 77,3 % no activa ninguno de los dos cortes. Esto indica que la regla prioriza una parte de la base, no que el resto carezca de riesgo. Las zonas de solo C1 alta y solo C2 alta tienen tamaños próximos, de unos 3.300 y 3.100 clientes: revisar únicamente la facturación dejaría sin un motivo específico de atención a muchos clientes con puntuaciones altas en la dimensión de atraso. La zona conjunta es mucho menor, por lo que los dos motivos de revisión no son intercambiables.
+
+## 7.3. Qué se pierde al utilizar solo C1
+
+```{r salida-23, echo=FALSE}
+tabla_cmp(
+  fuera_c1_cmp,
+  "Clientes de «Solo C2 alta» omitidos por el tramo superior de C1"
+)
+
+```
+
+### Consecuencia para la cobertura de la revisión
+
+El tramo superior de C1 omite al 91,78 % de la zona de solo C2 alta en la primera codificación y al 91,52 % en la mixta. La pérdida es parecida en ambos modelos: seleccionar un único indicador de facturación no sustituye una revisión del perfil asociado al atraso. Estos porcentajes se refieren a la zona definida por los cortes, no al conjunto de incumplidos; por ello, no deben interpretarse como tasas de error predictivo.
+
+## 7.4. Localización de las zonas en el mapa
+
+```{r salida-24, echo=FALSE}
+ggplot(
+  mapas_zonas_cmp %>% filter(id_fila %in% ids_muestra_cmp),
+  aes(C1, C2, color = Zona)
+) +
+  geom_point(alpha = 0.45, size = 0.8) +
+  geom_vline(
+    data = cortes_cmp,
+    aes(xintercept = Corte_C1),
+    inherit.aes = FALSE,
+    color = "grey30", linetype = "dashed"
+  ) +
+  geom_hline(
+    data = cortes_cmp,
+    aes(yintercept = Corte_C2),
+    inherit.aes = FALSE,
+    color = "grey30", linetype = "dashed"
+  ) +
+  facet_wrap(~ Analisis, ncol = 2) +
+  scale_color_manual(
+    values = c("#9B2C2C", "#2166AC", "#B35806", "grey65"),
+    drop = FALSE
+  ) +
+  coord_equal(xlim = c(-6, 9), ylim = c(-6, 8)) +
+  labs(
+    title = "Zonas de revisión: comparación de codificaciones",
+    subtitle = "Cortes específicos de cada modelo: media más una desviación estándar",
+    x = "C1", y = "C2", color = NULL,
+    caption = paste(
+      "Acercamiento central; conteos con toda la base.",
+      "No activar un corte no implica ausencia de riesgo.",
+      sep = "\n"
+    )
+  ) +
+  theme(legend.position = "bottom")
+
+# Coincidencia de las zonas entre ambos análisis.
+asignaciones_cmp <- mapas_zonas_cmp %>%
+  select(id_fila, Analisis, Zona) %>%
+  pivot_wider(names_from = Analisis, values_from = Zona)
+
+cruce_zonas_cmp <- as.data.frame(
+  table(
+    Primera = asignaciones_cmp[["Primera codificación"]],
+    Mixta = asignaciones_cmp[["Codificación mixta"]]
+  )
+)
+
+```
+
+### Qué significa la división visual
+
+Las líneas separan regiones de una nube continua, no grupos naturales. Los clientes próximos a ellas pueden cambiar de zona con pequeños ajustes del umbral. La similitud de las regiones entre paneles sugiere estabilidad frente a estas dos codificaciones bajo la regla elegida; no demuestra que los cortes sean óptimos. El gráfico amplía el centro para facilitar la lectura, mientras que el ajuste y los conteos conservan todos los registros válidos.
+
+## 7.5. Coincidencia de las asignaciones
+
+```{r salida-25, echo=FALSE}
+tabla_cmp(
+  cruce_zonas_cmp,
+  "Cruce de zonas entre ambos PCA · Mismos clientes"
+)
+
+```
+
+### Qué muestra el cruce de zonas
+
+Las coincidencias se concentran en la diagonal: la mayoría conserva su motivo de revisión al cambiar la codificación. Las celdas fuera de ella identifican qué transiciones deben examinarse si se sustituye un método por el otro. Que los totales de cada zona sean parecidos no bastaría para demostrar estabilidad individual; el cruce permite comprobar que se trata mayoritariamente de los mismos clientes.
+
+```{r salida-26, echo=FALSE}
+tabla_cmp(
+  data.frame(
+    Clientes = nrow(asignaciones_cmp),
+    Misma_zona = sum(
+      asignaciones_cmp[["Primera codificación"]] ==
+        asignaciones_cmp[["Codificación mixta"]]
+    ),
+    Misma_zona_pct = 100 * mean(
+      asignaciones_cmp[["Primera codificación"]] ==
+        asignaciones_cmp[["Codificación mixta"]]
+    )
+  ),
+  "Coincidencia de asignaciones entre codificaciones"
+)
+```
+
+### Implicación de la estabilidad observada
+
+De 30.000 clientes, 29.903 conservan su zona y 97 cambian, una coincidencia del 99,68 %. Bajo estos cortes, la decisión de revisión depende poco de cuál de las dos codificaciones se utilice. Parte del porcentaje alto proviene de la numerosa zona sin señal; por eso debe leerse junto con el cruce de las otras zonas. La coincidencia mide estabilidad entre métodos, no acierto frente al impago ni calidad de la intervención.
+
+# 8. Comprobación sin respuesta futura
+
+## 8.1. Recalcular el PCA sin utilizar el resultado
+
+Retirar `default payment next month` permite construir los ejes sin utilizar directamente el resultado que se querría anticipar. Se mantienen las mismas filas para que el cambio no se deba a otra muestra. Esta comprobación recalcula los PCA; no traslada automáticamente las zonas anteriores a los nuevos ejes.
+
+```{r bloque-27, echo=FALSE}
+# Recalcular ambos PCA excluyendo el resultado futuro.
+# Se mantienen las mismas filas para que la comparación sea consistente.
+modelos_sin_respuesta_cmp <- lapply(matrices_cmp, function(x) {
+  x_sin <- x[, colnames(x) != respuesta_cmp, drop = FALSE]
+  orientar_cmp(prcomp(x_sin, center = TRUE, scale. = TRUE))
+})
+
+comparacion_respuesta_cmp <- bind_rows(
+  lapply(names(modelos_cmp), function(nombre) {
+    bind_rows(lapply(c("Con respuesta", "Sin respuesta"), function(alcance) {
+
+      modelo <- if (alcance == "Con respuesta") {
+        modelos_cmp[[nombre]]
+      } else {
+        modelos_sin_respuesta_cmp[[nombre]]
+      }
+
+      pct <- 100 * modelo$sdev^2 / sum(modelo$sdev^2)
+      acumulado <- cumsum(pct)
+      k80 <- which(acumulado > 80)[1]
+
+      data.frame(
+        Codificacion = nombre,
+        Alcance = alcance,
+        Columnas = nrow(modelo$rotation),
+        PC1_pct = pct[1],
+        PC2_pct = pct[2],
+        Plano_pct = sum(pct[1:2]),
+        Componentes_80 = k80,
+        Acumulado_80_pct = acumulado[k80]
+      )
+    }))
+  })
+)
+
+```
+
+```{r salida-28, echo=FALSE}
+tabla_cmp(
+  comparacion_respuesta_cmp,
+  paste(
+    "Comprobación sin respuesta futura",
+    "· Los porcentajes tienen distintos totales de varianza"
+  )
+)
+
+```
+
+## 8.2. Qué significa el cambio de alcance
+
+Al excluir la respuesta futura, las dos primeras componentes conservan el 42,81 % de la varianza en la primera codificación y el 37,91 % en la mixta. Se necesitan diez y once componentes, respectivamente, para superar el 80 %. En ambos casos, el mapa de dos dimensiones continúa siendo una representación parcial de los perfiles. Estos resultados no permiten concluir que una codificación sea superior únicamente por su porcentaje de varianza explicada, pues cambia la representación y la ponderación de las variables. Excluir el impago evita utilizar el resultado futuro en la construcción del PCA, pero no demuestra capacidad predictiva ni valida los cortes anteriores: estos deben recalcularse y evaluarse con el nuevo ajuste.
+
+
+
+# 9. Alcance de las conclusiones para el banco
+
+Los resultados muestran estabilidad del plano y de las zonas frente a las dos codificaciones comparadas, pero no resuelven por sí solos la decisión de intervención temprana. La elección de codificación debe considerar qué relaciones se imponen a las categorías y cómo se ponderan las variables, además del porcentaje de varianza conservada.
+
+El hallazgo operativo es que facturación y atraso requieren lecturas complementarias: una revisión centrada únicamente en C1 deja fuera a gran parte de la zona alta de C2. Para pasar de esta descripción a una regla futura, será necesario construir los ejes sin la respuesta, definir y evaluar los cortes con información disponible en el momento de decidir y comprobar su desempeño en datos separados.
