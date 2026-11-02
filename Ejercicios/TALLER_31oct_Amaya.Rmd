@@ -1,0 +1,447 @@
+---
+title: "Resumir para decidir: PCA y Análisis Factorial"
+subtitle: "Clientes de tarjeta de crédito de un banco taiwanés"
+author: |
+  Juan Pablo Mosquera Marin - 20221020026  
+  Ana Laura Morcote Chacon - 20221020010  
+  Hana Sofia Pinilla Manrique - 20221020092  
+  Juan David Amaya Patiño - 20221020057
+date: "2026-11-01"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+    fig_width: 10
+    fig_height: 5.5
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r paquetes, include=FALSE}
+paquetes <- c(
+  "readr", "corrplot", "dplyr", "rlang", "here", "readxl", "ragg",
+  "kableExtra", "knitr", "tidyr", "ggplot2", "ggrepel", "scales",
+  "psych", "GPArotation"
+)
+
+paquetes_faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+if (length(paquetes_faltantes) > 0) {
+  install.packages(paquetes_faltantes, repos = "https://cloud.r-project.org")
+}
+
+# psych y GPArotation se usan con el prefijo ::
+invisible(lapply(
+  setdiff(paquetes, c("psych", "GPArotation")),
+  library,
+  character.only = TRUE
+))
+
+clasificar_kmo <- function(x) {
+  case_when(
+    is.na(x)  ~ "No disponible",
+    x >= 0.90 ~ "Excelente",
+    x >= 0.80 ~ "Muy buena",
+    x >= 0.70 ~ "Aceptable",
+    x >= 0.60 ~ "Regular",
+    x >= 0.50 ~ "Baja",
+    TRUE      ~ "Inadecuada"
+  )
+}
+
+# Formato numérico con coma decimal
+fmt <- function(x, d = 3) format(round(x, d), decimal.mark = ",", nsmall = d)
+miles <- function(x) formatC(x, format = "d", big.mark = ".")
+
+azul <- "#285A91"; naranja <- "#A65E00"; oscuro <- "#243447"
+```
+
+```{r datos, include=FALSE}
+datos_credit <- tryCatch(
+  readr::read_csv(here::here("DATASET", "datos_credit.csv"), show_col_types = FALSE),
+  error = function(e) {
+    readr::read_csv(here::here("GitHub", "ESTAD.-MULTI", "DATASET", "datos_credit.csv"),
+                    show_col_types = FALSE)
+  }
+)
+
+# Las nueve variables conservadas tras el KMO (se mantienen durante todo el taller)
+variables <- c("LIMIT_BAL", "AGE", paste0("BILL_AMT", 1:6), "PAY_AMT6")
+
+n_inicial  <- nrow(datos_credit)
+datos_kmo  <- as.data.frame(datos_credit[, variables])
+stopifnot(all(vapply(datos_kmo, is.numeric, logical(1))))
+completos  <- complete.cases(datos_kmo)
+n_completo <- sum(completos)
+datos_kmo  <- datos_kmo[completos, , drop = FALSE]
+
+R <- cor(datos_kmo, method = "pearson")
+resultado_kmo <- psych::KMO(R)
+```
+
+# 1 · El encargo
+
+## El encargo
+
+**Cliente:** [completar: el banco taiwanés]
+
+**Decisión que necesita tomar:** intervenir tempranamente sobre los clientes con riesgo de incumplimiento de pago.
+
+**Variables que usa hoy:** límite de crédito, edad, montos facturados (abril a septiembre) y monto pagado.
+
+**Pregunta:** ¿se pueden resumir estas variables en pocos indicadores? ¿Qué dimensiones hay detrás?
+
+<!-- Ajusta el texto del encargo para que quede dirigido al cliente -->
+
+## Los datos que entran
+
+```{r tabla-casos}
+data.frame(
+  Concepto = c("Casos iniciales", "Casos con información completa",
+               "Casos excluidos", "Variables analizadas"),
+  Valor = c(miles(n_inicial), miles(n_completo),
+            miles(n_inicial - n_completo), length(variables))
+) %>%
+  kable(format = "html", align = c("l", "r")) %>%
+  kable_styling(bootstrap_options = c("hover"), full_width = FALSE)
+```
+
+Variables: `r paste(variables, collapse = ", ")`.
+
+<!-- Indica por qué quedan por fuera los casos excluidos (y menciona el código de limpieza del primer corte) -->
+
+## ¿Debemos estandarizar?
+
+
+# 2 · ¿Se repiten?
+
+## Matriz de correlaciones
+
+## Lectura para el banco
+
+- **Se mueven juntas:** 
+- **Información parecida:** 
+- **Van por su cuenta:** 
+- **¿Tiene sentido resumir?**
+
+## Adecuación (KMO)
+
+KMO global: **`r fmt(resultado_kmo$MSA)`** (`r tolower(clasificar_kmo(resultado_kmo$MSA))`).
+
+```{r kmo-tabla}
+data.frame(
+  Variable = variables,
+  MSA = unname(resultado_kmo$MSAi[variables])
+) %>%
+  mutate(Adecuacion = clasificar_kmo(MSA)) %>%
+  kable(format = "html", digits = 3, row.names = FALSE,
+        format.args = list(decimal.mark = ","),
+        col.names = c("Variable", "MSA", "Adecuación")) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = FALSE, font_size = 13)
+```
+
+Se retiraron *PAY_AMT1* a *PAY_AMT5* por tener MSA inferior a 0,50.
+
+# 3 · PCA
+
+## ¿Cuánta información conserva cada componente?
+
+## ¿Qué representan las primeras componentes?
+
+
+- **PC1:** 
+- **PC2:** 
+- **PC3:** 
+
+## ¿Cuál es el costo de resumir?
+
+
+# 4 · Perfiles en el plano
+
+## Biplot de PC1 y PC2
+
+## Grupo relevante para el banco
+
+- **Quiénes son:** 
+- **Qué tienen en común:** 
+- **Por qué le importa al banco:** 
+- **Implicación para la decisión:** 
+
+# 5 · Análisis factorial
+
+## Lo común y lo propio (un factor, ML)
+
+```{r fa1}
+modelo_fa <- psych::fa(datos_kmo, nfactors = 1, fm = "ml", rotate = "none")
+
+tabla_varianzas <- data.frame(
+  Variable = colnames(datos_kmo),
+  Comun = unname(modelo_fa$communality),
+  Propia = unname(modelo_fa$uniquenesses)
+)
+
+tabla_varianzas %>%
+  pivot_longer(c(Comun, Propia), names_to = "Parte", values_to = "Proporcion") %>%
+  mutate(Variable = factor(Variable, levels = rev(colnames(datos_kmo))),
+         Parte = factor(Parte, levels = c("Comun", "Propia"))) %>%
+  ggplot(aes(Variable, Proporcion, fill = Parte)) +
+  geom_col(width = 0.7, position = position_stack(reverse = TRUE)) +
+  geom_text(aes(label = scales::percent(Proporcion, accuracy = 0.1)),
+            position = position_stack(vjust = 0.5, reverse = TRUE),
+            color = "white", fontface = "bold", size = 3.6) +
+  coord_flip() +
+  scale_fill_manual(values = c("Comun" = azul, "Propia" = naranja),
+                    labels = c("Parte común", "Parte propia")) +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "top", panel.grid.major.y = element_blank())
+```
+
+## ¿Qué variable conserva más información propia?
+
+```{r propia-max}
+var_propia <- tabla_varianzas$Variable[which.max(tabla_varianzas$Propia)]
+```
+
+```{r valores-texto-comun, include=FALSE}
+com_age <- unname(modelo_fa$communality["AGE"])
+```
+
+Mayor parte propia: **`r var_propia`** (`r fmt(100 * max(tabla_varianzas$Propia), 1)` %).
+
+La edad (*AGE*) es casi toda parte propia: el `r fmt(100 * (1 - com_age), 1)` % de su información no la explica la dimensión común y solo el `r fmt(100 * com_age, 1)` % se comparte con las demás variables.
+Mientras los montos facturados se mueven juntos y reflejan una misma dimensión (el nivel de endeudamiento), la edad se comporta de forma independiente.
+Algo similar ocurre con *PAY_AMT6* y *LIMIT_BAL*, que se explican sobre todo por sus propias características.
+
+- **Qué parte del fenómeno representa:** el perfil del cliente (en qué momento de su vida está), un atributo que no cambia con el monto que debe ni con lo que paga.
+- **Por qué no debe desaparecer en un indicador general:** porque aporta información distinta que no está contenida en las demás variables; si se resume todo en un solo número, esa información se pierde y no puede recuperarse.
+- **Decisión que se afectaría si se ignora:** la identificación temprana de clientes en riesgo de incumplimiento. Si el banco quiere usar la edad para ello, debe analizarla por separado y no a través del indicador de endeudamiento.
+
+## ¿Alcanza una sola dimensión?
+
+```{r error-mapa, fig.height=4.6}
+L <- as.numeric(modelo_fa$loadings[, 1])
+error <- R - outer(L, L)
+orden <- colnames(datos_kmo)
+
+error_inf <- error
+error_inf[upper.tri(error_inf, diag = TRUE)] <- NA
+
+datos_mapa <- as.data.frame(as.table(error_inf)) %>%
+  setNames(c("Fila", "Columna", "Error")) %>%
+  filter(!is.na(Error)) %>%
+  mutate(Fila = factor(Fila, levels = orden), Columna = factor(Columna, levels = orden))
+
+lim <- max(abs(datos_mapa$Error))
+
+ggplot(datos_mapa, aes(Columna, Fila, fill = Error)) +
+  geom_tile(color = "white", linewidth = 0.8) +
+  geom_text(aes(label = format(round(Error, 2), decimal.mark = ",", nsmall = 2)), size = 3) +
+  scale_fill_gradient2(low = azul, mid = "white", high = naranja, midpoint = 0,
+                       limits = c(-lim, lim), name = "Error\n(obs. − prod.)") +
+  scale_x_discrete(limits = orden[-length(orden)]) +
+  scale_y_discrete(limits = rev(orden[-1])) +
+  coord_fixed() +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r error-max}
+error_abs <- abs(error); diag(error_abs) <- 0
+donde <- which(error_abs == max(error_abs), arr.ind = TRUE)[1, ]
+```
+
+Mayor error: **`r fmt(max(error_abs))`**, en la pareja *`r colnames(datos_kmo)[donde[1]]`* y *`r colnames(datos_kmo)[donde[2]]`*.
+
+```{r valores-texto-error, include=FALSE}
+obs_b12  <- R["BILL_AMT1", "BILL_AMT2"]
+prod_b12 <- L["BILL_AMT1"] * L["BILL_AMT2"]
+```
+
+**¿Qué vemos?** El mapa muestra cuánto se equivoca la dimensión común al reproducir la relación entre cada pareja de variables: cuanto más cerca de blanco, mejor la reproduce.
+Las relaciones entre los montos facturados se reproducen mejor, porque son las variables que más comparten con la dimensión.
+Por ejemplo, para *BILL_AMT1* y *BILL_AMT2* la dimensión reproduce una relación de `r fmt(prod_b12)` frente a una observada de `r fmt(obs_b12)` (diferencia de `r fmt(obs_b12 - prod_b12)`), una diferencia moderada.
+
+El mayor error es de `r fmt(max(error_abs))` y corresponde a la pareja *`r colnames(datos_kmo)[donde[1]]`* y *`r colnames(datos_kmo)[donde[2]]`*, variables que comparten poco con la dimensión.
+
+**¿Qué significa para el banco?** Una sola dimensión describe bien el bloque de facturación, pero no alcanza para el conjunto completo: las variables que quedan por fuera (edad, límite de crédito y pago de abril) no se ven reflejadas en ella.
+
+**¿Qué decisión se desprende?** Usar la dimensión de endeudamiento para resumir la facturación, pero no para reemplazar a las variables que reproduce peor.
+
+# 6 · ¿Dos dimensiones?
+
+## ¿Cuántas dimensiones caben?
+
+Un modelo de *m* factores con *p* variables solo es estimable si tiene grados de libertad no negativos: ((*p* − *m*)² − (*p* + *m*)) / 2 ≥ 0.
+
+```{r df-factores}
+p <- length(variables)
+gl <- sapply(1:6, function(m) ((p - m)^2 - (p + m)) / 2)
+m_max <- max(which(gl >= 0))
+
+data.frame(Factores = 1:6, Grados_de_libertad = gl,
+           Se_puede_estimar = ifelse(gl >= 0, "Sí", "No")) %>%
+  kable(format = "html", align = c("c", "c", "c"),
+        col.names = c("Factores (m)", "Grados de libertad", "¿Se puede estimar?")) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = FALSE, font_size = 13)
+```
+
+Con las `r p` variables se pueden estimar, como máximo, `r m_max` factores, así que dos dimensiones sí caben.
+Es una condición mínima: que el modelo se pueda calcular no significa que las dimensiones tengan sentido, por eso se evalúa a continuación si el segundo factor aporta algo.
+
+```{r fa2}
+modelo_fa_2 <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "oblimin")
+
+data.frame(
+  Modelo = c("Un factor", "Dos factores"),
+  Comunalidad_prom = c(100 * mean(modelo_fa$communality), 100 * mean(modelo_fa_2$communality)),
+  RMSR = c(modelo_fa$rms, modelo_fa_2$rms)
+) %>%
+  kable(format = "html", digits = 3, format.args = list(decimal.mark = ","),
+        col.names = c("Modelo", "Comunalidad promedio (%)", "RMSR")) %>%
+  kable_styling(bootstrap_options = c("hover"), full_width = FALSE)
+```
+
+Correlación entre factores (oblimin): **`r fmt(modelo_fa_2$Phi[1, 2], 2)`**.
+
+```{r valores-texto-dos-factores, include=FALSE}
+com1    <- 100 * mean(modelo_fa$communality)
+com2    <- 100 * mean(modelo_fa_2$communality)
+rmsr1   <- modelo_fa$rms
+rmsr2   <- modelo_fa_2$rms
+phi12   <- modelo_fa_2$Phi[1, 2]
+max_ml2 <- max(abs(unclass(modelo_fa_2$loadings)[, 2]))
+```
+
+Al pasar de uno a dos factores, la información que las dimensiones conservan de cada variable, en promedio, cambió de `r fmt(com1, 1)` % a `r fmt(com2, 1)` %, y el error global de reproducción (RMSR) de `r fmt(rmsr1)` a `r fmt(rmsr2)`.
+La correlación entre los dos factores es de `r fmt(phi12, 2)`.
+
+El segundo factor es débil y difícil de interpretar: ninguno de sus pesos alcanza 0,40 (el máximo, en valor absoluto, es `r fmt(max_ml2, 2)`).
+Aun así, muestra un patrón de signos: positivo en los meses recientes (*BILL_AMT1* y *BILL_AMT2*) y negativo en los más antiguos (*BILL_AMT5* y *BILL_AMT6*).
+Esto sugiere un contraste entre la facturación reciente y la antigua, es decir, una posible tendencia de crecimiento o disminución de la deuda.
+Es una lectura tentativa: con pesos tan bajos, este factor es más un matiz dentro del bloque de facturación que una dimensión independiente.
+
+Además, *LIMIT_BAL*, *PAY_AMT6* y *AGE* siguen sin pesar de forma relevante en ninguno de los dos factores, por lo que el segundo factor no resuelve su bajo ajuste.
+Por eso, la mejora del RMSR (de `r fmt(rmsr1)` a `r fmt(rmsr2)`) y de la información conservada no justifica añadir un factor que apenas puede interpretarse.
+
+## Rotación: tres pares de ejes
+
+```{r giro, fig.height=4.4}
+f_sin <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "none")
+f_ind <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "varimax")
+f_jun <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "oblimin")
+
+plano_de <- function(f, nombre) {
+  data.frame(giro = nombre, variable = colnames(datos_kmo),
+             f1 = f$loadings[, 1], f2 = f$loadings[, 2])
+}
+niveles <- c("Sin girar", "Giro independiente (varimax)", "Giro con correlación (oblimin)")
+
+bind_rows(plano_de(f_sin, niveles[1]), plano_de(f_ind, niveles[2]), plano_de(f_jun, niveles[3])) %>%
+  mutate(giro = factor(giro, levels = niveles)) %>%
+  ggplot(aes(f1, f2)) +
+  geom_hline(yintercept = 0, color = "grey60") +
+  geom_vline(xintercept = 0, color = "grey60") +
+  geom_segment(aes(xend = f1, yend = f2), x = 0, y = 0, color = azul,
+               arrow = arrow(length = unit(0.15, "cm"))) +
+  ggrepel::geom_text_repel(aes(label = variable), size = 2.8, max.overlaps = Inf) +
+  facet_wrap(~ giro) +
+  coord_equal(xlim = c(-0.4, 1.1), ylim = c(-0.4, 1.1)) +
+  labs(x = "Factor 1", y = "Factor 2") +
+  theme_minimal(base_size = 11)
+```
+
+Al comparar los giros se obtienen lecturas distintas.
+
+- **Giro independiente (varimax):** los montos facturados pesan de forma parecida en ambos factores, es decir, siguen moviéndose juntos y no se separan. *PAY_AMT6*, *LIMIT_BAL* y *AGE* quedan muy cerca del origen, lo que confirma su bajo aporte a los factores.
+- **Giro con correlación (oblimin):** los montos facturados sí se reparten entre los dos ejes, mientras que *PAY_AMT6*, *LIMIT_BAL* y *AGE* siguen cerca del origen. Las facturas más recientes se acercan al factor 2 y las más antiguas al factor 1, con las intermedias en medio [confirmar con el gráfico cuáles quedan en medio].
+
+Esto sugiere que el giro permite describir el bloque de facturación de otra forma: no como un único nivel de endeudamiento, sino con una dimensión de tiempo (deuda reciente vs. deuda antigua).
+
+Sin embargo, los factores están correlacionados (r = `r fmt(f_jun$Phi[1, 2], 2)`), por lo que la separación entre facturación reciente y antigua debe leerse con cautela: ambos factores describen en gran parte lo mismo.
+
+## ¿Son estables? (ML vs. minres)
+
+```{r estabilidad}
+f_otro <- psych::fa(datos_kmo, nfactors = 2, fm = "minres", rotate = "oblimin")
+
+cmp <- cbind(
+  round(unclass(modelo_fa_2$loadings), 2),
+  round(unclass(f_otro$loadings), 2)
+)
+colnames(cmp) <- c("ML: F1", "ML: F2", "minres: F1", "minres: F2")
+
+cmp %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Variable") %>%
+  kable(format = "html", format.args = list(decimal.mark = ",")) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = FALSE, font_size = 13)
+```
+
+Al cambiar el método de cálculo a minres, el primer factor conserva los montos facturados con los mismos pesos, pero el segundo factor deja a esos montos en casi cero, quitándoles el poco peso que tenían.
+La mayor carga del segundo factor pasa a *LIMIT_BAL*, y este factor aumenta levemente hacia *PAY_AMT6* y *AGE*, aunque sin ser significativo.
+Esto indica que estas tres variables describen aspectos distintos del cliente y que no comparten nada en común respecto al segundo factor.
+
+Como la separación en dos factores cambia según el método de cálculo, **no es estable y no se le puede asignar un nombre definitivo**.
+Para el banco, esto significa que la distinción entre deuda reciente y antigua todavía no es una estructura confiable sobre la cual tomar decisiones.
+En conjunto, estos datos no son adecuados para un análisis con dos factores y se resumen mejor con uno solo: el nivel de endeudamiento reflejado en la facturación.
+
+## Traslape entre perfiles
+
+```{r traslape, fig.height=2.8}
+f_pun <- psych::fa(datos_kmo, nfactors = 2, fm = "ml", rotate = "oblimin", scores = "regression")
+H <- f_pun$scores
+alto <- function(v) v >= quantile(v, 0.80)
+perfil_1 <- alto(H[, 1]); perfil_2 <- alto(H[, 2])
+
+data.frame(
+  grupo = c("Solo en el perfil 1", "En los dos perfiles", "Solo en el perfil 2"),
+  n = c(sum(perfil_1 & !perfil_2), sum(perfil_1 & perfil_2), sum(perfil_2 & !perfil_1))
+) %>%
+  mutate(grupo = factor(grupo, levels = grupo)) %>%
+  ggplot(aes(n, "", fill = grupo)) +
+  geom_col(width = 0.5, position = position_stack(reverse = TRUE)) +
+  geom_text(aes(label = miles(n)), position = position_stack(vjust = 0.5, reverse = TRUE),
+            color = "white", fontface = "bold", size = 4.2) +
+  scale_fill_manual(values = c(azul, "#6B7280", naranja), name = NULL) +
+  scale_x_continuous(labels = miles) +
+  labs(x = "Clientes", y = NULL, subtitle = "Clientes en el 20 % más alto de cada factor") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top")
+```
+
+```{r traslape-cifras, include=FALSE}
+n_p1      <- sum(perfil_1)
+n_ambos   <- sum(perfil_1 & perfil_2)
+pct_ambos <- 100 * n_ambos / n_p1
+```
+
+**¿Qué vemos?** De los `r miles(n_p1)` clientes del 20 % más alto en el perfil 1, `r miles(n_ambos)` (`r fmt(pct_ambos, 1)` %) también están en el 20 % más alto del perfil 2.
+Si los dos perfiles fueran completamente independientes, solo se esperaría que alrededor del 20 % se repitiera.
+
+**¿Qué significa para el banco?** `r ifelse(pct_ambos > 20, "El traslape es mayor que el esperado por azar, así que", "El traslape no es mayor que el esperado por azar, pero")` los dos perfiles no identifican grupos de clientes claramente distintos, consistente con que los factores estén correlacionados (r = `r fmt(phi12, 2)`) y con que la separación no sea estable.
+
+**¿Qué decisión se desprende?** No conviene segmentar a los clientes en dos perfiles de facturación (reciente y antigua).
+Es más sólido usar un único indicador de endeudamiento y analizar aparte *AGE*, *LIMIT_BAL* y *PAY_AMT6*.
+
+# 7 · Recomendación
+
+## Recomendación al banco
+
+
+
+1. **¿Se puede resumir en un número?** 
+2. **¿Cuánta información conserva y qué deja por fuera?**
+3. **¿Cuántas dimensiones y qué variables seguir aparte?** 
+4. **Decisión recomendada:** 
