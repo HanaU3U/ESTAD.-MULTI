@@ -433,7 +433,86 @@ Si los dos perfiles fueran completamente independientes, solo se esperaría que 
 **¿Qué significa para el banco?** `r ifelse(pct_ambos > 20, "El traslape es mayor que el esperado por azar, así que", "El traslape no es mayor que el esperado por azar, pero")` los dos perfiles no identifican grupos de clientes claramente distintos, consistente con que los factores estén correlacionados (r = `r fmt(phi12, 2)`) y con que la separación no sea estable.
 
 **¿Qué decisión se desprende?** No conviene segmentar a los clientes en dos perfiles de facturación (reciente y antigua).
-Es más sólido usar un único indicador de endeudamiento y analizar aparte *AGE*, *LIMIT_BAL* y *PAY_AMT6*.
+
+### ¿Los perfiles se distinguen en el incumplimiento real?
+
+El objetivo del banco es intervenir tempranamente a clientes con riesgo de incumplimiento, así que la pregunta útil es si estos perfiles se distinguen en el incumplimiento real.
+Para responderla se compara la tasa de incumplimiento en cuatro grupos: solo perfil 1, solo perfil 2, en los dos y en ninguno.
+
+```{r incumplimiento, include=FALSE}
+# Columna de incumplimiento (el nombre cambia según cómo se leyó el CSV).
+col_default <- grep("default", names(datos_credit), value = TRUE, ignore.case = TRUE)[1]
+stopifnot(!is.na(col_default))
+
+# Mismas filas que usó el análisis factorial (sin datos faltantes).
+datos_perfiles <- as.data.frame(datos_credit)[as.integer(rownames(datos_kmo)), ] %>%
+  mutate(
+    grupo = case_when(
+      perfil_1 & perfil_2   ~ "En los dos perfiles",
+      perfil_1 & !perfil_2  ~ "Solo perfil 1",
+      !perfil_1 & perfil_2  ~ "Solo perfil 2",
+      TRUE                  ~ "En ninguno"
+    )
+  )
+
+resumen_grupos <- datos_perfiles %>%
+  group_by(grupo) %>%
+  summarise(clientes = n(),
+            tasa_incumplimiento = 100 * mean(.data[[col_default]], na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(desc(tasa_incumplimiento))
+
+tasa <- setNames(resumen_grupos$tasa_incumplimiento, resumen_grupos$grupo)
+
+# Prueba sobre los cuatro grupos.
+tabla_def  <- table(datos_perfiles$grupo, datos_perfiles[[col_default]])
+prueba_chi <- chisq.test(tabla_def)
+
+# Perfil 1 vs. perfil 2 (solo los clientes que están en uno u otro).
+sub <- datos_perfiles %>% filter(grupo %in% c("Solo perfil 1", "Solo perfil 2"))
+prueba_prop <- prop.test(table(sub$grupo, sub[[col_default]]))
+ic_dif <- sort(abs(prueba_prop$conf.int) * 100)
+```
+
+```{r tabla-incumplimiento}
+resumen_grupos %>%
+  kable(format = "html",
+        caption = "Tasa de incumplimiento según el perfil al que pertenece el cliente.",
+        col.names = c("Grupo", "Clientes", "Incumplimiento (%)"),
+        digits = 1, format.args = list(decimal.mark = ",", big.mark = "."),
+        align = c("l", "r", "r")) %>%
+  kable_styling(bootstrap_options = c("hover", "responsive"), full_width = FALSE) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#243447")
+```
+
+La tabla muestra qué porcentaje de clientes incumple según su ubicación en los dos factores.
+Los clientes que no destacan en ninguno incumplen un `r fmt(tasa["En ninguno"], 1)` %, y quienes destacan en los dos, un `r fmt(tasa["En los dos perfiles"], 1)` %, es decir, unos `r fmt(tasa["En ninguno"] - tasa["En los dos perfiles"], 0)` puntos menos.
+Entre quienes solo están en uno de los perfiles, la diferencia es menor: `r fmt(tasa["Solo perfil 1"], 1)` % para el perfil 1 y `r fmt(tasa["Solo perfil 2"], 1)` % para el perfil 2.
+Hay una diferencia, pero es modesta: incluso el grupo con menor incumplimiento supera el `r floor(min(tasa))` %, así que no basta para predecir quién va a incumplir.
+
+Para saber si esas diferencias son reales o producto del azar, se aplicó una prueba estadística a los cuatro grupos (chi-cuadrado = `r fmt(prueba_chi$statistic, 1)`, `r ifelse(prueba_chi$p.value < 0.001, "p < 0,001", paste0("p = ", fmt(prueba_chi$p.value, 3)))`).
+La prueba confirma que las diferencias no se deben al azar: los clientes que destacan en estos factores sí incumplen menos que los demás.
+También es real la diferencia entre los clientes del perfil 1 y los del perfil 2 (`r ifelse(prueba_prop$p.value < 0.001, "p < 0,001", paste0("p = ", fmt(prueba_prop$p.value, 3)))`): los primeros incumplen entre `r fmt(ic_dif[1], 1)` y `r fmt(ic_dif[2], 1)` puntos porcentuales más.
+
+Sin embargo, aunque la diferencia exista, es pequeña: saber a qué grupo pertenece un cliente dice muy poco sobre si va a incumplir.
+Además, la relación es contraintuitiva, porque quienes más facturan incumplen menos.
+Esto sugiere que los factores reflejan cuánto usa el cliente su tarjeta, no qué tan riesgoso es.
+Por tanto, estos grupos pueden servir como información complementaria, pero no deberían ser el criterio principal para decidir a qué clientes intervenir.
+Para eso conviene apoyarse en otras señales, como el historial de atrasos en los pagos.
+
+## Conclusión del análisis factorial
+
+El análisis factorial permitió resumir la información del conjunto de datos, pero no resultó una buena herramienta para anticipar qué clientes incumplirán.
+
+Los seis montos facturados se mueven casi siempre juntos y se pueden resumir en un único factor: el nivel de endeudamiento del cliente en su tarjeta.
+Un segundo factor, que distinguiría la facturación reciente de la antigua, resultó débil e inestable, por lo que no se sostiene como una dimensión propia.
+El límite de crédito, la edad y el pago de abril quedaron por fuera de los factores: aportan información distinta que no se resume en ellos.
+
+Al comparar los grupos formados con los factores, el incumplimiento varía entre el `r fmt(min(tasa), 1)` % y el `r fmt(max(tasa), 1)` %.
+La diferencia es real, pero pequeña, y además va en sentido contrario al esperado: los clientes que más facturan incumplen menos.
+Esto indica que los factores reflejan cuánto usa el cliente su tarjeta y no qué tan riesgoso es.
+
+En consecuencia, para intervenir tempranamente a los clientes con riesgo de incumplimiento, el banco no debería apoyarse en estos factores como criterio principal.
 
 # 7 · Recomendación
 
