@@ -187,15 +187,15 @@ tabla_kmo %>%
 Dado que el objetivo del banco taiwanés es intervenir tempranamente sobre los clientes con riesgo de incumplimiento de pago, el KMO permite concluir lo siguiente:
 
 - *LIMIT_BAL*, *PAY_AMT6* y *BILL_AMT1* a *BILL_AMT6* presentan una adecuación aceptable o muy buena.
-Por eso son las candidatas a conservar para explorar factores asociados con la información crediticia, los pagos y el endeudamiento.
+  Por eso son las candidatas a conservar para explorar factores asociados con la información crediticia, los pagos y el endeudamiento.
 
 - *LIMIT_BAL* tiene la mayor adecuación individual (`r fmt(resultado_kmo_todas$MSAi["LIMIT_BAL"])`), lo que asegura su inclusión.
-Sin embargo, una alta adecuación para el análisis factorial no implica que sea la variable con mayor peso para predecir el incumplimiento.
+  Sin embargo, una alta adecuación para el análisis factorial no implica que sea la variable con mayor peso para predecir el incumplimiento.
 
 - *AGE* tiene un MSA regular, pero se conserva porque permite perfilar al cliente mediante un atributo propio de él.
 
 - *PAY_AMT1* a *PAY_AMT5* tienen un MSA inferior a 0,50, por lo que no son adecuadas para el análisis factorial.
-Esto no les resta valor para identificar clientes que podrían incumplir.
+  Esto no les resta valor para identificar clientes que podrían incumplir.
 
 # KMO sin PAY_AMT1 a PAY_AMT5
 
@@ -573,7 +573,6 @@ Por lo anterior, no se incorpora un segundo factor en este análisis: la mejora 
 
 Para verificar la desición se procederá a realizar el análisis con giros de factores.
 
-
 ## Girando Factores
 
 ```{r cargas-giradas}
@@ -633,13 +632,17 @@ ggplot(plano, aes(f1, f2)) +
   theme(plot.title = element_text(face = "bold", color = "#243447"))
 ```
 
+Al comparar los dos giros se obtienen lecturas distintas.
+Con el giro que mantiene los factores independientes (varimax), los montos facturados cargan de forma parecida en ambos factores, es decir, siguen moviéndose juntos y no se separan.
+Por su parte, PAY_AMT6, LIMIT_BAL y AGE quedan muy cerca del origen, lo que confirma su bajo aporte a los factores.
+Además, las tres apuntan hacia la misma dirección.
 
-Al comparar los dos giros se obtienen lecturas distintas. Con el giro que mantiene los factores independientes (varimax), los montos facturados cargan de forma parecida en ambos factores, es decir, siguen moviéndose juntos y no se separan. Por su parte, PAY_AMT6, LIMIT_BAL y AGE quedan muy cerca del origen, lo que confirma su bajo aporte a los factores. Además, las tres apuntan hacia la misma dirección.
+Con el giro que permite correlación (oblimin), los montos facturados sí se reparten entre los dos ejes, mientras que PAY_AMT6, LIMIT_BAL y AGE siguen cerca del origen.
+Las facturas más recientes se acercan al factor 2, las más antiguas al factor 1, y las intermedias quedan en medio [confirma cuáles con el gráfico].
+Esto sugiere que el giro permite describir mejor el factor de facturación que ya habíamos identificado: no como un único nivel de endeudamiento, sino con una dimensión de tiempo.
 
-Con el giro que permite correlación (oblimin), los montos facturados sí se reparten entre los dos ejes, mientras que PAY_AMT6, LIMIT_BAL y AGE siguen cerca del origen. Las facturas más recientes se acercan al factor 2, las más antiguas al factor 1, y las intermedias quedan en medio [confirma cuáles con el gráfico]. Esto sugiere que el giro permite describir mejor el factor de facturación que ya habíamos identificado: no como un único nivel de endeudamiento, sino con una dimensión de tiempo.
-
-Sin embargo, los factores están correlacionados en r fmt(f_jun$Phi[1, 2], 2). Por eso la separación entre facturación reciente y antigua debe leerse con cautela: ambos factores describen en gran parte lo mismo.
-
+Sin embargo, los factores están correlacionados en r fmt(f_jun\$Phi[1, 2], 2).
+Por eso la separación entre facturación reciente y antigua debe leerse con cautela: ambos factores describen en gran parte lo mismo.
 
 ## Estabilidad Segundo Factor
 
@@ -652,9 +655,12 @@ otro
 c(correlacion_entre_factores_minres = round(f_otro$Phi[1, 2], 2))
 ```
 
-Al cambiar el método de extracción a minres, la estructura cambia para los BILL_AMT igual deja el F1 en los valores que se tenian pero en el F2 los deja en casi 0, quitandoles el poco peso pero que igual representaban. La mayor carga se concentra en LIMIT_BAL, y el segundo factor aumenta levemente hacia PAY_AMT6 y AGE, aunque sin ser significativo. Esto indica que estas tres variables describen aspectos distintos del cliente y que, respecto al segundo factor, no comparten nada en común.
+Al cambiar el método de extracción a minres, la estructura cambia para los BILL_AMT igual deja el F1 en los valores que se tenian pero en el F2 los deja en casi 0, quitandoles el poco peso pero que igual representaban.
+La mayor carga se concentra en LIMIT_BAL, y el segundo factor aumenta levemente hacia PAY_AMT6 y AGE, aunque sin ser significativo.
+Esto indica que estas tres variables describen aspectos distintos del cliente y que, respecto al segundo factor, no comparten nada en común.
 
-Como la separación en dos factores cambia según el método de cálculo, no es estable y no se puede nombrar con confianza. En conjunto, el conjunto de datos no es adecuado para un análisis con dos factores y se resume mejor con uno solo: el nivel de endeudamiento reflejado en la facturación.
+Como la separación en dos factores cambia según el método de cálculo, no es estable y no se puede nombrar con confianza.
+En conjunto, el conjunto de datos no es adecuado para un análisis con dos factores y se resume mejor con uno solo: el nivel de endeudamiento reflejado en la facturación.
 
 ## Traslape entre los dos perfiles
 
@@ -706,8 +712,6 @@ data.frame(
 
 <!-- Describir / Analizar / Decisión: escribe aquí tu análisis -->
 
-
 ## Conclusión
 
 <!-- Escribe aquí la conclusión para el banco -->
-

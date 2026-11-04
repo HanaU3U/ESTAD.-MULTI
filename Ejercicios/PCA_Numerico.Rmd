@@ -48,7 +48,6 @@ La pregunta central es: **¿cuánto se pierde al reducir todas las variables a u
 Se incluyen **todas las columnas almacenadas como numéricas**; esto incluye categorías codificadas (`SEX`, `EDUCATION`, `MARRIAGE`), estados de pago (`PAY_0`, `PAY_2` a `PAY_6`) y la respuesta binaria `default payment next month` (más adelante, se hace la comparación para las que son estrictamente numéricas, sin tener en cuenta las que son categorias codificadas ni `default payment next month`).
 El PCA trata sus códigos como números y supone distancias iguales entre códigos; por tanto, su interpretación depende de esa codificación.
 
-
 # Recorderis de la revisión de los datos
 
 ```{r lectura}
@@ -498,7 +497,7 @@ ggplot(mapa[indices_muestra, ], aes(C1, C2, color = zona)) +
   theme(legend.position = "bottom")
 ```
 
-**Respuesta.** Los cortes son C1 > `r fmt(corte1)` y C2 > `r fmt(corte2)`.
+**Respuesta.** Los cortes son C1 \> `r fmt(corte1)` y C2 \> `r fmt(corte2)`.
 Hay `r fmt(sum(mapa$zona == "Solo facturación"), 0)` clientes solo en facturación, `r fmt(sum(solo_estados), 0)` solo en estados de pago y `r fmt(sum(mapa$zona == "Ambas revisiones"), 0)` en ambas.
 Los `r fmt(sum(mapa$zona == "Sin señal por estos cortes"), 0)` restantes no activan estos cortes; eso **no implica ausencia de riesgo**.
 El `r fmt(fuera_C1)` % de los clientes de «Solo estados de pago» quedaría fuera del 20 % superior de C1.
@@ -830,13 +829,12 @@ ggplot(mapa_cuant[indices_cuant, ], aes(C1, C2, color = zona)) +
   theme(legend.position = "bottom")
 ```
 
-**Respuesta.** Los cortes son C1 > `r fmt(corte1_cuant)` y C2 < `r fmt(corte2_cuant)`.
+**Respuesta.** Los cortes son C1 \> `r fmt(corte1_cuant)` y C2 \< `r fmt(corte2_cuant)`.
 Se obtienen `r fmt(zonas_cuant$clientes[1], 0)` casos en ambas revisiones, `r fmt(zonas_cuant$clientes[2], 0)` solo en facturación y apenas `r fmt(zonas_cuant$clientes[3], 0)` solo en contraste de pagos.
 Los otros `r fmt(zonas_cuant$clientes[4], 0)` no activan los cortes, lo que no implica ausencia de riesgo.
 El `r fmt(fuera_pagos_cuant)` % de «Solo contraste de pagos» queda fuera del 20 % superior de C1: ese grupo pequeño sí queda cubierto por la selección.
 Esto no contradice la pérdida de clientes con **pagos altos** del apartado 5: se trata de objetivos y umbrales distintos.
 La ortogonalidad no implica independencia de las colas, por lo que ambas revisiones pueden coincidir ampliamente.
-
 
 ## Conclusión del análisis cuantitativo
 
@@ -846,12 +844,11 @@ Conviene conservar pagos y límite para revisiones específicas; el mapa no resu
 Excluir la respuesta elimina su participación en el ajuste, pero no convierte el PCA en un predictor ni valida los cortes como reglas de riesgo.
 Los porcentajes de ambos análisis se refieren a conjuntos distintos de variables; un porcentaje mayor no significa conservar más información absoluta.
 
-
 # Conclusiones generales
 
 **Un solo número no describe bien a cada cliente.** Los montos facturados suelen parecerse entre meses, pero los pagos, la edad y el límite de crédito aportan diferencias que ese resumen puede ocultar.
 
-**El mapa de dos ejes muestra solo parte de la historia:** cerca del 55 % usando únicamente mediciones cuantitativas. Para conservar más del 80 % se necesitan 6 indicadores.
+**El mapa de dos ejes muestra solo parte de la historia:** cerca del 55 % usando únicamente mediciones cuantitativas.
+Para conservar más del 80 % se necesitan 6 indicadores.
 
 **Las diferencias entre meses también importan.** Dos clientes pueden tener facturas parecidas y pagar de forma distinta.
-
