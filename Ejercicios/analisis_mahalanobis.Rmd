@@ -1,0 +1,449 @@
+---
+title: "Normal multivariante, distancia de Mahalanobis y gráfico Q-Q en clientes de tarjeta de crédito"
+subtitle: "Quién es raro de verdad cuando se miran las variables al tiempo"
+author: "Estadística Multidimensional, Universidad Distrital Francisco José de Caldas"
+date: "Miércoles 28 de octubre de 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    code_folding: show
+    df_print: paged
+    fig_width: 9
+    fig_height: 5.5
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", fig.width = 9, fig.height = 5.5)
+library(readxl)
+library(ggplot2)
+theme_set(theme_minimal(base_size = 13))
+```
+
+# Introducción
+
+> **¿Hay clientes que son raros en la combinación de sus variables
+> financieras, aunque ninguna cifra por separado sea extrema?**
+
+un cliente con una factura alta en septiembre y una factura casi en cero
+en agosto. Ni una cifra ni la otra son raras si se miran por separado.
+Pero las facturas de meses consecutivos tienden a parecerse, así que esa
+combinación puede ser rara aunque cada valor, solo, pase cualquier
+revisión.
+
+# Los datos
+
+Se usa `skip = 1` porque la primera fila del archivo trae etiquetas (X1,
+X2, ...) y los nombres reales están en la segunda.
+
+```{r leer}
+ruta <- file.path("..", "DATASET", "credit.xls")
+stopifnot(file.exists(ruta))
+
+credit <- as.data.frame(read_excel(ruta, skip = 1))
+dim(credit)
+```
+
+La distancia de Mahalanobis necesita variables continuas, así que se
+usan 14: `LIMIT_BAL`, `AGE`, las seis facturas (`BILL_AMT`) y los seis
+pagos (`PAY_AMT`).
+
+```{r grupos}
+facturas  <- paste0("BILL_AMT", 1:6)
+pagos     <- paste0("PAY_AMT", 1:6)
+continuas <- c("LIMIT_BAL", "AGE", facturas, pagos)
+
+M <- as.matrix(credit[continuas])
+p <- length(continuas)
+c(clientes = nrow(M), variables_continuas = p)
+```
+
+```{r resumen-continuas}
+resumen <- data.frame(
+  variable   = continuas,
+  minimo     = sapply(credit[continuas], min),
+  q1         = sapply(credit[continuas], function(v) quantile(v, 0.25, names = FALSE)),
+  mediana    = sapply(credit[continuas], median),
+  media      = sapply(credit[continuas], mean),
+  q3         = sapply(credit[continuas], function(v) quantile(v, 0.75, names = FALSE)),
+  maximo     = sapply(credit[continuas], max),
+  desviacion = sapply(credit[continuas], sd),
+  row.names  = NULL)
+resumen[-1] <- round(resumen[-1], 1)
+resumen
+```
+
+Las variables están en escalas muy distintas: la desviación de `AGE` es
+9,2 años, la de `LIMIT_BAL` es 129 748 y las de las facturas van de 59
+554 a 73 636. En casi todos los montos la media supera a la mediana (en
+`LIMIT_BAL` 167 484 contra 140 000; en `BILL_AMT1` 51 223 contra 22 382;
+en `PAY_AMT1` 5 664 contra 2 100). Las facturas tienen mínimos
+negativos, entre -69 777 y -339 603, y los pagos tienen mínimo 0. Los
+máximos están muy lejos del tercer cuartil: `PAY_AMT2` llega a 1 684 259
+con un tercer cuartil de 5 000, y `BILL_AMT3` llega a 1 664 089 con un
+tercer cuartil de 60 165.
+
+Eso anticipa que la comparación entre las distancias euclidiana y de
+Mahalanobis va a ser muy distinta, porque las escalas difieren por
+varios órdenes de magnitud. Los mínimos negativos de las facturas son
+saldos a favor y hay que tenerlos presentes si se transforma con
+logaritmo.
+
+se trabaja con las 14 variables continuas, primero en su escala original
+y luego, si el Q-Q lo exige, en una escala transformada.
+
+# La distancia de Mahalanobis
+
+la distancia de Mahalanobis mide qué tan lejos está un cliente del
+centro, teniendo en cuenta que las variables van juntas. La compañía de
+las facturas se ve directamente en su correlación:
+
+```{r colinealidad}
+round(cor(M[, facturas]), 2)
+```
+
+## Las dos distancias sobre los mismos clientes
+
+Se calculan sobre los 30 000 clientes y en la escala original de las
+variables. Se define una función auxiliar para no repetir el cálculo más
+adelante.
+
+```{r euclid-vs-maha}
+mahal2 <- function(X) mahalanobis(X, colMeans(X), cov(X))
+
+d2_crudo     <- mahal2(M)
+euclid_crudo <- sqrt(rowSums((M - matrix(colMeans(M), nrow(M), p, byrow = TRUE))^2))
+
+k <- sum(d2_crudo > qchisq(0.99, df = p))   # cuántos pasan el corte del 99 %
+c(correlacion_entre_las_dos = round(cor(euclid_crudo, sqrt(d2_crudo)), 3),
+  k_mas_lejanos = k,
+  coinciden_en_ese_top = length(intersect(order(euclid_crudo, decreasing = TRUE)[1:k],
+                                          order(d2_crudo,     decreasing = TRUE)[1:k])))
+```
+
+```{r ejemplos-dos-distancias}
+rango_eu <- rank(-euclid_crudo, ties.method = "first")
+rango_ma <- rank(-d2_crudo,     ties.method = "first")
+
+elegidos <- c(which.max(euclid_crudo),            # el más lejano en euclidiana
+              which.max(d2_crudo),                # el más lejano en Mahalanobis
+              which.max(rango_eu - rango_ma),     # lejos en Mahalanobis, cerca en euclidiana
+              which.min(rango_eu - rango_ma))     # lejos en euclidiana, cerca en Mahalanobis
+
+data.frame(
+  caso = c("Más lejano en euclidiana", "Más lejano en Mahalanobis",
+           "Cerca en euclidiana, lejos en Mahalanobis",
+           "Lejos en euclidiana, cerca en Mahalanobis"),
+  credit[elegidos, c("ID", continuas)],
+  euclidiana = round(euclid_crudo[elegidos], 1),
+  mahalanobis = round(d2_crudo[elegidos], 1),
+  rango_euclidiana = rango_eu[elegidos],
+  rango_mahalanobis = rango_ma[elegidos],
+  row.names = NULL)
+```
+
+el cliente 5297 es el más lejano en las dos distancias (euclidiana 2 415
+828,8; Mahalanobis 8 119,0), con una factura de julio (`BILL_AMT3`) de 1
+664 089 y un pago de agosto (`PAY_AMT2`) de 1 684 259. El 6948 es de los
+más cercanos al centro en euclidiana (puesto 29 454 de 30 000) y tiene
+Mahalanobis de 23,8. El 23142, con todo en cero, tiene euclidiana de 184
+878,2 (puesto 7 053) y Mahalanobis de 1,5. la euclidiana la dominan las
+variables de mayor escala: en el cliente 5297, `BILL_AMT3` y `PAY_AMT2`
+explican cerca del 93 % del cuadrado de su distancia. Sus valores son
+coherentes entre sí (de mayo a agosto, cada pago es casi igual a la
+factura del mes anterior), lo único llamativo es que la factura de julio
+es 3,3 veces su límite. El 6948 pasa apenas el corte del 95 % (23,7) y
+queda lejos del 99 % (29,1): no es raro, rompe la regla de que las
+facturas consecutivas se parecen (abril en 0 y mayo en 61 650). El 23142
+está lejos en euclidiana porque todas sus variables están por debajo del
+promedio, pero casi en el centro según Mahalanobis, porque todos los
+montos bajan juntos, que es la dirección en la que más varía la base.
+
+la euclidiana confunde el nivel de los montos con rareza. Para buscar
+casos que revisar se usa Mahalanobis.
+
+## Los cortes de la chi-cuadrado
+
+Si las 14 variables fueran una campana multivariante perfecta, las
+distancias al cuadrado se repartirían como una chi-cuadrado con 14
+grados de libertad, y eso da los cortes para decidir qué es lejos. Se
+definen tres funciones auxiliares que se reutilizan con la escala
+transformada.
+
+```{r funciones}
+tabla_cortes <- function(d2, p) {
+  cortes <- qchisq(c(0.95, 0.99, 0.999), df = p)
+  data.frame(
+    corte = c("95 %", "99 %", "99,9 %"),
+    valor_de_la_distancia = round(cortes, 2),
+    esperados_por_encima = c("5 %", "1 %", "0,1 %"),
+    observados = sapply(cortes, function(q) sum(d2 > q)),
+    observados_pct = paste0(round(100 * sapply(cortes, function(q) mean(d2 > q)), 2), " %"))
+}
+
+qq_d2 <- function(d2, p, titulo, log = FALSE) {
+  n  <- length(d2)
+  qq <- data.frame(teorica = qchisq(ppoints(n), df = p), observada = sort(d2))
+  g <- ggplot(qq, aes(x = teorica, y = observada)) +
+    geom_point(alpha = 0.3, size = 0.8, color = "steelblue") +
+    geom_abline(slope = 1, intercept = 0, color = "firebrick", linewidth = 1) +
+    geom_vline(xintercept = qchisq(0.99, df = p), linetype = "dashed") +
+    labs(title = titulo,
+         subtitle = paste0(
+                           if (log) " (ejes en escala logarítmica)" else ""),
+         x = "Distancia que debería tener", y = "Distancia que tiene")
+  if (log) g <- g + scale_x_log10() + scale_y_log10()
+  g
+}
+
+tabla_qq <- function(d2, p) {
+  pr <- c(0.50, 0.75, 0.90, 0.95, 0.99, 0.999)
+  data.frame(percentil = c("50 %", "75 %", "90 %", "95 %", "99 %", "99,9 %"),
+             observada = round(quantile(d2, pr, names = FALSE), 2),
+             teorica   = round(qchisq(pr, df = p), 2))
+}
+```
+
+```{r distancias-crudas}
+round(summary(d2_crudo), 2)
+tabla_cortes(d2_crudo, p)
+```
+
+Hay muchísimos más clientes por encima de los cortes de lo esperado
+buena parte de esa cola puede ser **efecto de la asimetría**
+(distribuciones con cola larga a la derecha) y no de observaciones
+genuinamente anómalas La distancia de Mahalanobis sobre datos crudos
+supone normalidad multivariante, supuesto que estas variables no
+cumplen.
+
+# El gráfico Q-Q
+
+El gráfico Q-Q pone en el eje horizontal la distancia que **debería**
+tener cada cliente si los datos fueran normales multivariantes, y en el
+vertical la que **tiene**. Si los datos se portan, los puntos caen sobre
+la recta.
+
+```{r qq-crudo, fig.height = 6}
+qq_d2(d2_crudo, p, "Q-Q de las distancias contra la chi-cuadrado, escala original")
+```
+
+Como las colas de esta base son muy largas, el máximo aplasta al resto
+de la nube. Se repite el gráfico con los ejes en escala logarítmica,
+donde la recta sigue siendo la diagonal:
+
+```{r qq-crudo-log, fig.height = 6}
+qq_d2(d2_crudo, p, "Q-Q de las distancias, escala original", log = TRUE)
+```
+
+```{r qq-tabla-crudo}
+tabla_qq(d2_crudo, p)
+```
+
+Ubicando el caso en la tabla de referencia: el gráfico no sigue la recta
+en el centro y solo se despega al final, sino que está curvado desde el
+principio (observado por debajo de lo teórico en 50 % y 75 %, muy por
+encima en la cola). Esa doble desviación es la firma de variables
+torcidas (asimetría multivariante), no de una simple cola de casos
+raros. Con 14 variables donde varias son montos muy sesgados a la
+derecha, la distancia de Mahalanobis crudo viola el supuesto de
+normalidad multivariante, y por eso ni siquiera el cuerpo central de los
+datos cae sobre teórica.
+
+No interpretar la cola como outliers sobre los datos crudos. Corresponde
+transformar las variables sesgada
+
+| Qué se ve en el Q-Q | Qué significa | Qué se hace |
+|------------------------|------------------------|------------------------|
+| Se despega **solo en la cola** | Hay casos raros, el cuerpo está bien | Identificarlos y decidir sobre ellos; seguir |
+| Se curva **desde el principio** | Alguna variable está torcida | Transformarla (logaritmo, raíz) y volver a mirar |
+| Dos tramos con pendientes distintas | Hay **dos grupos** mezclados | Separarlos y analizar cada uno; no promediar |
+| Se despega **hacia abajo** | Menos dispersión de la esperada | Sospechar de un tope o un piso en la escala |
+
+## La prueba formal
+
+La prueba de Mardia contrasta la asimetría y la curtosis multivariantes.
+Como exige una matriz de tamaño n por n (con 30 000 clientes pesaría
+unos 7 GB), se aplica sobre una **muestra de 2 000 clientes**.
+
+```{r mardia}
+mardia <- function(X) {
+  X  <- as.matrix(X)
+  n  <- nrow(X); k <- ncol(X)
+  Xc <- sweep(X, 2, colMeans(X))
+  S  <- crossprod(Xc) / n
+  D  <- Xc %*% solve(S) %*% t(Xc)
+  b1 <- sum(D^3) / n^2
+  b2 <- mean(diag(D)^2)
+  gl <- k * (k + 1) * (k + 2) / 6
+  est_asim <- n * b1 / 6
+  z_curt   <- (b2 - k * (k + 2)) / sqrt(8 * k * (k + 2) / n)
+  data.frame(prueba = c("Asimetría", "Curtosis"),
+             estadistico = round(c(est_asim, z_curt), 2),
+             p_valor = format.pval(c(pchisq(est_asim, gl, lower.tail = FALSE),
+                                     2 * pnorm(-abs(z_curt))), eps = 0.001))
+}
+
+set.seed(1)
+idx_mardia <- sample(nrow(M), 2000)
+mardia(M[idx_mardia, ])
+```
+
+```{r asimetria}
+asimetria <- function(X) round(apply(X, 2, function(x) mean((x - mean(x))^3) / sd(x)^3), 2)
+data.frame(variable = continuas, asimetria = asimetria(M), row.names = NULL)
+```
+
+con muchos datos cualquier desviación mínima hace que Mardia rechace,
+así que el p-valor por sí solo dice poco. Vale más el Q-Q del paso
+anterior, que muestra *cuánto* y *dónde* se desvían los datos y ese Q-Q
+se explica directamente con esta tabla: las asimetrías extremas de los
+PAY_AMT (10–30) son las que generan la **cola larga a la derecha** de
+las distancias de Mahalanobis
+
+El problema está localizado en variables sesgadas a la derecha, no en
+casos raros, así que corresponde **transformar los montos** antes de
+reevaluar outliers
+
+Las variables son montos con cola larga a la derecha, así que se
+transforman y se vuelve a mirar el Q-Q:
+
+- `LIMIT_BAL`: logaritmo, porque es positiva.
+- Pagos (`PAY_AMT`): `log(1 + x)`, porque tienen ceros.
+- Facturas (`BILL_AMT`): logaritmo con signo, `signo(x) * log(1 + |x|)`,
+  porque tienen valores negativos.
+- `AGE`: se deja igual, porque su asimetría es leve.
+
+Un cero no se corrige con un logaritmo: queda como un **piso** de la
+escala. Por eso se cuentan los pagos en cero antes de transformar.
+
+```{r ceros-pagos}
+colSums(credit[pagos] == 0)
+```
+
+```{r transformacion}
+slog <- function(x) sign(x) * log1p(abs(x))
+
+Mt <- M
+Mt[, "LIMIT_BAL"] <- log(M[, "LIMIT_BAL"])
+Mt[, facturas]    <- slog(M[, facturas])
+Mt[, pagos]       <- log1p(M[, pagos])
+
+d2_log <- mahal2(Mt)
+
+data.frame(variable = continuas,
+           asimetria_original = asimetria(M),
+           asimetria_transformada = asimetria(Mt),
+           row.names = NULL)
+```
+
+```{r qq-transformado, fig.height = 6}
+qq_d2(d2_log, p, "Q-Q de las distancias, escala transformada")
+```
+
+```{r cortes-transformado}
+tabla_qq(d2_log, p)
+tabla_cortes(d2_log, p)
+mardia(Mt[idx_mardia, ])
+```
+
+Comparación directa de las dos escalas:
+
+```{r comparacion-escalas}
+c99  <- qchisq(0.99,  df = p)
+c999 <- qchisq(0.999, df = p)
+data.frame(
+  escala = c("original", "transformada"),
+  sobre_corte_99  = c(sum(d2_crudo > c99),  sum(d2_log > c99)),
+  sobre_corte_999 = c(sum(d2_crudo > c999), sum(d2_log > c999)),
+  esperado_99  = round(0.01  * nrow(M)),
+  esperado_999 = round(0.001 * nrow(M)))
+```
+
+AY_AMT concentran muchos clientes con pago 0 en cada mes. Tras
+transformar (log en LIMIT_BAL, slog en facturas, log1p en pagos), las
+asimetrías bajan drásticamente pero **cambian de signo**
+
+La transformación acercó bastante la base a una campana multivariante
+pero **no corrige el centro**: el Q-Q se despega todavía antes del corte
+99 % y las asimetrías quedaron negativas. Ese giro de signo es la pista:
+hay **muchos ceros en los pagos**, y como `log1p(0) = 0`, esos ceros
+forman un **piso** que el logaritmo no puede separar, amontonando masa
+en el mínimo y generando la nueva cola izquierda. Por eso suben los
+clientes sobre el 99 % (el cuerpo se ensancha) aunque bajen los del 99,9
+% (la cola larga sí se comprimió). Lo que sigue sin corregirse es,
+entonces, estructural: una mezcla de "paga / no paga" que ninguna
+transformación monótona de una sola variable va a volver gaussiana.
+
+# Los clientes más lejanos
+
+Se deja la escala elegida como parámetro, para cambiarla en un solo
+lugar: `"transformada"` o `"cruda"`. Los clientes que pasan el corte del
+99 % son la lista de casos a revisar uno por uno: no se borran por estar
+en la lista, se revisan.
+
+```{r escala-final}
+escala_final <- "transformada"   # cambiar a "cruda" si el Q-Q transformado no mejora al original
+
+Mf <- if (escala_final == "transformada") Mt else M
+d2 <- mahal2(Mf)
+raros <- d2 > qchisq(0.99, df = p)
+
+c(escala = escala_final, clientes_raros = sum(raros),
+  porcentaje = round(100 * mean(raros), 2))
+```
+
+Los cinco más lejanos, con sus valores en la escala original y la
+relación entre su factura de septiembre y su límite de crédito:
+
+```{r mas-lejanos}
+top5 <- order(d2, decreasing = TRUE)[1:5]
+data.frame(ID = credit$ID[top5],
+           credit[top5, continuas],
+           factura1_sobre_limite = round(credit$BILL_AMT1[top5] / credit$LIMIT_BAL[top5], 2),
+           mahalanobis = round(d2[top5], 1),
+           row.names = NULL)
+```
+
+- **ID 28720** factura de septiembre ≈ 1,02× el límite: candidato a
+  **tope de escala o error de coherencia** (una factura no debería
+  superar el cupo); hay que verificar con los pagos y si es un valor
+  redondeado al máximo.
+
+- **Facturas negativas** (BILL_AMT2/3 en 28720, 1651, 9410; BILL_AMT4 en
+  8356) son **saldos a favor**, no errores en sí; un atípico real, no un
+  dato a corregir, salvo que choquen con los pagos.
+
+- **IDs 8356 y 23327** comparten valores casi idénticos cruzados entre
+  variables: revisar si es **duplicación/registro espejado** (posible
+  error) o coincidencia.
+
+- **IDs 1651 y 9410** límites altos y montos moderados: perfiles
+  plausibles, probables **atípicos reales** (clientes verdaderos poco
+  comunes), no errores.
+
+# Conclusión
+
+en escala original el Q-Q se curva desde el centro las distancias del 50
+% y 75 % caen muy por debajo de la teórica y la cola explota hasta
+\~8.000, señal de que los datos crudos no son una campana multivariante
+y no es confiable como referencia. Tras transformar (log/slog/log1p en
+montos) el Q-Q mejora mucho: la cola se encoge a \~200 y la base se
+acerca a la recta, aunque sigue despegándose antes del corte 99 % por el
+piso de ceros de los pagos. Se **decidió seguir en la escala
+transformada**, que es la que más se aproxima a la normalidad
+multivariante y hace interpretables las distancias.
+
+en la escala transformada **3.076 clientes (10,25 %)** superan el corte
+al 99 %, muy por encima del 1 % esperado. Son una **lista a revisar, no
+a borrar**: mezclan atípicos reales (clientes verdaderos de perfil poco
+común límites altos con uso moderado, o saldos de factura negativos que
+son saldo a favor) con unos pocos candidatos a error o tope de escala
+(p. ej. ID 28720, con factura de septiembre su límite de crédito). El
+criterio de cierre es simple: un atípico se estudia, un error se
+corrige.
