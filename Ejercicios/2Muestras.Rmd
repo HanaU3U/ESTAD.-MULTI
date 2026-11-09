@@ -1,0 +1,148 @@
+---
+title: "¿Hombres y mujeres son distintos? Hotelling de dos muestras"
+author: |
+  Juan Pablo Mosquera Marin   - 20221020026
+  Ana Laura Morcote Chacon    - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño     - 20221020057
+date: "2026-09-05"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 8, fig.height = 4, fig.align = "center")
+
+paquetes <- c("readxl", "ggplot2")
+faltantes <- paquetes[!(paquetes %in% installed.packages()[, "Package"])]
+if (length(faltantes) > 0) install.packages(faltantes, repos = "https://cloud.r-project.org")
+invisible(lapply(paquetes, library, character.only = TRUE))
+
+# Número con coma decimal, para los textos (los números del texto salen del código)
+coma <- function(x, d = 1) format(round(x, d), nsmall = d, decimal.mark = ",", trim = TRUE)
+```
+
+# La pregunta
+
+Comparamos **dos grupos entre sí**: hombres y mujeres, clientes de tarjetas de crédito. Miramos las tres variables al tiempo (en miles de NT\$): el cupo (`LIMIT_BAL`), la facturación del último mes (`BILL_AMT1`) y el abono del último mes (`PAY_AMT1`).
+
+Como en la clase, la respuesta tiene tres partes:
+
+1.  **¿Es real?** ¿O puede ser mala suerte de esta muestra?
+2.  **¿Es grande?** ¿Cuánto es, en algo que se entienda?
+3.  **¿Separa?** Si me dan los valores de un cliente, ¿puedo saber si es hombre o mujer?
+
+## La base
+
+```{r datos}
+ruta <- file.path("..", "DATASET", "credit.xls")
+stopifnot(file.exists(ruta))
+credit <- as.data.frame(read_excel(ruta, skip = 1))
+
+vars     <- c("LIMIT_BAL", "BILL_AMT1", "PAY_AMT1")
+etiqueta <- c(LIMIT_BAL = "cupo", BILL_AMT1 = "facturación", PAY_AMT1 = "abono")
+
+sc <- credit[, c("SEX", vars)]
+sc[, vars] <- sc[, vars] / 1000                      # miles de NT$
+sc <- sc[complete.cases(sc), ]
+sc$genero <- factor(sc$SEX, levels = c(2, 1), labels = c("Mujer", "Hombre"))
+
+X <- as.matrix(sc[vars])
+nrow(sc)
+```
+
+# Cuántos hay de cada grupo
+
+```{r tamanos}
+table(sc$genero)
+round(100 * prop.table(table(sc$genero)), 1)
+```
+
+# ¿Llegan con el mismo perfil?
+
+Mirar el nivel de cada variable por separado no alcanza para decir si los perfiles son iguales. Primero, las medias de cada grupo y su diferencia:
+
+```{r medias}
+medias_g <- sapply(vars, function(v) tapply(sc[[v]], sc$genero, mean))
+dif_g <- medias_g["Hombre", ] - medias_g["Mujer", ]
+round(rbind(medias_g, hombre_menos_mujer = dif_g), 2)
+```
+
+```{r grafico_dif}
+data.frame(variable = factor(etiqueta[vars], levels = rev(etiqueta)), dif = dif_g) |>
+  ggplot(aes(dif, variable, fill = dif > 0)) +
+  geom_col(width = 0.6) +
+  geom_vline(xintercept = 0, color = "grey40") +
+  geom_text(aes(label = coma(dif, 2), hjust = ifelse(dif > 0, -0.2, 1.2)), size = 4.2) +
+  scale_fill_manual(values = c("#805AD5", "#2B6CB0"), guide = "none") +
+  scale_x_continuous(expand = expansion(mult = 0.25)) +
+  labs(title = "Hombres menos mujeres, en cada variable",
+       subtitle = "Azul: mayor en los hombres · morado: mayor en las mujeres",
+       x = "Miles de NT$", y = NULL)
+```
+
+las mujeres tienen en promedio 6,57 mil NT\$ más de cupo que los hombres (170,09 frente a 163,52). Los hombres tienen 5,06 mil NT\$ más de facturación (54,28 frente a 49,22). En el abono casi no hay diferencia: 5,67 en hombres y 5,66 en mujeres, es decir, 0,01 mil NT\$ (unos 10 NT\$).
+
+el abono es prácticamente igual, pero el cupo y la facturación van en sentidos contrarios: las mujeres tienen más cupo y los hombres más facturación. Por eso la barra del abono casi no se ve en el gráfico: no hay diferencia que mostrar. Hasta aquí solo describimos promedios; todavía no sabemos si esas diferencias son reales ni cuánto pesan. Eso lo responde la sección siguiente.
+
+# ¿Cuánto pesa esa diferencia de perfil?
+
+Es la misma distancia de la sesión anterior, ahora entre los dos promedios, y la misma pregunta de si puede ser azar.
+
+```{r hotelling}
+hotelling_2 <- function(A, B) {
+  n1 <- nrow(A); n2 <- nrow(B); p <- ncol(A)
+  Sp <- ((n1 - 1) * cov(A) + (n2 - 1) * cov(B)) / (n1 + n2 - 2)
+  dif <- colMeans(A) - colMeans(B)
+  D2 <- as.numeric(t(dif) %*% solve(Sp) %*% dif)
+  T2 <- n1 * n2 / (n1 + n2) * D2
+  F  <- (n1 + n2 - p - 1) / (p * (n1 + n2 - 2)) * T2
+  c(D = sqrt(D2), T2 = T2, F = F, p = pf(F, p, n1 + n2 - p - 1, lower.tail = FALSE))
+}
+h_gen <- hotelling_2(X[sc$genero == "Hombre", ], X[sc$genero == "Mujer", ])
+signif(h_gen, 4)
+
+# comprobación: R lo calcula con manova(); debe dar el mismo resultado (T2)
+L <- summary(manova(X ~ sc$genero), test = "Wilks")$stats[1, 2]
+round((nrow(sc) - 2) * (1 / L - 1), 2)
+```
+
+los perfiles de hombres y mujeres, mirando cupo, facturación y abono al tiempo, están a 0,10 desviaciones. El T² es 72,73 y el valor p es 1,2 × 10⁻¹⁵. La comprobación con `manova()` da 72,73, el mismo T².
+
+la diferencia es **real**: con ese valor p, la probabilidad de que sea azar es prácticamente cero. Pero la distancia es **pequeña**: una décima de desviación. Con 30.000 clientes casi cualquier diferencia sale real, así que lo que pesa es la distancia, no el valor p. **Decisión para el emisor:** la diferencia de perfil existe, pero es pequeña. Falta la tercera pregunta, la que más importa para decidir sobre una persona.
+
+# Si me muestran los valores de alguien, ¿sé si es hombre o mujer?
+
+Es la prueba de fuego. Usamos las tres variables para clasificar a cada cliente como hombre o mujer, con la regla que mejor lo hace, y contamos los aciertos.
+
+```{r lda}
+clasif <- MASS::lda(sc[vars], sc$genero)
+acierto_gen <- 100 * mean(predict(clasif)$class == sc$genero)
+sin_datos   <- 100 * max(table(sc$genero)) / nrow(sc)
+mayoria     <- tolower(names(which.max(table(sc$genero))))
+c(acierto_con_las_variables = round(acierto_gen, 1),
+  acierto_diciendo_siempre_la_mayoria = round(sin_datos, 1))
+```
+
+con las tres variables se acierta el sexo en 60,4 de cada 100 clientes. Diciendo siempre «mujer», sin mirar ninguna variable, también se acierta en 60,4.
+
+ las variables no mejoran el acierto: 0,0 puntos de diferencia. La diferencia entre hombres y mujeres es real, pero los grupos **no se separan**: se montan casi por completo, y mirar el cupo, la facturación y el abono no ayuda a adivinar el sexo mejor que no mirar nada. **Decisión para el emisor:** el perfil sirve para describir la cartera de cada grupo, pero no para tratar a un cliente según su sexo; a cada cliente se le evalúa por sus propios valores.
+
+
+ Con muchos clientes se detecta hasta una diferencia diminuta (real), pero la distancia entre los promedios es pequeña frente a la variación dentro de cada grupo, y por eso los dos grupos se montan casi por completo y no se pueden separar.
+
+# Conclusión
+
+- **¿Es real?** Sí: el valor p es 1,2 × 10⁻¹⁵.
+- **¿Es grande?** No: los perfiles están a 0,10 desviaciones.
+- **¿Separa?** No: 60,4 % de acierto frente a 60,4 % sin mirar nada.
+
+
+el perfil de hombres y mujeres es distinto en promedio (más cupo en ellas, más facturación en ellos), pero la diferencia es pequeña y no sirve para clasificar a ningún cliente. Sirve para describir la cartera de cada grupo, no para tratar a una persona según su sexo.

@@ -259,7 +259,7 @@ No interpretar la cola como outliers sobre los datos crudos. Corresponde
 transformar las variables sesgada
 
 | Qué se ve en el Q-Q | Qué significa | Qué se hace |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | Se despega **solo en la cola** | Hay casos raros, el cuerpo está bien | Identificarlos y decidir sobre ellos; seguir |
 | Se curva **desde el principio** | Alguna variable está torcida | Transformarla (logaritmo, raíz) y volver a mirar |
 | Dos tramos con pendientes distintas | Hay **dos grupos** mezclados | Separarlos y analizar cada uno; no promediar |
@@ -416,8 +416,9 @@ data.frame(ID = credit$ID[top5],
   redondeado al máximo.
 
 - **Facturas negativas** (BILL_AMT2/3 en 28720, 1651, 9410; BILL_AMT4 en
+
   8356) son **saldos a favor**, no errores en sí; un atípico real, no un
-  dato a corregir, salvo que choquen con los pagos.
+        dato a corregir, salvo que choquen con los pagos.
 
 - **IDs 8356 y 23327** comparten valores casi idénticos cruzados entre
   variables: revisar si es **duplicación/registro espejado** (posible
