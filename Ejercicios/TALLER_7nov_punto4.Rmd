@@ -1,0 +1,117 @@
+---
+title: "¿Qué viaja con el grupo?"
+subtitle: "La edad y las diferencias de facturación entre hombres y mujeres"
+author: |
+  Juan Pablo Mosquera Marin - 20221020026
+  Ana Laura Morcote Chacon - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño - 20221020057
+date: "2026-11-09"
+output:
+  html_document:
+    theme: cosmo
+    toc: false
+    self_contained: true
+    code_download: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+numero <- function(x, d = 2) {
+  formatC(x, format = "f", digits = d, big.mark = ".", decimal.mark = ",")
+}
+
+# R Markdown ejecuta los bloques desde la carpeta del documento.
+rutas <- c(file.path("..", "DATASET", "datos_credit.csv"),
+           file.path("DATASET", "datos_credit.csv"))
+ruta <- rutas[file.exists(rutas)][1]
+if (is.na(ruta)) stop("No se encontró DATASET/datos_credit.csv.")
+datos <- read.csv(ruta, check.names = FALSE)
+requeridas <- c("SEX", "AGE", "BILL_AMT1")
+stopifnot(all(requeridas %in% names(datos)))
+stopifnot(all(complete.cases(datos[requeridas])),
+          all(datos$SEX %in% c(1, 2)), all(datos$AGE >= 21))
+datos$grupo <- factor(datos$SEX, levels = c(1, 2),
+                      labels = c("Hombres", "Mujeres"))
+datos$edad <- cut(datos$AGE, breaks = c(20, 29, 39, 49, Inf),
+                  labels = c("21 a 29", "30 a 39", "40 a 49", "50 o más"))
+datos$facturacion <- datos$BILL_AMT1 / 1000
+conteos <- table(datos$edad, datos$grupo)
+stopifnot(all(conteos > 0), sum(conteos) == nrow(datos))
+porcentajes <- 100 * prop.table(conteos, margin = 2)
+edad_media <- tapply(datos$AGE, datos$grupo, mean)
+medias <- tapply(datos$facturacion, datos$grupo, mean)
+por_edad <- with(datos, tapply(facturacion, list(edad, grupo), mean))
+brechas <- por_edad[, "Hombres"] - por_edad[, "Mujeres"]
+# Ambos grupos reciben la misma distribución de edad: la de toda la base.
+pesos <- rowSums(conteos) / sum(conteos)
+comparables <- colSums(sweep(por_edad, 1, pesos, "*"))
+brecha_original <- unname(medias["Hombres"] - medias["Mujeres"])
+brecha_comparable <- unname(comparables["Hombres"] - comparables["Mujeres"])
+reduccion <- 100 * (brecha_original - brecha_comparable) / brecha_original
+```
+
+<style>
+.main-container { max-width: 940px; }
+body { font-size: 17px; line-height: 1.65; color: #243447; }
+h1, h2 { color: #174d63; }
+h2 { margin-top: 30px; font-size: 25px; }
+blockquote { background: #edf6f8; border-left: 5px solid #24758a; padding: 15px 20px; }
+table { font-size: 16px; }
+</style>
+
+## ¿Qué comparación escogimos?
+
+Se escogió **hombres frente a mujeres**, donde se comparan el cupo, la facturación y el abono. Para este punto nos centramos en **la facturación del último mes**: el valor que aparece en el estado de cuenta, que no es lo mismo que el dinero abonado.
+
+En los `r numero(nrow(datos), 0)` clientes, los hombres tienen una facturación promedio de **`r numero(medias["Hombres"])` mil NT\$**, frente a **`r numero(medias["Mujeres"])` mil NT\$** en las mujeres. La diferencia es de **`r numero(brecha_original)` mil NT\$**. 
+Nota: NT\$ = dólares taiwaneses.
+
+## La **edad** viaja con el grupo
+
+Esto significa que **los grupos también son distintos en edad**: los hombres tienen, en promedio, `r numero(edad_media["Hombres"], 1)` años y las mujeres, `r numero(edad_media["Mujeres"], 1)`. Además, entre las mujeres hay una mayor proporción de personas jóvenes:
+
+```{r composicion, results='asis'}
+knitr::kable(
+  data.frame(
+    "Edad (años)" = rownames(conteos),
+    "De cada 100 hombres" = numero(porcentajes[, "Hombres"], 1),
+    "De cada 100 mujeres" = numero(porcentajes[, "Mujeres"], 1),
+    check.names = FALSE
+  ), row.names = FALSE, align = c("l", "r", "r")
+)
+```
+
+**¿Será que parte de la diferencia de facturación acompaña esa diferencia de edad?** Para revisarlo, comparamos hombres y mujeres dentro del mismo rango de edad.
+
+## ¿Qué pasa al comparar personas de edades parecidas?
+
+La tabla muestra la **facturación promedio en miles de NT\$**. Una diferencia positiva indica más facturación en los hombres; una negativa, más en las mujeres.
+
+```{r comparacion, results='asis'}
+knitr::kable(
+  data.frame(
+    "Edad (años)" = rownames(por_edad),
+    "Hombres" = numero(por_edad[, "Hombres"]),
+    "Mujeres" = numero(por_edad[, "Mujeres"]),
+    "Hombres menos mujeres" = numero(brechas),
+    check.names = FALSE
+  ), row.names = FALSE, align = c("l", "r", "r", "r")
+)
+```
+
+Entre los clientes de **21 a 29 años**, las mujeres facturan `r numero(-brechas[1])` mil NT\$ más. En los otros tres rangos ocurre lo contrario: los hombres facturan más. Además, en ambos grupos los menores de 30 años tienen la menor facturación promedio. Por eso, tener más personas jóvenes puede influir en el promedio de las mujeres.
+
+Para resumirlo, calculamos cómo quedarían los promedios **si ambos grupos tuvieran la misma proporción de personas en cada rango de edad**, usando las proporciones de toda la base. Así quedan en `r numero(comparables["Hombres"])` mil NT\$ para los hombres y `r numero(comparables["Mujeres"])` mil NT\$ para las mujeres.
+
+Para obtener esos valores usamos un **promedio ponderado**: multiplicamos la facturación promedio de cada rango de edad por la proporción de clientes de ese rango en toda la base y sumamos los resultados. Por ejemplo, las personas de 21 a 29 años representan el `r numero(100 * pesos[1])` % de la base, por lo que su promedio aporta ese mismo porcentaje al cálculo de hombres y al de mujeres. Así, los rangos con más personas cuentan más, pero usamos las mismas proporciones para ambos grupos.
+
+> **La brecha baja de `r numero(brecha_original)` a `r numero(brecha_comparable)` mil NT\$: se reduce cerca de un `r numero(reduccion, 0)` %, pero no desaparece.** La edad ayuda a entender una parte de la diferencia observada; no la explica por completo.
+
+## ¿Qué le decimos al banco?
+
+No basta con decir _los hombres facturan más:_ el resultado cambia según la edad y, entre los más jóvenes, se invierte. Conviene revisar la edad y el comportamiento de cada cliente antes de sacar conclusiones sobre su grupo.
+
+Esta comparación describe una relación, **no demuestra que la edad o el sexo causen la diferencia**. Los rangos reúnen edades parecidas, no idénticas, y pueden existir otras diferencias entre los clientes. La conclusión se refiere a la facturación; no se extiende automáticamente al cupo ni al abono.
+
+
