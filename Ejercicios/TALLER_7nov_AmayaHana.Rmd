@@ -1,0 +1,202 @@
+---
+title: "TALLER_7nov_Amaya"
+author: |
+  Juan Pablo Mosquera Marin - 20221020026
+  Ana Laura Morcote Chacon - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño - 20221020057
+date: "2026-11-08"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+paquetes <- c("ggplot2", "knitr", "MASS")
+faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
+if (length(faltantes) > 0) install.packages(faltantes, repos = "https://cloud.r-project.org")
+library(ggplot2)
+
+# Formato con coma decimal y punto de miles para el texto en línea
+coma  <- function(x, d = 1) format(round(x, d), decimal.mark = ",", nsmall = d, trim = TRUE)
+miles <- function(x) format(round(x), big.mark = ".", decimal.mark = ",", trim = TRUE)
+# La probabilidad de azar dicha en palabras
+en_palabras_p <- function(p) {
+  if (p < 1e-6) "menos de una en un millón"
+  else if (p < 0.5) paste0("una en ", miles(1 / p))
+  else paste0(coma(100 * p, 0), " en 100")
+}
+```
+
+# Taller Hotelling: ¿son distintos estos grupos?
+
+## 1. El encargo
+
+```{r datos}
+rutas <- c(
+  "datos_credit.csv",
+  file.path("..", "DATASET", "datos_credit.csv"),
+  file.path("DATASET", "datos_credit.csv"),
+  here::here("DATASET", "datos_credit.csv"),
+  here::here("GitHub", "ESTAD.-MULTI", "DATASET", "datos_credit.csv"),
+  "C:/Users/tralf/Documents/u_distrital/ESTAD.-MULTI/DATASET/datos_credit.csv"
+)
+ruta <- rutas[file.exists(rutas)][1]
+if (is.na(ruta)) stop("No se encontró datos_credit.csv.")
+datos_originales <- read.csv(ruta, check.names = FALSE, stringsAsFactors = FALSE)
+
+vars <- paste0("PAY_AMT", 1:6)               # PAY_AMT1 = septiembre ... PAY_AMT6 = abril (2005)
+meses <- c("Sep", "Ago", "Jul", "Jun", "May", "Abr")
+
+raw <- as.matrix(datos_originales[vars])     # montos en NT$
+X   <- log1p(raw)                            # trabajamos con log(1 + monto)
+sexo <- factor(datos_originales$SEX, levels = c(1, 2), labels = c("Hombre", "Mujer"))
+uni  <- datos_originales$EDUCATION == 2
+
+N      <- nrow(X)
+nu     <- sum(uni)
+n_h    <- sum(sexo == "Hombre")
+n_m    <- sum(sexo == "Mujer")
+cors   <- cor(X)[upper.tri(cor(X))]
+asim   <- sapply(as.data.frame(raw), function(v) mean(((v - mean(v)) / sd(v))^3))
+```
+
+**Cliente y comparaciones.** Nuestro cliente es un banco de Taiwán (es un supuesto de la clase: los datos son reales, 30.000 titulares de tarjeta de crédito, y el encargo lo imaginamos) que quiere perfilar a sus clientes según cuánto pagan de su tarjeta cada mes, para decidir a quiénes estudiar con más detalle y qué hacer con el crédito otorgado.
+Le sirven dos comparaciones.
+La primera, **de una muestra**: ¿los universitarios (`EDUCATION = 2`: `r miles(nu)` clientes, `r coma(100 * nu / N)` % de la base, casi la mitad) pagan distinto del cliente promedio?
+La referencia es el promedio de toda la base de `r miles(N)` clientes; no es una meta del banco ni una cifra publicada, y así se dice en el informe.
+La segunda, **de dos muestras**: ¿los hombres (`r miles(n_h)`) y las mujeres (`r miles(n_m)`) pagan distinto?, para saber si el sexo sirve como atajo para decidir a quién estudiar.
+
+**Variables.** Usamos las seis `PAY_AMT1` a `PAY_AMT6`: el monto que cada cliente pagó en cada uno de los seis meses (de abril a septiembre de 2005).
+Las escogimos porque son el comportamiento de pago realmente observado (no una calificación), están todas en la misma unidad y se mueven juntas (correlación promedio entre meses de `r coma(mean(cors), 2)`), así que no basta compararlas una por una: como con los módulos de la prueba Saber, estar por encima en abril y en mayo es en buena parte el mismo hallazgo contado dos veces.
+Los montos son muy asimétricos (asimetría entre `r coma(min(asim), 0)` y `r coma(max(asim), 0)`; hay pagos de hasta NT$ `r miles(max(raw))`), y unos pocos pagos enormes moverían todo el cálculo; por eso trabajamos con $\log(1+\text{monto})$.
+En esa escala una diferencia se lee, aproximadamente, como un porcentaje (0,10 es cerca de 10 % más).
+Al final de cada comparación se revisa qué pasa con los montos sin transformar.
+
+## 2. Una muestra: ¿los universitarios son distintos de la referencia?
+
+### 2.1 Variable por variable
+
+```{r una-diferencias, fig.height=4}
+mu      <- colMeans(X)                 # la referencia: el promedio de toda la base
+Xu      <- X[uni, ]
+dif_uni <- colMeans(Xu) - mu
+
+graf_dif <- function(dif, titulo, subtitulo, color) {
+  df <- data.frame(mes = factor(meses, levels = rev(meses)), pct = 100 * (exp(dif) - 1))
+  ggplot(df, aes(mes, pct)) +
+    geom_col(fill = color, width = 0.6) +
+    geom_hline(yintercept = 0, color = "grey40") +
+    geom_text(aes(y = pct + sign(pct) * max(abs(pct)) * 0.1,
+                  label = paste0(ifelse(pct > 0, "+", ""), coma(pct, 1), " %")),
+              fontface = "bold", size = 4) +
+    scale_y_continuous(expand = expansion(mult = 0.2)) +
+    labs(title = titulo, subtitle = subtitulo, x = NULL, y = "Diferencia aproximada (%)")
+}
+graf_dif(dif_uni, "Universitarios frente al promedio de la base: pago de cada mes",
+         paste0(miles(nu), " clientes universitarios · positivo = pagan más que la base"), "#C05621")
+```
+
+Los universitarios pagan más que el promedio de la base en los seis meses, entre `r coma(100 * (exp(min(dif_uni)) - 1))` % y `r coma(100 * (exp(max(dif_uni)) - 1))` % más, con la mayor brecha en `r meses[which.max(dif_uni)]`. Todas las barras suben juntas, así que es una diferencia de nivel (no de perfil), y como los meses se mueven juntos no son seis hallazgos sino casi uno.
+
+No presentar seis barras sueltas: pedir una sola medida de cuánto se aleja el grupo con los seis meses al tiempo.
+
+### 2.2 ¿Es grande? La distancia $D$
+
+```{r una-D}
+D2_uni <- as.numeric(t(dif_uni) %*% solve(cov(Xu)) %*% dif_uni)
+D_uni  <- sqrt(D2_uni)
+```
+
+El promedio de los universitarios está a `r coma(D_uni, 3)` desviaciones del promedio de la base, contando los seis meses al tiempo. Una distancia de 1 es una desviación completa y esta ni siquiera llega a una décima: el universitario típico se parece muchísimo más al cliente promedio de lo que se diferencia. No se puede decir que los universitarios «pagan distinto» a secas, sino que la brecha es muy pequeña.
+
+### 2.3 ¿Es real? `hotelling_1()` y la simulación
+
+```{r una-hotelling}
+hotelling_1 <- function(Y, mu) {
+  n <- nrow(Y); p <- ncol(Y); dif <- colMeans(Y) - mu
+  D2 <- as.numeric(t(dif) %*% solve(cov(Y)) %*% dif)
+  T2 <- n * D2; F <- (n - p) / (p * (n - 1)) * T2
+  c(n = n, D = sqrt(D2), T2 = T2, F = F, p = pf(F, p, n - p, lower.tail = FALSE))
+}
+h_uni <- hotelling_1(Xu, mu)
+signif(h_uni, 4)
+```
+
+```{r una-simulacion, fig.height=4}
+set.seed(711)
+D_azar <- replicate(1000, {
+  g  <- X[sample(nrow(X), nu), ]
+  dd <- colMeans(g) - mu
+  sqrt(as.numeric(t(dd) %*% solve(cov(g)) %*% dd))
+})
+c(distancia_tipica_por_azar = round(median(D_azar), 3),
+  la_mayor_de_1000          = round(max(D_azar), 3),
+  la_de_universitarios      = round(D_uni, 3))
+
+ggplot(data.frame(D = D_azar), aes(D)) +
+  geom_histogram(bins = 40, fill = "grey70", color = "white") +
+  geom_vline(xintercept = D_uni, color = "#C05621", linewidth = 1.2) +
+  annotate("text", x = D_uni, y = Inf, vjust = 1.5, hjust = 1.05, color = "#C05621",
+           label = paste0("Universitarios: ", coma(D_uni, 3)), fontface = "bold", size = 4.3) +
+  labs(title = paste0("1.000 grupos al azar de ", miles(nu), " clientes: ¿qué tan lejos quedan?"),
+       x = "Distancia al promedio de la base (desviaciones)", y = "Grupos")
+```
+
+Un grupo de `r miles(nu)` clientes sacado al azar queda típicamente a `r coma(median(D_azar), 3)` desviaciones y el más lejano de los 1.000 quedó a `r coma(max(D_azar), 3)`; los universitarios están a `r coma(D_uni, 3)`, y el cálculo exacto con `hotelling_1()` da una probabilidad de azar de `r en_palabras_p(h_uni["p"])`.
+
+Ningún grupo al azar se les acercó, así que la diferencia es real y no es mala suerte (la simulación es la referencia más exacta aquí: los universitarios son casi la mitad de la base, y la fórmula, que trata la referencia como un valor fijo, deja más margen al azar del que realmente hay); pero real no es lo mismo que grande, y esta diferencia es real y muy pequeña.
+
+El banco puede afirmar que los universitarios pagan algo distinto, siempre acompañado de la cifra de cuánto: `r coma(D_uni, 3)` desviaciones.
+
+Revisión con los montos sin transformar:
+
+```{r una-sensibilidad}
+h_uni_raw   <- hotelling_1(raw[uni, ], colMeans(raw))
+dif_uni_raw <- colMeans(raw[uni, ]) - colMeans(raw)
+signif(h_uni_raw, 4)
+round(dif_uni_raw)
+```
+
+Con los montos en NT$ sin transformar, $D$ es `r coma(h_uni_raw["D"], 3)` y el promedio de los universitarios queda NT$ `r miles(-max(dif_uni_raw))` a `r miles(-min(dif_uni_raw))` por debajo del de la base, al revés de lo que mostraba la escala logarítmica.
+
+El promedio en NT$ lo arrastran unos pocos pagos enormes (por eso el cliente típico paga un poco más, pero el promedio de dinero es menor), y aun así la distancia sigue por debajo de una décima de desviación, así que la conclusión de fondo (diferencia real y muy pequeña) no depende de la escala.
+
+El banco puede decir que ninguna de las dos lecturas le da base para tratar a los universitarios como un grupo aparte.
+
+### 2.4 ¿Separa?
+
+```{r una-separa}
+nivel    <- rowMeans(X)                # nivel de pago: promedio de los seis log-pagos
+med_base <- median(nivel)
+pct_abajo <- 100 * mean(nivel[uni] < med_base)       # los universitarios están desplazados hacia arriba:
+                                                      # "el otro lado" es quedar por debajo de la mediana
+c(mediana_base = round(med_base, 2), universitarios_bajo_la_mediana = sum(nivel[uni] < med_base),
+  de_cada_100 = round(pct_abajo, 1))
+
+# un caso concreto: el universitario cuyo nivel de pago es el del 25 % más bajo de la base
+q25   <- quantile(nivel, 0.25)
+cand  <- which(uni)
+caso  <- cand[which.min(abs(nivel[cand] - q25))]
+raw[caso, ]
+sobre_caso <- 100 * mean(nivel > nivel[caso])
+```
+
+Los `r miles(sum(nivel[uni] < med_base))` universitarios, `r coma(pct_abajo)` de cada 100, quedan por debajo de la mediana de la base, cuando si fueran iguales a la base serían 50; uno de ellos (cliente de la fila `r caso`) pagó NT$ `r miles(sum(raw[caso, ]))` en los seis meses y paga menos que `r coma(sobre_caso, 0)` de cada 100 clientes de la base.
+
+El grupo está apenas corrido hacia arriba y casi la mitad de sus integrantes está del lado de los que pagan menos: diferencia no es separación, y ser universitario casi no dice nada sobre cuánto paga un cliente.
+
+Se concluye que «universitario» no sirve como criterio para seleccionar a quién estudiar: un filtro por educación pondría en el mismo saco a clientes que pagan mucho y a clientes que pagan poco.
+
+

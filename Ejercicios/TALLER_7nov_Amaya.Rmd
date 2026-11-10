@@ -15,27 +15,42 @@ output:
     theme: cosmo
     highlight: tango
     df_print: paged
+    self_contained: true
+    code_download: false
 editor_options:
   markdown:
     wrap: sentence
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(
+  echo = FALSE,
+  results = "hide",
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 4,
+  fig.align = "center"
+)
 
-paquetes <- c("ggplot2", "knitr", "MASS")
+paquetes <- c("ggplot2", "knitr", "MASS", "readxl")
 faltantes <- paquetes[!paquetes %in% rownames(installed.packages())]
 if (length(faltantes) > 0) install.packages(faltantes, repos = "https://cloud.r-project.org")
-library(ggplot2)
+invisible(lapply(paquetes, library, character.only = TRUE))
 
 # Formato con coma decimal y punto de miles para el texto en línea
 coma  <- function(x, d = 1) format(round(x, d), decimal.mark = ",", nsmall = d, trim = TRUE)
 miles <- function(x) format(round(x), big.mark = ".", decimal.mark = ",", trim = TRUE)
+
 # La probabilidad de azar dicha en palabras
 en_palabras_p <- function(p) {
   if (p < 1e-6) "menos de una en un millón"
   else if (p < 0.5) paste0("una en ", miles(1 / p))
   else paste0(coma(100 * p, 0), " en 100")
+}
+
+numero <- function(x, d = 2) {
+  formatC(x, format = "f", digits = d, big.mark = ".", decimal.mark = ",")
 }
 ```
 
@@ -44,6 +59,7 @@ en_palabras_p <- function(p) {
 ## 1. El encargo
 
 ```{r datos}
+# R Markdown ejecuta los bloques desde la carpeta del documento.
 rutas <- c(
   "datos_credit.csv",
   file.path("..", "DATASET", "datos_credit.csv"),
@@ -54,6 +70,7 @@ rutas <- c(
 )
 ruta <- rutas[file.exists(rutas)][1]
 if (is.na(ruta)) stop("No se encontró datos_credit.csv.")
+
 datos_originales <- read.csv(ruta, check.names = FALSE, stringsAsFactors = FALSE)
 
 vars <- paste0("PAY_AMT", 1:6)               # PAY_AMT1 = septiembre ... PAY_AMT6 = abril (2005)
@@ -104,6 +121,7 @@ graf_dif <- function(dif, titulo, subtitulo, color) {
     scale_y_continuous(expand = expansion(mult = 0.2)) +
     labs(title = titulo, subtitle = subtitulo, x = NULL, y = "Diferencia aproximada (%)")
 }
+
 graf_dif(dif_uni, "Universitarios frente al promedio de la base: pago de cada mes",
          paste0(miles(nu), " clientes universitarios · positivo = pagan más que la base"), "#C05621")
 ```
@@ -199,4 +217,275 @@ El grupo está apenas corrido hacia arriba y casi la mitad de sus integrantes es
 
 Se concluye que «universitario» no sirve como criterio para seleccionar a quién estudiar: un filtro por educación pondría en el mismo saco a clientes que pagan mucho y a clientes que pagan poco.
 
+# ¿Hombres y mujeres son distintos? Hotelling de dos muestras
 
+```{r opciones-dos-muestras, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# La pregunta
+
+Comparamos **dos grupos entre sí**: hombres y mujeres, clientes de tarjetas de crédito. Miramos las tres variables al tiempo (en miles de NT\$): el cupo (`LIMIT_BAL`), la facturación del último mes (`BILL_AMT1`) y el abono del último mes (`PAY_AMT1`).
+
+Como en la clase, la respuesta tiene tres partes:
+
+1.  **¿Es real?** ¿O puede ser mala suerte de esta muestra?
+2.  **¿Es grande?** ¿Cuánto es, en algo que se entienda?
+3.  **¿Separa?** Si me dan los valores de un cliente, ¿puedo saber si es hombre o mujer?
+
+## La base
+
+```{r datos-dos-muestras}
+ruta <- file.path("..", "DATASET", "credit.xls")
+stopifnot(file.exists(ruta))
+credit <- as.data.frame(read_excel(ruta, skip = 1))
+
+vars     <- c("LIMIT_BAL", "BILL_AMT1", "PAY_AMT1")
+etiqueta <- c(LIMIT_BAL = "cupo", BILL_AMT1 = "facturación", PAY_AMT1 = "abono")
+
+sc <- credit[, c("SEX", vars)]
+sc[, vars] <- sc[, vars] / 1000                      # miles de NT$
+sc <- sc[complete.cases(sc), ]
+sc$genero <- factor(sc$SEX, levels = c(2, 1), labels = c("Mujer", "Hombre"))
+
+X <- as.matrix(sc[vars])
+nrow(sc)
+```
+
+# Cuántos hay de cada grupo
+
+```{r tamanos}
+table(sc$genero)
+round(100 * prop.table(table(sc$genero)), 1)
+```
+
+# ¿Llegan con el mismo perfil?
+
+Mirar el nivel de cada variable por separado no alcanza para decir si los perfiles son iguales. Primero, las medias de cada grupo y su diferencia:
+
+```{r medias}
+medias_g <- sapply(vars, function(v) tapply(sc[[v]], sc$genero, mean))
+dif_g <- medias_g["Hombre", ] - medias_g["Mujer", ]
+round(rbind(medias_g, hombre_menos_mujer = dif_g), 2)
+```
+
+```{r grafico_dif}
+data.frame(variable = factor(etiqueta[vars], levels = rev(etiqueta)), dif = dif_g) |>
+  ggplot(aes(dif, variable, fill = dif > 0)) +
+  geom_col(width = 0.6) +
+  geom_vline(xintercept = 0, color = "grey40") +
+  geom_text(aes(label = coma(dif, 2), hjust = ifelse(dif > 0, -0.2, 1.2)), size = 4.2) +
+  scale_fill_manual(values = c("#805AD5", "#2B6CB0"), guide = "none") +
+  scale_x_continuous(expand = expansion(mult = 0.25)) +
+  labs(title = "Hombres menos mujeres, en cada variable",
+       subtitle = "Azul: mayor en los hombres · morado: mayor en las mujeres",
+       x = "Miles de NT$", y = NULL)
+```
+
+las mujeres tienen en promedio 6,57 mil NT\$ más de cupo que los hombres (170,09 frente a 163,52). Los hombres tienen 5,06 mil NT\$ más de facturación (54,28 frente a 49,22). En el abono casi no hay diferencia: 5,67 en hombres y 5,66 en mujeres, es decir, 0,01 mil NT\$ (unos 10 NT\$).
+
+el abono es prácticamente igual, pero el cupo y la facturación van en sentidos contrarios: las mujeres tienen más cupo y los hombres más facturación. Por eso la barra del abono casi no se ve en el gráfico: no hay diferencia que mostrar. Hasta aquí solo describimos promedios; todavía no sabemos si esas diferencias son reales ni cuánto pesan. Eso lo responde la sección siguiente.
+
+# ¿Cuánto pesa esa diferencia de perfil?
+
+Es la misma distancia de la parte anterior, ahora entre los dos promedios, y la misma pregunta de si puede ser azar.
+
+```{r hotelling}
+hotelling_2 <- function(A, B) {
+  n1 <- nrow(A); n2 <- nrow(B); p <- ncol(A)
+  Sp <- ((n1 - 1) * cov(A) + (n2 - 1) * cov(B)) / (n1 + n2 - 2)
+  dif <- colMeans(A) - colMeans(B)
+  D2 <- as.numeric(t(dif) %*% solve(Sp) %*% dif)
+  T2 <- n1 * n2 / (n1 + n2) * D2
+  F  <- (n1 + n2 - p - 1) / (p * (n1 + n2 - 2)) * T2
+  c(D = sqrt(D2), T2 = T2, F = F, p = pf(F, p, n1 + n2 - p - 1, lower.tail = FALSE))
+}
+h_gen <- hotelling_2(X[sc$genero == "Hombre", ], X[sc$genero == "Mujer", ])
+signif(h_gen, 4)
+
+# comprobación: R lo calcula con manova(); debe dar el mismo resultado (T2)
+L <- summary(manova(X ~ sc$genero), test = "Wilks")$stats[1, 2]
+round((nrow(sc) - 2) * (1 / L - 1), 2)
+```
+
+los perfiles de hombres y mujeres, mirando cupo, facturación y abono al tiempo, están a 0,10 desviaciones. El T² es 72,73 y el valor p es 1,2 × 10⁻¹⁵. La comprobación con `manova()` da 72,73, el mismo T².
+
+la diferencia es **real**: con ese valor p, la probabilidad de que sea azar es prácticamente cero. Pero la distancia es **pequeña**: una décima de desviación. Con 30.000 clientes casi cualquier diferencia sale real, así que lo que pesa es la distancia, no el valor p. **Decisión para el emisor:** la diferencia de perfil existe, pero es pequeña. Falta la tercera pregunta, la que más importa para decidir sobre una persona.
+
+# Si me muestran los valores de alguien, ¿sé si es hombre o mujer?
+
+Es la prueba de fuego. Usamos las tres variables para clasificar a cada cliente como hombre o mujer, con la regla que mejor lo hace, y contamos los aciertos.
+
+```{r lda}
+clasif <- MASS::lda(sc[vars], sc$genero)
+acierto_gen <- 100 * mean(predict(clasif)$class == sc$genero)
+sin_datos   <- 100 * max(table(sc$genero)) / nrow(sc)
+mayoria     <- tolower(names(which.max(table(sc$genero))))
+c(acierto_con_las_variables = round(acierto_gen, 1),
+  acierto_diciendo_siempre_la_mayoria = round(sin_datos, 1))
+```
+
+con las tres variables se acierta el sexo en 60,4 de cada 100 clientes. Diciendo siempre «mujer», sin mirar ninguna variable, también se acierta en 60,4.
+
+las variables no mejoran el acierto: 0,0 puntos de diferencia. La diferencia entre hombres y mujeres es real, pero los grupos **no se separan**: se montan casi por completo, y mirar el cupo, la facturación y el abono no ayuda a adivinar el sexo mejor que no mirar nada. **Decisión para el emisor:** el perfil sirve para describir la cartera de cada grupo, pero no para tratar a un cliente según su sexo; a cada cliente se le evalúa por sus propios valores.
+
+Con muchos clientes se detecta hasta una diferencia diminuta (real), pero la distancia entre los promedios es pequeña frente a la variación dentro de cada grupo, y por eso los dos grupos se montan casi por completo y no se pueden separar.
+
+# Conclusión
+
+- **¿Es real?** Sí: el valor p es 1,2 × 10⁻¹⁵.
+- **¿Es grande?** No: los perfiles están a 0,10 desviaciones.
+- **¿Separa?** No: 60,4 % de acierto frente a 60,4 % sin mirar nada.
+
+el perfil de hombres y mujeres es distinto en promedio (más cupo en ellas, más facturación en ellos), pero la diferencia es pequeña y no sirve para clasificar a ningún cliente. Sirve para describir la cartera de cada grupo, no para tratar a una persona según su sexo.
+
+# ¿Qué viaja con el grupo?
+
+La edad y las diferencias de facturación entre hombres y mujeres
+
+```{r datos-punto4, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+datos <- datos_originales
+requeridas <- c("SEX", "AGE", "BILL_AMT1")
+stopifnot(all(requeridas %in% names(datos)))
+stopifnot(all(complete.cases(datos[requeridas])),
+          all(datos$SEX %in% c(1, 2)), all(datos$AGE >= 21))
+
+datos$grupo <- factor(datos$SEX, levels = c(1, 2),
+                      labels = c("Hombres", "Mujeres"))
+
+datos$edad <- cut(datos$AGE, breaks = c(20, 29, 39, 49, Inf),
+                  labels = c("21 a 29", "30 a 39", "40 a 49", "50 o más"))
+
+datos$facturacion <- datos$BILL_AMT1 / 1000
+conteos <- table(datos$edad, datos$grupo)
+stopifnot(all(conteos > 0), sum(conteos) == nrow(datos))
+porcentajes <- 100 * prop.table(conteos, margin = 2)
+edad_media <- tapply(datos$AGE, datos$grupo, mean)
+medias <- tapply(datos$facturacion, datos$grupo, mean)
+por_edad <- with(datos, tapply(facturacion, list(edad, grupo), mean))
+brechas <- por_edad[, "Hombres"] - por_edad[, "Mujeres"]
+
+# Ambos grupos reciben la misma distribución de edad: la de toda la base.
+pesos <- rowSums(conteos) / sum(conteos)
+comparables <- colSums(sweep(por_edad, 1, pesos, "*"))
+brecha_original <- unname(medias["Hombres"] - medias["Mujeres"])
+brecha_comparable <- unname(comparables["Hombres"] - comparables["Mujeres"])
+reduccion <- 100 * (brecha_original - brecha_comparable) / brecha_original
+```
+
+<style>
+.main-container { max-width: 940px; }
+body { font-size: 17px; line-height: 1.65; color: #243447; }
+h1, h2 { color: #174d63; }
+h2 { margin-top: 30px; font-size: 25px; }
+blockquote { background: #edf6f8; border-left: 5px solid #24758a; padding: 15px 20px; }
+table { font-size: 16px; }
+</style>
+
+## ¿Qué comparación escogimos?
+
+Se escogió **hombres frente a mujeres**, donde se comparan el cupo, la facturación y el abono. Para este punto nos centramos en **la facturación del último mes**: el valor que aparece en el estado de cuenta, que no es lo mismo que el dinero abonado.
+
+En los `r numero(nrow(datos), 0)` clientes, los hombres tienen una facturación promedio de **`r numero(medias["Hombres"])` mil NT\$**, frente a **`r numero(medias["Mujeres"])` mil NT\$** en las mujeres. La diferencia es de **`r numero(brecha_original)` mil NT\$**.
+Nota: NT\$ = dólares taiwaneses.
+
+## La **edad** viaja con el grupo
+
+Esto significa que **los grupos también son distintos en edad**: los hombres tienen, en promedio, `r numero(edad_media["Hombres"], 1)` años y las mujeres, `r numero(edad_media["Mujeres"], 1)`. Además, entre las mujeres hay una mayor proporción de personas jóvenes:
+
+```{r composicion, results='asis'}
+knitr::kable(
+  data.frame(
+    "Edad (años)" = rownames(conteos),
+    "De cada 100 hombres" = numero(porcentajes[, "Hombres"], 1),
+    "De cada 100 mujeres" = numero(porcentajes[, "Mujeres"], 1),
+    check.names = FALSE
+  ), row.names = FALSE, align = c("l", "r", "r")
+)
+```
+
+**¿Será que parte de la diferencia de facturación acompaña esa diferencia de edad?** Para revisarlo, comparamos hombres y mujeres dentro del mismo rango de edad.
+
+## ¿Qué pasa al comparar personas de edades parecidas?
+
+La tabla muestra la **facturación promedio en miles de NT\$**. Una diferencia positiva indica más facturación en los hombres; una negativa, más en las mujeres.
+
+```{r comparacion, results='asis'}
+knitr::kable(
+  data.frame(
+    "Edad (años)" = rownames(por_edad),
+    "Hombres" = numero(por_edad[, "Hombres"]),
+    "Mujeres" = numero(por_edad[, "Mujeres"]),
+    "Hombres menos mujeres" = numero(brechas),
+    check.names = FALSE
+  ), row.names = FALSE, align = c("l", "r", "r", "r")
+)
+```
+
+Entre los clientes de **21 a 29 años**, las mujeres facturan `r numero(-brechas[1])` mil NT\$ más. En los otros tres rangos ocurre lo contrario: los hombres facturan más. Además, en ambos grupos los menores de 30 años tienen la menor facturación promedio. Por eso, tener más personas jóvenes puede influir en el promedio de las mujeres.
+
+Para resumirlo, calculamos cómo quedarían los promedios **si ambos grupos tuvieran la misma proporción de personas en cada rango de edad**, usando las proporciones de toda la base. Así quedan en `r numero(comparables["Hombres"])` mil NT\$ para los hombres y `r numero(comparables["Mujeres"])` mil NT\$ para las mujeres.
+
+Para obtener esos valores usamos un **promedio ponderado**: multiplicamos la facturación promedio de cada rango de edad por la proporción de clientes de ese rango en toda la base y sumamos los resultados. Por ejemplo, las personas de 21 a 29 años representan el `r numero(100 * pesos[1])` % de la base, por lo que su promedio aporta ese mismo porcentaje al cálculo de hombres y al de mujeres. Así, los rangos con más personas cuentan más, pero usamos las mismas proporciones para ambos grupos.
+
+> **La brecha baja de `r numero(brecha_original)` a `r numero(brecha_comparable)` mil NT\$: se reduce cerca de un `r numero(reduccion, 0)` %, pero no desaparece.** La edad ayuda a entender una parte de la diferencia observada; no la explica por completo.
+
+## ¿Qué le decimos al banco?
+
+No basta con decir _los hombres facturan más:_ el resultado cambia según la edad y, entre los más jóvenes, se invierte. Conviene revisar la edad y el comportamiento de cada cliente antes de sacar conclusiones sobre su grupo.
+
+Esta comparación describe una relación, **no demuestra que la edad o el sexo causen la diferencia**. Los rangos reúnen edades parecidas, no idénticas, y pueden existir otras diferencias entre los clientes. La conclusión se refiere a la facturación; no se extiende automáticamente al cupo ni al abono.
+
+## 5. Las tres preguntas y la decisión
+
+```{r tabla-final, echo=FALSE, results='asis'}
+resumen <- data.frame(
+  "Comparación" = c(
+    "Universitarios frente al promedio de la base: seis pagos mensuales en escala logarítmica",
+    "Hombres frente a mujeres: cupo, facturación y abono en miles de NT$"
+  ),
+  "¿Es real?" = c(
+    paste0(
+      "Hay evidencia de diferencia (p = ",
+      format.pval(h_uni["p"], digits = 3),
+      "), respaldada por la simulación de grupos al azar."
+    ),
+    paste0(
+      "Hay evidencia de diferencia (p = ",
+      format.pval(h_gen["p"], digits = 3),
+      "); Hotelling y manova coinciden."
+    )
+  ),
+  "¿Es grande? (D)" = c(
+    paste0(coma(D_uni, 3), " desviaciones: muy pequeña."),
+    paste0(coma(h_gen["D"], 3), " desviaciones: pequeña.")
+  ),
+  "¿Separa?" = c(
+    paste0(
+      "Muy poco: ", coma(pct_abajo, 1),
+      " de cada 100 universitarios quedan por debajo de la mediana de la base."
+    ),
+    paste0(
+      "No mejora la clasificación: ", coma(acierto_gen, 1),
+      " % de acierto con LDA frente a ", coma(sin_datos, 1),
+      " % diciendo siempre «mujer»."
+    )
+  ),
+  check.names = FALSE
+)
+
+knitr::kable(
+  resumen,
+  row.names = FALSE,
+  align = c("l", "l", "l", "l")
+)
+```
+
+### La decisión para el cliente
+
+El banco si encuentra diferencias en base los datos en las dos comparaciones, pero las distancias son pequeñas y los grupos se superponen ampliamente, por lo que estos resultados no justifican usar el grado de escolaridad o el sexo como criterios para modificar el crédito otorgado al usuario de tarjeta de credito.
+Ser universitario aporta poca información sobre el pago individual: `r coma(pct_abajo, 1)` de cada 100 universitarios quedan por debajo de la mediana de la base, mientras que el cupo, la facturación y el abono no permiten clasificar el sexo mejor que elegir siempre el grupo mayoritario que es este caso son las mujures.
+Además, al igualar la composición por edad, la brecha de facturación entre hombres y mujeres se reduce cerca de un `r numero(reduccion, 0)` %, lo que muestra que parte de la diferencia acompaña a la edad, sin demostrar una relación causal de peso.
+Por ello, el banco debe usar estos resultados para describir su cartera y orientar análisis posteriores, y evaluar a cada cliente por su comportamiento de pago y su capacidad de pago por sobre su sexo, escolaridad e incluso edad al estas superponerse, antes de decidir sobre su crédito.
