@@ -28,9 +28,6 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # Exportar las transformaciones de `datos_credit.csv`
 
-Este documento lee `DATASET/datos_credit.csv`, repite cada transformación que se hizo en los talleres del 31 de octubre (análisis factorial y PCA) y del 7 de noviembre (Hotelling), y guarda una copia en CSV de cada resultado en la carpeta `DATASET`.
-
-
 **Cómo leer los archivos generados**
 
 - Se llaman `datos_credit_NN_descripcion.csv`. El número `NN` identifica un conjunto de datos y la versión con sufijo `_zscore` es ese mismo conjunto estandarizado.
@@ -43,16 +40,11 @@ Este documento lee `DATASET/datos_credit.csv`, repite cada transformación que s
 
 ```{r parametros}
 nombre_csv_original     <- "datos_credit.csv"
-
-# Las versiones estandarizadas (Z-score) pesan bastante: la de one-hot ronda los 25 MB.
-# Si solo se quieren las transformaciones de valores, cambiar a FALSE.
 exportar_estandarizadas <- TRUE
 decimales_z             <- 6      # redondeo de las columnas Z-score
 ```
 
 ## 1. Lectura y carpetas
-
-El documento busca el CSV con las mismas rutas que usan los otros talleres y **guarda los resultados en la carpeta donde lo encontró**, es decir, `DATASET`.
 
 ```{r rutas}
 usa_here <- requireNamespace("here", quietly = TRUE)
@@ -205,9 +197,10 @@ vista(Xu_log, "02 hotelling1_universitarios_log1p")
 vista(Xu_raw, "03 hotelling1_universitarios_montos")
 ```
 
-### 3.3 Cupo, facturación y abono en miles de NT$ (dos muestras)
+### 3.3 Cupo, facturación y abono en miles de NT\$ (dos muestras)
 
-En el taller esta parte lee `credit.xls`. Aquí se construye a partir del CSV, que tiene las mismas columnas, para que todos los archivos salgan de una sola fuente.
+En el taller esta parte lee `credit.xls`.
+Aquí se construye a partir del CSV, que tiene las mismas columnas, para que todos los archivos salgan de una sola fuente.
 Las tres variables (`LIMIT_BAL`, `BILL_AMT1`, `PAY_AMT1`) se dividen entre 1.000 y se agrega la etiqueta de género con Mujer como primer nivel.
 
 ```{r hotelling-dos-muestras}
@@ -233,7 +226,7 @@ vista(base_hotelling2, "04 hotelling2_cupo_facturacion_abono_miles")
 
 ### 3.4 Facturación por edad y sexo
 
-La facturación del último mes en miles de NT$, el grupo (Hombres/Mujeres) y la edad agrupada en cuatro rangos: 21 a 29, 30 a 39, 40 a 49 y 50 o más.
+La facturación del último mes en miles de NT\$, el grupo (Hombres/Mujeres) y la edad agrupada en cuatro rangos: 21 a 29, 30 a 39, 40 a 49 y 50 o más.
 
 ```{r punto4}
 stopifnot(all(complete.cases(datos_originales[c("SEX", "AGE", "BILL_AMT1")])),
@@ -323,7 +316,8 @@ vista(grupo_edad, "10 pca_14_grupo_edad")
 
 ### 4.3 Recodificaciones y one-hot
 
-**One-hot completo.** Se recodifican `EDUCATION` (0, 5 y 6 a 4) y `MARRIAGE` (0 a 3); las 14 variables cuantitativas se dejan igual y cada categoría de las 9 variables categóricas (`SEX`, `EDUCATION`, `MARRIAGE` y los 6 estados de pago) pasa a una columna 0/1. No incluye la respuesta.
+**One-hot completo.** Se recodifican `EDUCATION` (0, 5 y 6 a 4) y `MARRIAGE` (0 a 3); las 14 variables cuantitativas se dejan igual y cada categoría de las 9 variables categóricas (`SEX`, `EDUCATION`, `MARRIAGE` y los 6 estados de pago) pasa a una columna 0/1.
+No incluye la respuesta.
 
 ```{r onehot}
 predictores <- datos_originales[c(vars_cuant, vars_cat)]
@@ -346,9 +340,8 @@ vista(con_id(ids_onehot, X_onehot), paste("11", nombre_onehot))
 ```
 
 **Una columna por variable (recodificado).** `SEX` queda con sus códigos (1 y 2).
-`EDUCATION` se ordena: Otros = 0, Secundaria = 1, Universidad = 2, Posgrado = 3.
-`MARRIAGE` lleva el 0 al 3.
-En los seis estados de pago los códigos -2, -1 y 0 se agrupan en 0 y los positivos se mantienen. Incluye la respuesta binaria.
+`EDUCATION` se ordena: Otros = 0, Secundaria = 1, Universidad = 2, Posgrado = 3. `MARRIAGE` lleva el 0 al 3. En los seis estados de pago los códigos -2, -1 y 0 se agrupan en 0 y los positivos se mantienen.
+Incluye la respuesta binaria.
 
 ```{r recodificado}
 recodificada <- datos_originales                      # copia: el original no se toca
