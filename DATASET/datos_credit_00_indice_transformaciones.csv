@@ -1,0 +1,23 @@
+"archivo","taller","objeto_en_taller","filas","columnas","descripcion","tamano_MB"
+"datos_credit_01_hotelling1_pagos_log1p.csv","TALLER_7nov","X, sexo, uni, nivel",30000,12,"Los 6 pagos mensuales en log(1 + monto), con sexo (etiqueta), indicador de universitario (EDUCATION = 2) y nivel de pago (promedio de los 6 log-pagos). Todas las filas.",3.44
+"datos_credit_02_hotelling1_universitarios_log1p.csv","TALLER_7nov","Xu",14030,7,"Solo los universitarios (EDUCATION = 2): los 6 pagos en log(1 + monto).",1.22
+"datos_credit_03_hotelling1_universitarios_montos.csv","TALLER_7nov","raw[uni, ]",14030,7,"Solo los universitarios (EDUCATION = 2): los 6 pagos en NT$ sin transformar (revisión de sensibilidad).",0.44
+"datos_credit_04_hotelling2_cupo_facturacion_abono_miles.csv","TALLER_7nov","sc",30000,6,"Cupo (LIMIT_BAL), facturación (BILL_AMT1) y abono (PAY_AMT1) en miles de NT$, con el género como etiqueta.",0.9
+"datos_credit_05_facturacion_por_edad_y_sexo.csv","TALLER_7nov","datos",30000,7,"Facturación del último mes (BILL_AMT1) en miles de NT$, grupo (Hombres/Mujeres) y edad en 4 rangos.",1.25
+"datos_credit_06_numericas_14_cuantitativas.csv","TALLER_31oct","datos_kmo_todas / X_cuant",30000,15,"Las 14 variables cuantitativas (LIMIT_BAL, AGE, BILL_AMT1-6, PAY_AMT1-6) con sus valores originales. Se usa en el KMO del factorial y en el PCA cuantitativo.",2.13
+"datos_credit_06_numericas_14_cuantitativas_zscore.csv","TALLER_31oct","Z_cuant",30000,15,"Las 14 variables cuantitativas. Versión estandarizada (Z-score) de las columnas.",4.04
+"datos_credit_07_factorial_9_variables.csv","TALLER_31oct","datos_kmo",30000,10,"Las 9 variables del modelo factorial (LIMIT_BAL, AGE, BILL_AMT1-6, PAY_AMT6) con sus valores originales.",1.5
+"datos_credit_08_pca_24_numericas_zscore.csv","TALLER_31oct","Z (PCA de todas las numéricas)",30000,25,"Las 24 columnas numéricas del CSV, en el orden del archivo y sin recodificar. Versión estandarizada (Z-score) de las columnas.",6.71
+"datos_credit_09_pca_23_sin_respuesta.csv","TALLER_31oct","X_sin_respuesta",30000,24,"Las 24 columnas numéricas sin default payment next month, valores originales.",2.7
+"datos_credit_09_pca_23_sin_respuesta_zscore.csv","TALLER_31oct","X_sin_respuesta",30000,24,"Las 24 columnas numéricas sin default payment next month. Versión estandarizada (Z-score) de las columnas.",6.43
+"datos_credit_10_pca_14_grupo_edad.csv","TALLER_31oct","mapa_cuant$grupo_edad",30000,3,"Edad y su grupo: menores de 35 años / 35 o más (corte del PCA cuantitativo).",0.68
+"datos_credit_11_onehot_completo_87.csv","TALLER_31oct","datos_codificados",30000,88,"14 variables cuantitativas + una columna 0/1 por cada categoría de SEX, EDUCATION, MARRIAGE y PAY_0, PAY_2-6 (columnas VARIABLE_categoria_NIVEL).",6.31
+"datos_credit_11_onehot_completo_87_zscore.csv","TALLER_31oct","datos_codificados",30000,88,"14 variables cuantitativas + indicadoras one-hot. Versión estandarizada (Z-score) de las columnas.",24.34
+"datos_credit_12_recodificado_24.csv","TALLER_31oct","X (recodificado)",30000,25,"Las 24 variables con una columna cada una: EDUCATION ordenada (Otros 0 a Posgrado 3), MARRIAGE con 0 -> 3 y estados de pago con -2, -1 y 0 agrupados en 0. Incluye la respuesta.",2.7
+"datos_credit_12_recodificado_24_zscore.csv","TALLER_31oct","X (recodificado)",30000,25,"Las 24 variables recodificadas. Versión estandarizada (Z-score) de las columnas.",6.8
+"datos_credit_13_mixto_27.csv","TALLER_31oct","X_mixto",30000,28,"Codificación mixta: variables recodificadas (como en el archivo 12) con SEX y MARRIAGE en columnas indicadoras con nombre. Incluye la respuesta.",2.87
+"datos_credit_13_mixto_27_zscore.csv","TALLER_31oct","X_mixto",30000,28,"Codificación mixta. Versión estandarizada (Z-score) de las columnas.",7.6
+"datos_credit_14_recodificado_sin_respuesta_23.csv","TALLER_31oct","X_label sin respuesta",30000,24,"El recodificado del archivo 12 sin default payment next month.",2.65
+"datos_credit_14_recodificado_sin_respuesta_23_zscore.csv","TALLER_31oct","X_label sin respuesta",30000,24,"El recodificado sin la respuesta. Versión estandarizada (Z-score) de las columnas.",6.52
+"datos_credit_15_mixto_sin_respuesta_26.csv","TALLER_31oct","X_mixto sin respuesta",30000,27,"La codificación mixta del archivo 13 sin default payment next month.",2.82
+"datos_credit_15_mixto_sin_respuesta_26_zscore.csv","TALLER_31oct","X_mixto sin respuesta",30000,27,"La codificación mixta sin la respuesta. Versión estandarizada (Z-score) de las columnas.",7.32

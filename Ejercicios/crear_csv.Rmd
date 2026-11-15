@@ -1,0 +1,477 @@
+---
+title: "crear_csv"
+date: "2026-11-15"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: false
+    theme: cosmo
+    highlight: tango
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+# Si R arranca en locale "C" (pasa en algunas instalaciones de Windows), las tildes de las
+# etiquetas ("50 o más") se escribirían como <U+00E1>. Se pasa a un locale UTF-8 antes de exportar.
+if (!l10n_info()[["UTF-8"]]) {
+  for (loc in c("Spanish_Colombia.utf8", "es_CO.UTF-8", "en_US.UTF-8", "C.UTF-8")) {
+    if (nzchar(suppressWarnings(Sys.setlocale("LC_CTYPE", loc)))) break
+  }
+}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Exportar las transformaciones de `datos_credit.csv`
+
+Este documento lee `DATASET/datos_credit.csv`, repite cada transformación que se hizo en los talleres del 31 de octubre (análisis factorial y PCA) y del 7 de noviembre (Hotelling), y guarda una copia en CSV de cada resultado en la carpeta `DATASET`.
+
+
+**Cómo leer los archivos generados**
+
+- Se llaman `datos_credit_NN_descripcion.csv`. El número `NN` identifica un conjunto de datos y la versión con sufijo `_zscore` es ese mismo conjunto estandarizado.
+- Todos traen `id_fila`: la posición de la fila en `datos_credit.csv` (1 = primera fila de datos). Sirve para unir cualquier archivo con el original o entre sí, aunque unos tengan menos filas.
+- El CSV original **no se modifica**: al final se comprueba con su suma MD5.
+- Los CSV usan coma como separador y punto decimal, igual que el original (se leen con `read.csv()`).
+- Solo se exportan **datos transformados**. Las puntuaciones de los modelos (componentes del PCA, puntajes factoriales) y las tablas resumen (promedios por edad, distancias, p-valores) son resultados de cada análisis, no transformaciones del CSV, y no se guardan.
+
+## 0. Parámetros
+
+```{r parametros}
+nombre_csv_original     <- "datos_credit.csv"
+
+# Las versiones estandarizadas (Z-score) pesan bastante: la de one-hot ronda los 25 MB.
+# Si solo se quieren las transformaciones de valores, cambiar a FALSE.
+exportar_estandarizadas <- TRUE
+decimales_z             <- 6      # redondeo de las columnas Z-score
+```
+
+## 1. Lectura y carpetas
+
+El documento busca el CSV con las mismas rutas que usan los otros talleres y **guarda los resultados en la carpeta donde lo encontró**, es decir, `DATASET`.
+
+```{r rutas}
+usa_here <- requireNamespace("here", quietly = TRUE)
+
+rutas <- c(
+  file.path("..", "DATASET", nombre_csv_original),       # al tejer desde Ejercicios
+  file.path("DATASET", nombre_csv_original),
+  if (usa_here) here::here("DATASET", nombre_csv_original),
+  if (usa_here) here::here("GitHub", "ESTAD.-MULTI", "DATASET", nombre_csv_original),
+  file.path("C:/Users/tralf/Documents/u_distrital/ESTAD.-MULTI/DATASET", nombre_csv_original)
+)
+ruta_csv <- rutas[file.exists(rutas)][1]
+if (is.na(ruta_csv)) stop("No se encontró DATASET/", nombre_csv_original, ".")
+
+dir_salida <- normalizePath(dirname(ruta_csv), winslash = "/")
+dir_salida
+```
+
+```{r lectura}
+datos_originales <- read.csv(ruta_csv, check.names = FALSE, stringsAsFactors = FALSE)
+md5_original_antes <- unname(tools::md5sum(ruta_csv))
+
+# Nombres de columnas que usan los talleres
+vars_cuant <- c("LIMIT_BAL", "AGE", paste0("BILL_AMT", 1:6), paste0("PAY_AMT", 1:6))
+vars_hist  <- c("PAY_0", paste0("PAY_", 2:6))
+vars_cat   <- c("SEX", "EDUCATION", "MARRIAGE", vars_hist)
+respuesta  <- "default payment next month"
+
+faltan <- setdiff(c(vars_cuant, vars_cat, respuesta), names(datos_originales))
+if (length(faltan)) stop("Faltan columnas en el CSV: ", paste(faltan, collapse = ", "))
+stopifnot(all(vapply(datos_originales[c(vars_cuant, vars_cat, respuesta)], is.numeric, logical(1))))
+
+id_fila <- seq_len(nrow(datos_originales))   # posición de cada fila en el CSV original
+
+data.frame(filas = nrow(datos_originales), columnas = ncol(datos_originales))
+```
+
+## 2. Funciones auxiliares
+
+Las recodificaciones son las de los talleres, escritas una sola vez para que todas las secciones usen exactamente la misma regla.
+
+```{r funciones}
+# ---- filas y formato ----------------------------------------------------------
+filas_finitas <- function(df) which(rowSums(!is.finite(as.matrix(df))) == 0)
+con_id        <- function(ids, m) data.frame(id_fila = ids, m, check.names = FALSE)
+
+vista <- function(df, titulo, max_cols = 8) {
+  knitr::kable(head(df[seq_len(min(ncol(df), max_cols))], 3),
+               caption = sprintf("%s: primeras filas (%d de %d columnas)",
+                                 titulo, min(ncol(df), max_cols), ncol(df)))
+}
+
+# ---- recodificaciones -----------------------------------------------------------
+# EDUCATION: 0, 5 y 6 pasan a 4 (Otros), según el diccionario
+agrupar_educacion <- function(x) { x[x %in% c(0, 5, 6)] <- 4; x }
+# EDUCATION con orden: Otros = 0, Secundaria = 1, Universidad = 2, Posgrado = 3
+ordenar_educacion <- function(x) {
+  equivalencias <- c("1" = 3, "2" = 2, "3" = 1, "4" = 0)
+  unname(equivalencias[as.character(agrupar_educacion(x))])
+}
+# MARRIAGE: el código 0 pasa a 3 (Otros)
+agrupar_marriage  <- function(x) { x[x %in% 0] <- 3; x }
+# Historial de pagos: -2, -1 y 0 se agrupan en 0; los positivos (meses de atraso) no cambian
+agrupar_historial <- function(x) { x[x %in% c(-2, -1, 0)] <- 0; x }
+
+# ---- one-hot: una columna 0/1 por categoría observada -------------------------------
+crear_indicadoras <- function(x, variable, etiquetas = NULL) {
+  f <- factor(x)
+  niveles <- levels(f)
+  bloque <- vapply(niveles, function(n) as.numeric(f == n), numeric(length(f)))
+  sufijo <- if (is.null(etiquetas)) paste0("categoria_", niveles) else unname(etiquetas[niveles])
+  stopifnot(!anyNA(sufijo))
+  colnames(bloque) <- paste0(variable, "_", sufijo)
+  stopifnot(all(rowSums(bloque) == 1))        # cada fila cae en una sola categoría
+  bloque
+}
+
+# ---- escritura y registro -------------------------------------------------------------
+registro <- new.env()
+registro$filas <- list()
+
+escribir_csv <- function(df, numero, nombre, taller, objeto, descripcion) {
+  archivo <- sprintf("datos_credit_%02d_%s.csv", numero, nombre)
+  write.csv(df, file.path(dir_salida, archivo), row.names = FALSE, fileEncoding = "UTF-8")
+  registro$filas[[archivo]] <- data.frame(
+    archivo = archivo, taller = taller, objeto_en_taller = objeto,
+    filas = nrow(df), columnas = ncol(df), descripcion = descripcion,
+    stringsAsFactors = FALSE
+  )
+  invisible(archivo)
+}
+
+# Z-score columna a columna: (x - media) / desviación estándar, como hace prcomp(scale. = TRUE)
+exportar_z <- function(m, ids, numero, nombre, taller, objeto, descripcion) {
+  if (!exportar_estandarizadas) return(invisible(NULL))
+  m <- as.matrix(m)
+  if (any(apply(m, 2, sd) == 0)) stop("Hay columnas constantes: no se pueden estandarizar.")
+  z <- scale(m)
+  attr(z, "scaled:center") <- NULL
+  attr(z, "scaled:scale")  <- NULL
+  escribir_csv(con_id(ids, round(z, decimales_z)), numero, paste0(nombre, "_zscore"), taller, objeto,
+               paste(descripcion, "Versión estandarizada (Z-score) de las columnas."))
+}
+```
+
+## 3. TALLER_7nov: Hotelling
+
+### 3.1 Pagos en $\log(1+\text{monto})$ (una muestra)
+
+El taller trabaja con `PAY_AMT1` a `PAY_AMT6` en la escala $\log(1+\text{monto})$ para que unos pocos pagos enormes no dominen el cálculo.
+Además define el grupo de universitarios (`EDUCATION = 2`), las etiquetas de sexo y el nivel de pago de cada cliente (promedio de sus seis log-pagos).
+
+```{r hotelling-log}
+vars_pago <- paste0("PAY_AMT", 1:6)           # PAY_AMT1 = septiembre ... PAY_AMT6 = abril (2005)
+raw   <- as.matrix(datos_originales[vars_pago])
+X_log <- log1p(raw)
+stopifnot(all(is.finite(X_log)))
+colnames(X_log) <- paste0(vars_pago, "_log1p")
+
+sexo <- factor(datos_originales$SEX, levels = c(1, 2), labels = c("Hombre", "Mujer"))
+uni  <- datos_originales$EDUCATION == 2
+
+base_hotelling1 <- data.frame(
+  id_fila,
+  SEX = datos_originales$SEX, sexo = as.character(sexo),
+  EDUCATION = datos_originales$EDUCATION, universitario = as.integer(uni),
+  X_log,
+  nivel_pago_log = rowMeans(X_log),
+  check.names = FALSE
+)
+
+escribir_csv(base_hotelling1, 1, "hotelling1_pagos_log1p", "TALLER_7nov", "X, sexo, uni, nivel",
+             "Los 6 pagos mensuales en log(1 + monto), con sexo (etiqueta), indicador de universitario (EDUCATION = 2) y nivel de pago (promedio de los 6 log-pagos). Todas las filas.")
+vista(base_hotelling1, "01 hotelling1_pagos_log1p")
+```
+
+### 3.2 Universitarios
+
+La muestra del contraste son las filas con `EDUCATION = 2`: primero en la escala logarítmica (`Xu`) y después con los montos sin transformar, que es la revisión de sensibilidad del taller.
+
+```{r hotelling-universitarios}
+Xu_log <- data.frame(id_fila = id_fila[uni], X_log[uni, ], check.names = FALSE)
+Xu_raw <- data.frame(id_fila = id_fila[uni], raw[uni, ],   check.names = FALSE)
+
+escribir_csv(Xu_log, 2, "hotelling1_universitarios_log1p", "TALLER_7nov", "Xu",
+             "Solo los universitarios (EDUCATION = 2): los 6 pagos en log(1 + monto).")
+escribir_csv(Xu_raw, 3, "hotelling1_universitarios_montos", "TALLER_7nov", "raw[uni, ]",
+             "Solo los universitarios (EDUCATION = 2): los 6 pagos en NT$ sin transformar (revisión de sensibilidad).")
+vista(Xu_log, "02 hotelling1_universitarios_log1p")
+vista(Xu_raw, "03 hotelling1_universitarios_montos")
+```
+
+### 3.3 Cupo, facturación y abono en miles de NT$ (dos muestras)
+
+En el taller esta parte lee `credit.xls`. Aquí se construye a partir del CSV, que tiene las mismas columnas, para que todos los archivos salgan de una sola fuente.
+Las tres variables (`LIMIT_BAL`, `BILL_AMT1`, `PAY_AMT1`) se dividen entre 1.000 y se agrega la etiqueta de género con Mujer como primer nivel.
+
+```{r hotelling-dos-muestras}
+vars_h2 <- c("LIMIT_BAL", "BILL_AMT1", "PAY_AMT1")
+sc      <- datos_originales[c("SEX", vars_h2)]
+ids_sc  <- filas_finitas(sc)
+sc      <- sc[ids_sc, , drop = FALSE]
+sc[vars_h2] <- sc[vars_h2] / 1000                      # miles de NT$
+names(sc)[match(vars_h2, names(sc))] <- paste0(vars_h2, "_miles")
+
+base_hotelling2 <- data.frame(
+  id_fila = ids_sc,
+  SEX = sc$SEX,
+  genero = as.character(factor(sc$SEX, levels = c(2, 1), labels = c("Mujer", "Hombre"))),
+  sc[paste0(vars_h2, "_miles")],
+  check.names = FALSE
+)
+
+escribir_csv(base_hotelling2, 4, "hotelling2_cupo_facturacion_abono_miles", "TALLER_7nov", "sc",
+             "Cupo (LIMIT_BAL), facturación (BILL_AMT1) y abono (PAY_AMT1) en miles de NT$, con el género como etiqueta.")
+vista(base_hotelling2, "04 hotelling2_cupo_facturacion_abono_miles")
+```
+
+### 3.4 Facturación por edad y sexo
+
+La facturación del último mes en miles de NT$, el grupo (Hombres/Mujeres) y la edad agrupada en cuatro rangos: 21 a 29, 30 a 39, 40 a 49 y 50 o más.
+
+```{r punto4}
+stopifnot(all(complete.cases(datos_originales[c("SEX", "AGE", "BILL_AMT1")])),
+          all(datos_originales$SEX %in% c(1, 2)), all(datos_originales$AGE >= 21))
+
+edad_rango <- cut(datos_originales$AGE, breaks = c(20, 29, 39, 49, Inf),
+                  labels = c("21 a 29", "30 a 39", "40 a 49", "50 o más"))
+stopifnot(!anyNA(edad_rango))
+
+base_facturacion <- data.frame(
+  id_fila,
+  SEX = datos_originales$SEX,
+  grupo = as.character(factor(datos_originales$SEX, levels = c(1, 2), labels = c("Hombres", "Mujeres"))),
+  AGE = datos_originales$AGE,
+  edad_rango = as.character(edad_rango),
+  BILL_AMT1 = datos_originales$BILL_AMT1,
+  facturacion_miles = datos_originales$BILL_AMT1 / 1000,
+  check.names = FALSE
+)
+
+escribir_csv(base_facturacion, 5, "facturacion_por_edad_y_sexo", "TALLER_7nov", "datos",
+             "Facturación del último mes (BILL_AMT1) en miles de NT$, grupo (Hombres/Mujeres) y edad en 4 rangos.")
+vista(base_facturacion, "05 facturacion_por_edad_y_sexo")
+```
+
+## 4. TALLER_31oct: factorial y PCA
+
+### 4.1 Selección de variables para el factorial
+
+Las 14 variables cuantitativas (límite, edad, seis facturas y seis pagos) y, después de retirar `PAY_AMT1` a `PAY_AMT5` por su MSA bajo, las 9 que se conservan.
+El PCA cuantitativo usa las mismas 14 columnas, de modo que el archivo 06 sirve para ambos análisis.
+
+```{r factorial}
+vars_9 <- c("LIMIT_BAL", "AGE", paste0("BILL_AMT", 1:6), "PAY_AMT6")
+
+ids_14 <- filas_finitas(datos_originales[vars_cuant])
+X14    <- datos_originales[ids_14, vars_cuant]
+
+ids_9  <- filas_finitas(datos_originales[vars_9])
+X9     <- datos_originales[ids_9, vars_9]
+
+escribir_csv(con_id(ids_14, X14), 6, "numericas_14_cuantitativas", "TALLER_31oct", "datos_kmo_todas / X_cuant",
+             "Las 14 variables cuantitativas (LIMIT_BAL, AGE, BILL_AMT1-6, PAY_AMT1-6) con sus valores originales. Se usa en el KMO del factorial y en el PCA cuantitativo.")
+escribir_csv(con_id(ids_9, X9), 7, "factorial_9_variables", "TALLER_31oct", "datos_kmo",
+             "Las 9 variables del modelo factorial (LIMIT_BAL, AGE, BILL_AMT1-6, PAY_AMT6) con sus valores originales.")
+vista(con_id(ids_14, X14), "06 numericas_14_cuantitativas")
+vista(con_id(ids_9, X9),   "07 factorial_9_variables")
+```
+
+### 4.2 PCA de las variables numéricas
+
+- **24 variables.** El PCA usa todas las columnas numéricas del CSV, en el orden del archivo y sin recodificar. Esa matriz es el propio CSV, así que solo se guarda su versión estandarizada.
+- **23 variables.** La comprobación final del taller retira la respuesta futura (`default payment next month`).
+- **14 variables.** La matriz es la del archivo 06; aquí se guarda su versión estandarizada.
+
+```{r pca-numericas}
+vars_numericas <- names(datos_originales)[vapply(datos_originales, is.numeric, logical(1))]
+ids_24 <- filas_finitas(datos_originales[vars_numericas])
+X24    <- datos_originales[ids_24, vars_numericas]
+X23    <- X24[setdiff(vars_numericas, respuesta)]
+
+exportar_z(X24, ids_24, 8, "pca_24_numericas", "TALLER_31oct", "Z (PCA de todas las numéricas)",
+           "Las 24 columnas numéricas del CSV, en el orden del archivo y sin recodificar.")
+
+escribir_csv(con_id(ids_24, X23), 9, "pca_23_sin_respuesta", "TALLER_31oct", "X_sin_respuesta",
+             "Las 24 columnas numéricas sin default payment next month, valores originales.")
+exportar_z(X23, ids_24, 9, "pca_23_sin_respuesta", "TALLER_31oct", "X_sin_respuesta",
+           "Las 24 columnas numéricas sin default payment next month.")
+
+exportar_z(X14, ids_14, 6, "numericas_14_cuantitativas", "TALLER_31oct", "Z_cuant",
+           "Las 14 variables cuantitativas.")
+```
+
+Para comparar grupos de edad sin usar columnas excluidas, el PCA cuantitativo divide la edad en menores de 35 y 35 o más (solo para visualizar; la edad sigue cuantitativa en el ajuste).
+
+```{r pca-grupo-edad}
+grupo_edad <- data.frame(
+  id_fila = ids_14,
+  AGE = X14$AGE,
+  grupo_edad = ifelse(X14$AGE < 35, "Menores de 35", "35 o más"),
+  stringsAsFactors = FALSE
+)
+escribir_csv(grupo_edad, 10, "pca_14_grupo_edad", "TALLER_31oct", "mapa_cuant$grupo_edad",
+             "Edad y su grupo: menores de 35 años / 35 o más (corte del PCA cuantitativo).")
+vista(grupo_edad, "10 pca_14_grupo_edad")
+```
+
+### 4.3 Recodificaciones y one-hot
+
+**One-hot completo.** Se recodifican `EDUCATION` (0, 5 y 6 a 4) y `MARRIAGE` (0 a 3); las 14 variables cuantitativas se dejan igual y cada categoría de las 9 variables categóricas (`SEX`, `EDUCATION`, `MARRIAGE` y los 6 estados de pago) pasa a una columna 0/1. No incluye la respuesta.
+
+```{r onehot}
+predictores <- datos_originales[c(vars_cuant, vars_cat)]
+predictores$EDUCATION <- agrupar_educacion(predictores$EDUCATION)
+predictores$MARRIAGE  <- agrupar_marriage(predictores$MARRIAGE)
+
+ids_onehot  <- filas_finitas(predictores)
+predictores <- predictores[ids_onehot, , drop = FALSE]
+
+indicadores <- do.call(cbind, lapply(vars_cat, function(v) crear_indicadoras(predictores[[v]], v)))
+X_onehot    <- cbind(as.matrix(predictores[vars_cuant]), indicadores)
+X_onehot    <- X_onehot[, apply(X_onehot, 2, sd) > 0, drop = FALSE]    # sin columnas constantes
+
+nombre_onehot <- sprintf("onehot_completo_%d", ncol(X_onehot))
+escribir_csv(con_id(ids_onehot, X_onehot), 11, nombre_onehot, "TALLER_31oct", "datos_codificados",
+             "14 variables cuantitativas + una columna 0/1 por cada categoría de SEX, EDUCATION, MARRIAGE y PAY_0, PAY_2-6 (columnas VARIABLE_categoria_NIVEL).")
+exportar_z(X_onehot, ids_onehot, 11, nombre_onehot, "TALLER_31oct", "datos_codificados",
+           "14 variables cuantitativas + indicadoras one-hot.")
+vista(con_id(ids_onehot, X_onehot), paste("11", nombre_onehot))
+```
+
+**Una columna por variable (recodificado).** `SEX` queda con sus códigos (1 y 2).
+`EDUCATION` se ordena: Otros = 0, Secundaria = 1, Universidad = 2, Posgrado = 3.
+`MARRIAGE` lleva el 0 al 3.
+En los seis estados de pago los códigos -2, -1 y 0 se agrupan en 0 y los positivos se mantienen. Incluye la respuesta binaria.
+
+```{r recodificado}
+recodificada <- datos_originales                      # copia: el original no se toca
+recodificada$EDUCATION <- ordenar_educacion(recodificada$EDUCATION)
+recodificada$MARRIAGE  <- agrupar_marriage(recodificada$MARRIAGE)
+for (v in vars_hist) recodificada[[v]] <- agrupar_historial(recodificada[[v]])
+
+vars_recod <- c("LIMIT_BAL", "SEX", "EDUCATION", "MARRIAGE", "AGE", vars_hist,
+                paste0("BILL_AMT", 1:6), paste0("PAY_AMT", 1:6), respuesta)
+ids_recod <- filas_finitas(recodificada[vars_recod])
+X_label   <- recodificada[ids_recod, vars_recod, drop = FALSE]
+stopifnot(all(X_label[[respuesta]] %in% c(0, 1)), all(apply(X_label, 2, sd) > 0))
+
+nombre_label <- sprintf("recodificado_%d", ncol(X_label))
+escribir_csv(con_id(ids_recod, X_label), 12, nombre_label, "TALLER_31oct", "X (recodificado)",
+             "Las 24 variables con una columna cada una: EDUCATION ordenada (Otros 0 a Posgrado 3), MARRIAGE con 0 -> 3 y estados de pago con -2, -1 y 0 agrupados en 0. Incluye la respuesta.")
+exportar_z(X_label, ids_recod, 12, nombre_label, "TALLER_31oct", "X (recodificado)",
+           "Las 24 variables recodificadas.")
+vista(con_id(ids_recod, X_label), paste("12", nombre_label))
+```
+
+**Codificación mixta.** Igual que la anterior, pero `SEX` y `MARRIAGE` pasan a columnas indicadoras con nombre: `SEX_Hombre`, `SEX_Mujer`, `MARRIAGE_Casado`, `MARRIAGE_Soltero` y `MARRIAGE_Otros`.
+
+```{r mixto}
+vars_directas <- c(vars_cuant, "EDUCATION", vars_hist, respuesta)
+etiquetas_sex      <- c("1" = "Hombre", "2" = "Mujer")
+etiquetas_marriage <- c("1" = "Casado", "2" = "Soltero", "3" = "Otros")
+
+mixta     <- recodificada[c(vars_directas, "SEX", "MARRIAGE")]
+ids_mixto <- filas_finitas(mixta)
+mixta     <- mixta[ids_mixto, , drop = FALSE]
+stopifnot(all(mixta$SEX %in% c(1, 2)), all(mixta$MARRIAGE %in% c(1, 2, 3)),
+          all(mixta[[respuesta]] %in% c(0, 1)))
+
+X_mixto <- cbind(as.matrix(mixta[vars_directas]),
+                 crear_indicadoras(mixta$SEX, "SEX", etiquetas_sex),
+                 crear_indicadoras(mixta$MARRIAGE, "MARRIAGE", etiquetas_marriage))
+X_mixto <- X_mixto[, apply(X_mixto, 2, sd) > 0, drop = FALSE]
+
+nombre_mixto <- sprintf("mixto_%d", ncol(X_mixto))
+escribir_csv(con_id(ids_mixto, X_mixto), 13, nombre_mixto, "TALLER_31oct", "X_mixto",
+             "Codificación mixta: variables recodificadas (como en el archivo 12) con SEX y MARRIAGE en columnas indicadoras con nombre. Incluye la respuesta.")
+exportar_z(X_mixto, ids_mixto, 13, nombre_mixto, "TALLER_31oct", "X_mixto",
+           "Codificación mixta.")
+vista(con_id(ids_mixto, X_mixto), paste("13", nombre_mixto))
+```
+
+**Sin la respuesta futura.** Las dos codificaciones anteriores sin la columna `default payment next month`, como en la comprobación del final del taller.
+
+```{r sin-respuesta}
+X_label_sr <- X_label[setdiff(colnames(X_label), respuesta)]
+X_mixto_sr <- X_mixto[, colnames(X_mixto) != respuesta, drop = FALSE]
+
+nombre_label_sr <- sprintf("recodificado_sin_respuesta_%d", ncol(X_label_sr))
+nombre_mixto_sr <- sprintf("mixto_sin_respuesta_%d", ncol(X_mixto_sr))
+
+escribir_csv(con_id(ids_recod, X_label_sr), 14, nombre_label_sr, "TALLER_31oct", "X_label sin respuesta",
+             "El recodificado del archivo 12 sin default payment next month.")
+exportar_z(X_label_sr, ids_recod, 14, nombre_label_sr, "TALLER_31oct", "X_label sin respuesta",
+           "El recodificado sin la respuesta.")
+escribir_csv(con_id(ids_mixto, X_mixto_sr), 15, nombre_mixto_sr, "TALLER_31oct", "X_mixto sin respuesta",
+             "La codificación mixta del archivo 13 sin default payment next month.")
+exportar_z(X_mixto_sr, ids_mixto, 15, nombre_mixto_sr, "TALLER_31oct", "X_mixto sin respuesta",
+           "La codificación mixta sin la respuesta.")
+```
+
+## 5. Índice y comprobaciones
+
+### 5.1 Archivos generados
+
+```{r indice}
+indice <- do.call(rbind, unname(registro$filas))
+# Orden: por número de conjunto y, dentro de cada uno, el original antes que su versión _zscore
+numero_archivo <- as.integer(sub("^datos_credit_([0-9]+)_.*$", "\\1", indice$archivo))
+indice <- indice[order(numero_archivo, grepl("_zscore\\.csv$", indice$archivo)), ]
+indice$tamano_MB <- round(file.size(file.path(dir_salida, indice$archivo)) / 1024^2, 2)
+rownames(indice) <- NULL
+
+# El propio índice también queda en DATASET
+write.csv(indice, file.path(dir_salida, "datos_credit_00_indice_transformaciones.csv"),
+          row.names = FALSE, fileEncoding = "UTF-8")
+
+knitr::kable(indice[c("archivo", "taller", "filas", "columnas", "tamano_MB")],
+             caption = sprintf("%d archivos en %s (%.1f MB en total)",
+                               nrow(indice), dir_salida, sum(indice$tamano_MB)))
+```
+
+```{r indice-descripcion}
+knitr::kable(indice[c("archivo", "objeto_en_taller", "descripcion")],
+             caption = "Qué contiene cada archivo y a qué objeto de los talleres corresponde")
+```
+
+### 5.2 Comprobaciones
+
+El CSV original sigue igual, cada archivo se puede volver a leer con las dimensiones registradas, y las matrices tienen el número de columnas que se reportó en los talleres.
+
+```{r comprobaciones}
+# 1) El CSV original no cambió
+stopifnot(identical(md5_original_antes, unname(tools::md5sum(ruta_csv))))
+
+# 2) Cada archivo se relee con las dimensiones registradas y con id_fila como primera columna;
+#    además, ninguna etiqueta de texto debe traer escapes tipo <U+00E1> (problema de locale)
+ok_dim <- vapply(seq_len(nrow(indice)), function(i) {
+  d <- read.csv(file.path(dir_salida, indice$archivo[i]), check.names = FALSE, stringsAsFactors = FALSE)
+  texto <- unlist(d[vapply(d, is.character, logical(1))], use.names = FALSE)
+  nrow(d) == indice$filas[i] && ncol(d) == indice$columnas[i] && names(d)[1] == "id_fila" &&
+    !anyDuplicated(d$id_fila) && !any(grepl("<U\\+[0-9A-Fa-f]{4}>", texto))
+}, logical(1))
+if (!all(ok_dim)) stop("Revisar estos archivos: ", paste(indice$archivo[!ok_dim], collapse = ", "))
+
+# 3) Número de columnas de cada matriz frente a lo que reportan los talleres
+columnas_taller <- data.frame(
+  matriz = c("One-hot completo", "Recodificado", "Mixto", "Recodificado sin respuesta",
+             "Mixto sin respuesta", "Numéricas cuantitativas", "Factorial", "PCA de todas las numéricas"),
+  en_el_taller = c(87, 24, 27, 23, 26, 14, 9, 24),
+  aqui = c(ncol(X_onehot), ncol(X_label), ncol(X_mixto), ncol(X_label_sr),
+           ncol(X_mixto_sr), ncol(X14), ncol(X9), ncol(X24))
+)
+columnas_taller$coincide <- ifelse(columnas_taller$en_el_taller == columnas_taller$aqui, "sí", "NO")
+knitr::kable(columnas_taller, caption = "Columnas de cada matriz (sin contar id_fila)")
+```
+
+```{r resumen-final, echo=FALSE, results='asis'}
+cat(sprintf("**Listo.** Se guardaron %d archivos CSV en `%s`; el original `%s` quedó intacto (MD5 sin cambios).\n",
+            nrow(indice) + 1, dir_salida, nombre_csv_original))
+```
