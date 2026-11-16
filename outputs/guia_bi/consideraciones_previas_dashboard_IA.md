@@ -59,7 +59,7 @@ Esto autoriza plantear exploraciones simples y múltiples; no autoriza inventar 
 
 Raíz del repositorio:
 
-`C:/Users/Ana_L/OneDrive/Documentos/GitHub/ESTAD.-MULTI`
+`.../GitHub/ESTAD.-MULTI`
 
 Todas las rutas siguientes son relativas a esa raíz, salvo indicación contraria.
 
@@ -446,9 +446,9 @@ Un único CSV con categoría, X e Y no permite auditar una interpretación. Expo
 
 ## 11. Archivo de exportación preparado
 
-Ruta absoluta:
+Ruta:
 
-`C:/Users/Ana_L/OneDrive/Documentos/GitHub/ESTAD.-MULTI/outputs/guia_bi/exportar_resultados_BI.R`
+`.../ESTAD.-MULTI/outputs/guia_bi/exportar_resultados_BI.R`
 
 Estado:
 
@@ -502,16 +502,15 @@ PROPUESTO como encuadre comercial, no pregunta problema definitiva: diagnóstico
 
 ## 13. Pendientes y reglas de continuación
 
-1. Esperar la instrucción de la usuaria para entregar el paso a paso más detallado del dashboard.
-2. No tratar la propuesta de PCA14, factorial9 o agrupación 3+ como selección definitiva si la usuaria solicita otra versión.
-3. Ejecutar y validar el exportador en RStudio cuando corresponda; revisar advertencias, dimensiones, claves y resultados.
-4. Comparar las nuevas salidas con los valores de control documentados aquí.
-5. Calcular y revisar las variantes ACM antes de afirmar que aportan descubrimientos nuevos.
-6. Confirmar la interpretación de los códigos -2 y 0 si se requieren etiquetas comerciales más específicas.
-7. Mantener separados hechos verificados, resultados reportados, propuestas y pendientes en futuras respuestas.
-8. No reutilizar cifras de versiones distintas por conveniencia narrativa.
-9. Conservar los originales y la trazabilidad entre base, transformación, modelo y resultado.
-10. Al autorizarse el instructivo, usar este contexto para elaborar pasos concretos y comprensibles, sin desplazar al dashboard el contenido reservado para diapositivas externas.
+1. No tratar la propuesta de PCA14, factorial9 o agrupación 3+ como selección definitiva si la usuaria solicita otra versión.
+2. Ejecutar y validar el exportador en RStudio cuando corresponda; revisar advertencias, dimensiones, claves y resultados.
+3. Comparar las nuevas salidas con los valores de control documentados aquí.
+4. Calcular y revisar las variantes ACM antes de afirmar que aportan descubrimientos nuevos.
+5. Confirmar la interpretación de los códigos -2 y 0 si se requieren etiquetas comerciales más específicas.
+6. Mantener separados hechos verificados, resultados reportados, propuestas y pendientes en futuras respuestas.
+7. No reutilizar cifras de versiones distintas por conveniencia narrativa.
+8. Conservar los originales y la trazabilidad entre base, transformación, modelo y resultado.
+9. Al autorizarse el instructivo, usar este contexto para elaborar pasos concretos y comprensibles, sin desplazar al dashboard el contenido reservado para diapositivas externas.
 
 ## 14. Referencia técnica consultada
 
