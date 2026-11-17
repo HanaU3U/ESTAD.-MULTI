@@ -1,0 +1,259 @@
+---
+title: "Análisis de correspondencias: perfiles de clientes e incumplimiento de pago"
+author:  |
+  Juan Pablo Mosquera Marin   - 20221020026
+  Ana Laura Morcote Chacon    - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño     - 20221020057
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 6, fig.align = "center")
+options(scipen = 999)
+```
+
+# 1. Pregunta de negocio
+
+Un banco quiere reducir las pérdidas por clientes que no pagan su tarjeta de crédito.
+
+**Pregunta:** ¿Qué perfiles de cliente (educación, estado civil, edad, límite de crédito y comportamiento de pago reciente) se asocian con el incumplimiento del mes siguiente?
+
+a qué segmentos aplicar alertas o controles, y a cuáles ofrecer más crédito.
+
+| Paso | Técnica | Qué responde |
+|------------------------|------------------------|------------------------|
+| 1 | Correspondencias simple | Qué comportamiento de pago va con cada nivel de límite |
+| 2 | Correspondencias múltiples | Qué perfil completo de cliente queda cerca del incumplimiento |
+
+# 2. Datos
+
+```{r carga}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(FactoMineR)
+library(factoextra)
+library(knitr)
+
+ruta <- file.path("..", "DATASET", "credit.xls")
+stopifnot(file.exists(ruta))
+credit <- as.data.frame(read_excel(ruta, skip = 1))
+```
+
+Las variables numéricas se agrupan en categorías, porque el método solo trabaja con categorías. Los códigos sin definición de educación (0, 5, 6) y estado civil (0) se agrupan como "Otro".
+
+```{r recodificacion}
+datos <- credit %>%
+  transmute(
+    Educacion = case_when(
+      EDUCATION == 1 ~ "Posgrado",
+      EDUCATION == 2 ~ "Universitaria",
+      EDUCATION == 3 ~ "Bachillerato",
+      TRUE           ~ "Otro/desconocido"
+    ),
+    EstadoCivil = case_when(
+      MARRIAGE == 1 ~ "Casado",
+      MARRIAGE == 2 ~ "Soltero",
+      TRUE          ~ "Otro"
+    ),
+    Sexo = if_else(SEX == 1, "Hombre", "Mujer"),
+    Edad = cut(AGE, breaks = c(0, 29, 39, 49, Inf),
+               labels = c("21-29", "30-39", "40-49", "50+")),
+    Limite = cut(LIMIT_BAL,
+                 breaks = quantile(LIMIT_BAL, probs = 0:4 / 4),
+                 include.lowest = TRUE,
+                 labels = c("Limite_1_bajo", "Limite_2", "Limite_3", "Limite_4_alto")),
+    EstadoPago = case_when(
+      PAY_0 == -2 ~ "Sin consumo",
+      PAY_0 == -1 ~ "Pago total",
+      PAY_0 == 0  ~ "Credito rotativo",
+      PAY_0 == 1  ~ "Retraso 1 mes",
+      PAY_0 >= 2  ~ "Retraso 2+ meses"
+    ),
+    Incumplimiento = if_else(`default payment next month` == 1,
+                             "Incumple", "No incumple")
+  ) %>%
+  mutate(across(everything(), as.factor))
+
+datos$EstadoPago <- factor(datos$EstadoPago,
+  levels = c("Sin consumo", "Pago total", "Credito rotativo",
+             "Retraso 1 mes", "Retraso 2+ meses"))
+```
+
+# 3. Tasa de incumplimiento por categoría
+
+```{r tasas}
+tasa_global <- mean(datos$Incumplimiento == "Incumple")
+
+tasas <- bind_rows(lapply(setdiff(names(datos), "Incumplimiento"), function(v) {
+  datos %>%
+    group_by(Categoria = .data[[v]]) %>%
+    summarise(Clientes = n(),
+              Tasa_incumplimiento = round(100 * mean(Incumplimiento == "Incumple"), 1),
+              .groups = "drop") %>%
+    mutate(Variable = v, .before = 1)
+}))
+
+ggplot(tasas, aes(x = reorder(paste(Variable, Categoria, sep = ": "), Tasa_incumplimiento),
+                  y = Tasa_incumplimiento)) +
+  geom_col(fill = "#2E8372") +
+  geom_hline(yintercept = 100 * tasa_global, linetype = "dashed", colour = "#C0392B") +
+  coord_flip() +
+  labs(x = NULL, y = "% que incumple",
+       title = "Tasa de incumplimiento por categoría",
+       subtitle = "Línea roja: tasa global") +
+  theme_minimal()
+```
+
+**Resultado.** El 22,1 % de los clientes incumple. Hay una señal muy clara: quienes llevan 2 meses o más de retraso incumplen cerca del 70 %, y con 1 mes de retraso cerca del 34 %. Le sigue el límite más bajo (cerca de 32 %). Los clientes que pagan el total, no consumen o usan crédito rotativo incumplen entre 13 % y 17 %. Sexo, estado civil y edad casi no cambian la tasa.
+
+# 4. Paso 1: correspondencias simple (límite y estado de pago)
+
+**Objetivo:** ver qué comportamiento de pago acompaña a cada nivel de límite, y dónde cae el incumplimiento.
+
+## 4.1 ¿Hay relación?
+
+```{r chi}
+tab <- table(datos$Limite, datos$EstadoPago)
+prueba <- chisq.test(tab)
+v_cramer <- sqrt(unname(prueba$statistic) / (sum(tab) * (min(dim(tab)) - 1)))
+
+data.frame(Chi2 = round(unname(prueba$statistic), 2),
+           gl = unname(prueba$parameter),
+           p_valor = prueba$p.value,
+           V_Cramer = round(v_cramer, 3),
+           Min_esperado = round(min(prueba$expected), 1))
+```
+
+**Resultado.** La relación existe (p menor a 0,001; el mínimo esperado de 649,9 confirma que la prueba es confiable). Su fuerza es débil a moderada (V de Cramér = 0,19): el límite orienta, pero no determina el comportamiento de pago.
+
+## 4.2 Combinaciones frecuentes
+
+```{r residuos}
+kable(round(prueba$stdres, 1), caption = "Residuos estandarizados (mayor a 2: más de lo esperado; menor a -2: menos)")
+```
+
+**Resultado.**
+
+- Límite bajo: se concentra en retraso de 2+ meses (22,4), retraso de 1 mes (9,3) y crédito rotativo (11,5). Casi no aparece en pago total (-22,0) ni sin consumo (-24,4).
+- Límite alto: ocurre lo contrario. Se asocia con sin consumo (28,3) y pago total (17,0), y casi no tiene retrasos de 2+ meses (-19,6).
+- Límite 3 sigue el patrón del límite alto, con menor intensidad. Límite 2 queda en un punto intermedio, cerca del crédito rotativo (14,5).
+
+## 4.3 Mapa
+
+El incumplimiento no construye el mapa: se proyecta sobre él.
+
+```{r ca-simple}
+tab_def <- table(datos$Limite, datos$Incumplimiento)
+tabla_ca <- cbind(as.matrix(tab), as.matrix(tab_def))
+ca_res <- CA(tabla_ca, col.sup = (ncol(tab) + 1):ncol(tabla_ca), graph = FALSE)
+
+fviz_screeplot(ca_res, addlabels = TRUE) +
+  labs(title = "Información que guarda cada eje")
+
+fviz_ca_biplot(ca_res, repel = TRUE, col.row = "#E08A2C", col.col = "#2E8372",
+               col.col.sup = "#C0392B") +
+  labs(title = "Límite de crédito y estado de pago",
+       subtitle = "Naranja: límite. Verde: estado de pago. Rojo: incumplimiento")
+```
+
+**Resultado.** Un solo eje guarda el 97,3 % de la información, así que se lee solo el eje horizontal. Va de **más riesgo (izquierda)** a **menos riesgo (derecha)**:
+
+- Izquierda: límite bajo, retraso de 2+ meses, retraso de 1 mes e "Incumple" (-0,30).
+- Derecha: límite alto, pago total, sin consumo y "No incumple" (0,09).
+
+Los clientes que incumplen se parecen a los de límite bajo (-0,38) y con retrasos. Los que cumplen se parecen a los de límite alto y sin deuda pendiente.
+
+# 5. Paso 2: correspondencias múltiples
+
+**Objetivo:** ver qué perfil completo queda cerca del incumplimiento. Variables activas: educación, estado civil, sexo, edad, límite y estado de pago. El incumplimiento solo se proyecta.
+
+```{r mca}
+mca_res <- MCA(datos, quali.sup = which(names(datos) == "Incumplimiento"),
+               graph = FALSE)
+```
+
+## 5.1 Información por eje
+
+```{r inercia-mca}
+Q <- ncol(datos) - 1
+lambda <- mca_res$eig[, 1]
+lambda_ajust <- ifelse(lambda > 1 / Q, (Q / (Q - 1) * (lambda - 1 / Q))^2, 0)
+kable(head(data.frame(Dimension = seq_along(lambda),
+                      Autovalor = round(lambda, 3),
+                      Pct_bruto = round(mca_res$eig[, 2], 1),
+                      Pct_ajustado = round(100 * lambda_ajust / sum(lambda_ajust), 1)), 5))
+```
+
+**Resultado.** Dos ejes explican el 96,4 % de la información ajustada (53,5 % y 42,9 %). Los demás casi no aportan (2,6 % o menos), así que se interpretan dos ejes.
+
+## 5.2 Qué define cada eje
+
+```{r eta2}
+kable(round(mca_res$var$eta2[, 1:2], 3), caption = "Peso de cada variable en cada eje (0 a 1)")
+```
+
+**Resultado.**
+
+- **Eje 1: capacidad y comportamiento de pago.** Lo definen el límite (0,49), la edad (0,47), el estado de pago (0,32) y el estado civil (0,29).
+- **Eje 2: etapa de vida y nivel educativo.** Lo definen la educación (0,49), la edad (0,43) y el estado civil (0,38).
+- El sexo no pesa en ningún eje (0,00 y 0,02): no sirve para segmentar.
+
+## 5.3 Mapa de perfiles
+
+```{r mapa-mca}
+act <- data.frame(mca_res$var$coord[, 1:2], Tipo = "Perfil")
+act$Categoria <- rownames(act)
+sup <- data.frame(mca_res$quali.sup$coord[, 1:2], Tipo = "Incumplimiento")
+sup$Categoria <- rownames(sup)
+mapa <- rbind(act, sup)
+names(mapa)[1:2] <- c("D1", "D2")
+
+ggplot(mapa, aes(D1, D2, colour = Tipo, label = Categoria)) +
+  geom_hline(yintercept = 0, colour = "grey80") +
+  geom_vline(xintercept = 0, colour = "grey80") +
+  geom_point(size = 2) +
+  geom_text_repel(max.overlaps = 30, size = 3.3) +
+  scale_colour_manual(values = c(Perfil = "#2E8372", Incumplimiento = "#C0392B")) +
+  labs(x = sprintf("Eje 1 (%.1f %%)", mca_res$eig[1, 2]),
+       y = sprintf("Eje 2 (%.1f %%)", mca_res$eig[2, 2]),
+       title = "Perfiles de cliente e incumplimiento",
+       subtitle = "Rojo: incumplimiento (solo se proyecta). Verde: categorías activas") +
+  theme_minimal()
+```
+
+**Resultado.**
+
+- **Eje 1 (horizontal).** A la izquierda están los clientes de 21-29 años, solteros, con límite bajo y retraso de 2+ meses. A la derecha están los de límite alto, casados, de 30 años o más, que pagan el total o no consumen.
+- **Eje 2 (vertical).** Arriba están los de bachillerato, 50+ y "otro" estado civil. Abajo están los de posgrado, solteros y de 21-29 años.
+- **Incumplimiento.** "Incumple" queda en la zona izquierda-superior, cerca de límite bajo o medio, retrasos, crédito rotativo, universitaria y hombre. "No incumple" queda casi en el centro, hacia el lado de los perfiles con más recursos.
+- Los dos puntos están poco separados entre sí (-0,24 contra 0,07 en el eje 1). El perfil demográfico distingue poco a quien incumple, y el comportamiento de pago es la señal más clara.
+
+## 5.4 Qué categorías pesan más
+
+```{r contrib}
+contrib <- round(mca_res$var$contrib[, 1:2], 1)
+kable(contrib[order(-contrib[, 1]), ], caption = "Contribución (%) a los ejes 1 y 2")
+```
+
+**Resultado.** El eje 1 lo construyen sobre todo el grupo de 21-29 años (19,0 %), el límite alto (11,8 %), el límite bajo (11,0 %), casados (9,6 %) y solteros (8,0 %). El eje 2 lo construyen bachillerato (16,1 %), posgrado (13,7 %), 50+ (10,9 %), solteros (10,5 %) y casados (10,3 %). Las categorías "Otro" y "Otro/desconocido" casi no pesan (menos de 1,6 % del total).
+
+# 6. Conclusiones para el negocio
+
+| Pregunta | Respuesta |
+|------------------------------------|------------------------------------|
+| ¿Qué comportamiento acompaña al incumplimiento? | El retraso de pago. Con 2+ meses de retraso incumple cerca del 70 %, y con 1 mes cerca del 34 %, frente a 22,1 % global. |
+| ¿Qué perfil se asocia con incumplir? | Límite de crédito bajo (cerca de 32 % de incumplimiento). Educación, edad y estado civil explican poco: sus tasas quedan entre 19 % y 25 %. |
+| ¿Quién tiene menor riesgo? | Clientes con límite alto o medio-alto que pagan el total o no consumen (13 % a 17 %). |
+| ¿Qué tan fuerte es la relación? | Moderada entre límite y estado de pago (V de Cramér 0,19). En el mapa múltiple, el perfil demográfico separa poco a quien incumple de quien cumple. |
+| ¿A qué segmentos aplicar controles? | Alertas tempranas a clientes con 1 mes de retraso, antes de llegar a 2. Revisión de exposición en límites bajos con retrasos. No segmentar por sexo. |
+| ¿Qué no podemos concluir? | Que un perfil cause el incumplimiento, ni predecir a un cliente individual. El crédito rotativo queda cerca de "Incumple" en el mapa, pero solo incumple cerca del 13 %: el mapa describe perfiles y la tasa por categoría (sección 3) es la medida real de riesgo. |
