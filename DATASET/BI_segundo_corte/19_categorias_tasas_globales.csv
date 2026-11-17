@@ -1,0 +1,25 @@
+"variable","categoria","categoria_id","n_categoria","n_incumplimientos","orden","tasa_incumplimiento"
+"Educacion","Bachillerato","Educacion::Bachillerato",4917,1237,1,0.251576164327842
+"Educacion","Otro/desconocido","Educacion::Otro/desconocido",468,33,2,0.0705128205128205
+"Educacion","Posgrado","Educacion::Posgrado",10585,2036,3,0.192347661785546
+"Educacion","Universitaria","Educacion::Universitaria",14030,3330,4,0.237348538845331
+"EstadoCivil","Casado","EstadoCivil::Casado",13659,3206,1,0.234717036386265
+"EstadoCivil","Otro","EstadoCivil::Otro",377,89,2,0.236074270557029
+"EstadoCivil","Soltero","EstadoCivil::Soltero",15964,3341,3,0.20928338762215
+"Sexo","Hombre","Sexo::Hombre",11888,2873,1,0.241672274562584
+"Sexo","Mujer","Sexo::Mujer",18112,3763,2,0.207762809187279
+"Edad","21-29","Edad::21-29",9618,2197,1,0.228425868163859
+"Edad","30-39","Edad::30-39",11238,2276,2,0.202527140060509
+"Edad","40-49","Edad::40-49",6464,1485,3,0.229733910891089
+"Edad","50+","Edad::50+",2680,678,4,0.252985074626866
+"Limite","Limite_1_bajo","Limite::Limite_1_bajo",7676,2440,1,0.317873892652423
+"Limite","Limite_2","Limite::Limite_2",7614,1882,2,0.247176254268453
+"Limite","Limite_3","Limite::Limite_3",7643,1326,3,0.173492084260107
+"Limite","Limite_4_alto","Limite::Limite_4_alto",7067,988,4,0.139804726192161
+"EstadoPago","Sin consumo","EstadoPago::Sin consumo",2759,365,1,0.132294309532439
+"EstadoPago","Pago total","EstadoPago::Pago total",5686,954,2,0.167780513542033
+"EstadoPago","Credito rotativo","EstadoPago::Credito rotativo",14737,1888,3,0.128112913075931
+"EstadoPago","Retraso 1 mes","EstadoPago::Retraso 1 mes",3688,1252,4,0.339479392624729
+"EstadoPago","Retraso 2+ meses","EstadoPago::Retraso 2+ meses",3130,2177,5,0.695527156549521
+"Incumplimiento","Incumple","Incumplimiento::Incumple",6636,6636,1,1
+"Incumplimiento","No incumple","Incumplimiento::No incumple",23364,0,2,0

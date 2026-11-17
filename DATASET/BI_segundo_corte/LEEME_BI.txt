@@ -1,0 +1,13 @@
+BI SEGUNDO CORTE - SIN FACTORIAL
+01 y 02: combinar por ID, nunca anexar. 03-11: modelos globales, no se recalculan al filtrar clientes.
+12-13 y 16-17: prueba 30%, ajuste 70%; no mezclar con puntajes globales de 01.
+16 repite personas entre reglas: contar ID distintos. 05 orden no es ID, valores son D2.
+06/09 suplementarias sin contribucion. No sumar las columnas suplementarias del ACS al contar personas.
+10 contiene espectro completo: usar proporcion_ajustada; proporcion_ajustada_Rmd conserva el calculo original posiblemente truncado.
+Ampliar ncp completa autovalores sin modificar el modelo ni los mapas de 09/18. 19 repite personas entre variables.
+Conservar NA de cobertura cuando BILL_AMT2<=0. Uso/cobertura pueden superar 1; no recortar.
+Etiquetas -2 Sin consumo, -1 Pago total y 0 Credito rotativo se preservan del Rmd; confirmar semantica.
+UTF-8, coma separadora, punto decimal. Proporciones 0-1, sin redondear para presentacion.
+90 contiene controles, 93 advertencias R y 94 tipos/vacios. Revisar antes de cargar el BI.
+99_manifest.csv se publica al final; comprobar sus MD5 si se interrumpe una copia.
+Rareza no equivale a incumplimiento; validacion interna no justifica aprobacion automatica de credito.

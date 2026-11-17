@@ -269,16 +269,56 @@ exportar_segundo_corte <- function(raiz = getOption("bi.raiz",
   verificar(all(acm_p$variable[acm_p$rol=="Suplementario"]=="Incumplimiento") &&
     !any(acm_p$variable[acm_p$rol=="Activo"]=="Incumplimiento"),"Respuesta ACM solo suplementaria")
   agregar("09_acm_categorias.csv",acm_p,"Categorias, no personas. Frecuencias se superponen entre variables.")
-  lam <- C$lambda; ajust <- C$lambda_ajust
-  verificar(iguales(lam,C$mca_res$eig[,1]),"Autovalores ACM propios")
-  verificar(iguales(ajust,ifelse(lam>1/C$Q,(C$Q/(C$Q-1)*(lam-1/C$Q))^2,0)),"Formula inercia ajustada")
+  # Algunas versiones de FactoMineR devuelven eig truncado a ncp (5 por
+  # defecto). No exigir 100% ni renormalizar esos cinco porcentajes.
+  # Ampliar SOLO las dimensiones solicitadas del MISMO modelo; las coordenadas,
+  # contribuciones y cos2 de 09/11/18 siguen siendo los originales del Rmd.
+  lam_rmd <- C$lambda
+  verificar(iguales(lam_rmd,C$mca_res$eig[,1]),"Autovalores ACM propios")
+  verificar(iguales(C$lambda_ajust,ifelse(lam_rmd>1/C$Q,
+    (C$Q/(C$Q-1)*(lam_rmd-1/C$Q))^2,0)),"Formula inercia ajustada Rmd")
+  activas_acm <- setdiff(names(cats),"Incumplimiento")
+  K_acm <- sum(vapply(cats[activas_acm],function(x) nlevels(droplevels(x)),integer(1)))
+  dimensiones_acm <- min(nrow(cats)-1L,K_acm-C$Q)
+  inercia_total_acm <- (K_acm-C$Q)/C$Q
+  eig_rmd <- C$mca_res$eig
+  espectro_ampliado <- nrow(eig_rmd)<dimensiones_acm
+  if (espectro_ampliado) {
+    message("ACM: completando espectro de ",nrow(eig_rmd)," a ",dimensiones_acm," dimensiones del mismo modelo.")
+    acm_completo <- withCallingHandlers(FactoMineR::MCA(cats,
+      quali.sup=which(names(cats)=="Incumplimiento"),ncp=dimensiones_acm,graph=FALSE),
+      warning=function(w) {
+        avisos <<- c(avisos,paste("ACM espectro completo",conditionMessage(w),sep=" | "))
+        invokeRestart("muffleWarning")
+      })
+    eig_acm <- acm_completo$eig
+  } else eig_acm <- eig_rmd
+  verificar(nrow(eig_acm)==dimensiones_acm,"Espectro ACM completo",
+    paste("Esperadas:",dimensiones_acm,"; recibidas:",nrow(eig_acm)))
+  verificar(iguales(eig_acm[seq_len(nrow(eig_rmd)),1],lam_rmd),"Ampliacion conserva autovalores Rmd")
+  verificar(iguales(eig_acm[seq_len(nrow(eig_rmd)),2],eig_rmd[,2]),"Ampliacion conserva porcentajes brutos Rmd")
+  lam <- eig_acm[,1]
+  verificar(iguales(sum(lam),inercia_total_acm),"Inercia ACM teorica (K-Q)/Q")
+  verificar(iguales(eig_acm[,2]/100,lam/inercia_total_acm),"Porcentajes ACM con denominador completo")
+  verificar(iguales(eig_acm[,3]/100,cumsum(eig_acm[,2]/100)),"Acumulado bruto ACM")
+  ajust <- ifelse(lam>1/C$Q,(C$Q/(C$Q-1)*(lam-1/C$Q))^2,0)
   pa <- if(sum(ajust)>0) ajust/sum(ajust) else rep(NA_real_,length(ajust))
-  verificar(abs(sum(C$mca_res$eig[,2])/100-1)<1e-7,"Suma inercia bruta ACM")
+  verificar(abs(sum(eig_acm[,2])/100-1)<1e-7,"Suma inercia bruta ACM",
+    paste("Suma =",format(sum(eig_acm[,2]),digits=17),
+          "; suma autovalores =",format(sum(lam),digits=17)))
   if(sum(ajust)>0) verificar(abs(sum(pa)-1)<1e-10,"Suma inercia ajustada ACM")
+  pa_rmd <- if(sum(C$lambda_ajust)>0) C$lambda_ajust/sum(C$lambda_ajust) else rep(NA_real_,length(lam_rmd))
+  if (espectro_ampliado) avisos <- c(avisos,paste0(
+    "El Rmd devuelve ",length(lam_rmd)," dimensiones ACM; se exportan ",length(lam),
+    ". Inercia ajustada del plano: Rmd=",format(sum(pa_rmd[1:2]),digits=10),
+    "; espectro completo=",format(sum(pa[1:2]),digits=10),
+    ". Usar proporcion_ajustada para el BI; proporcion_ajustada_Rmd es trazabilidad."))
   agregar("10_acm_ejes.csv",data.frame(modelo_id="ACM_PERFILES",dimension=seq_along(lam),autovalor_bruto=lam,
-    proporcion_bruta=C$mca_res$eig[,2]/100,acumulada_bruta=C$mca_res$eig[,3]/100,
-    autovalor_ajustado=ajust,proporcion_ajustada=pa,acumulada_ajustada=cumsum(pa),variables_activas=C$Q),
-    "Inercia bruta y ajustada diferenciadas. No comparar ajustada con varianza PCA.")
+    proporcion_bruta=eig_acm[,2]/100,acumulada_bruta=eig_acm[,3]/100,
+    autovalor_ajustado=ajust,proporcion_ajustada=pa,acumulada_ajustada=cumsum(pa),variables_activas=C$Q,
+    disponible_en_Rmd=as.integer(seq_along(lam)<=length(lam_rmd)),
+    proporcion_ajustada_Rmd=c(pa_rmd,rep(NA_real_,length(lam)-length(lam_rmd)))),
+    "Espectro completo del mismo ACM; ajustada usa todos los autovalores. Columna ajustada_Rmd solo para trazabilidad.")
   eta <- C$mca_res$var$eta2
   verificar(setequal(rownames(eta),setdiff(names(cats),"Incumplimiento")),"Variables activas ACM")
   eta_l <- do.call(rbind,lapply(seq_len(ncol(eta)),function(k) data.frame(
@@ -360,6 +400,11 @@ exportar_segundo_corte <- function(raiz = getOption("bi.raiz",
   met("ACS_LIMITE_PAGO","celdas_esperado_menor5",sum(C$prueba$expected<5))
   met("ACS_LIMITE_PAGO","suplementarias","Incumplimiento proyectado por su distribucion entre grupos de limite")
   met("ACM_PERFILES","variables_activas",C$Q)
+  met("ACM_PERFILES","dimensiones_devueltas_Rmd",length(lam_rmd))
+  met("ACM_PERFILES","dimensiones_espectro_completo",length(lam))
+  met("ACM_PERFILES","inercia_total_teorica",inercia_total_acm)
+  met("ACM_PERFILES","plano_ajustado_Rmd",sum(pa_rmd[1:2]))
+  met("ACM_PERFILES","plano_ajustado_completo",sum(pa[1:2]))
   met("ACM_PERFILES","ajuste_inercia","Benzecri: [Q/(Q-1)*(lambda-1/Q)]^2 si lambda>1/Q; normalizacion por suma ajustada")
   met("HOLDOUT_2026_70_30","semilla_particion",2026); met("HOLDOUT_2026_70_30","semilla_azar",7)
   met("HOLDOUT_2026_70_30","eje_facturacion",P$kf); met("HOLDOUT_2026_70_30","eje_atraso",P$ka)
@@ -445,7 +490,8 @@ exportar_segundo_corte <- function(raiz = getOption("bi.raiz",
     "12-13 y 16-17: prueba 30%, ajuste 70%; no mezclar con puntajes globales de 01.",
     "16 repite personas entre reglas: contar ID distintos. 05 orden no es ID, valores son D2.",
     "06/09 suplementarias sin contribucion. No sumar las columnas suplementarias del ACS al contar personas.",
-    "10 contiene inercia bruta Y ajustada. Etiquetarlas correctamente. 19 repite personas entre variables.",
+    "10 contiene espectro completo: usar proporcion_ajustada; proporcion_ajustada_Rmd conserva el calculo original posiblemente truncado.",
+    "Ampliar ncp completa autovalores sin modificar el modelo ni los mapas de 09/18. 19 repite personas entre variables.",
     "Conservar NA de cobertura cuando BILL_AMT2<=0. Uso/cobertura pueden superar 1; no recortar.",
     "Etiquetas -2 Sin consumo, -1 Pago total y 0 Credito rotativo se preservan del Rmd; confirmar semantica.",
     "UTF-8, coma separadora, punto decimal. Proporciones 0-1, sin redondear para presentacion.",
