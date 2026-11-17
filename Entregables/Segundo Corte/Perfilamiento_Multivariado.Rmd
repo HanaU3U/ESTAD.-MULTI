@@ -1,0 +1,1143 @@
+---
+title: "Perfilamiento multivariado de los clientes de tarjeta de crédito"
+subtitle: "Quiénes son, quiénes no pagan y a quién conviene revisar primero"
+author: |
+  Juan Pablo Mosquera Marin - 20221020026
+  Ana Laura Morcote Chacon - 20221020010
+  Hana Sofia Pinilla Manrique - 20221020092
+  Juan David Amaya Patiño - 20221020057
+date: "Noviembre de 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+    code_folding: hide
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+# Evita escapes Unicode en las etiquetas gráficas si Windows inicia con locale C.
+if (.Platform$OS.type == "windows" && !l10n_info()[["UTF-8"]]) {
+  invisible(Sys.setlocale("LC_CTYPE", "Spanish_Colombia.utf8"))
+}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", fig.width = 10, fig.height = 6)
+paquetes <- c("ggplot2", "dplyr", "tidyr", "knitr")
+faltan <- paquetes[!vapply(paquetes, requireNamespace, logical(1), quietly = TRUE)]
+if (length(faltan)) stop("Instale los paquetes necesarios: ", paste(faltan, collapse = ", "))
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+theme_set(theme_minimal(base_size = 12))
+
+fmt <- function(x, d = 2) formatC(x, format = "f", digits = d,
+                                 decimal.mark = ",", big.mark = ".")
+tabla <- function(x, digits = 2, caption = NULL)
+  knitr::kable(x, digits = digits, caption = caption, row.names = FALSE,
+               format.args = list(decimal.mark = ",", big.mark = "."))
+col_paga <- "#2166AC"; col_no_paga <- "#B2182B"; col_acento <- "#B35806"
+```
+
+# El encargo
+
+El banco taiwanés entregó la información de 30.000 clientes de tarjeta de crédito (límite, datos sociodemográficos, seis meses de estados de pago, facturas y pagos, de abril a septiembre de 2005) y si incumplieron el pago del mes siguiente.
+El encargo es de **perfilamiento**:
+
+> **¿Qué perfiles de cliente hay en la base y cuáles conviene revisar? Y, al compararlos con el resultado de pago, ¿coinciden esos perfiles con quienes realmente no pagaron?**
+
+Este documento unifica tres trabajos previos del curso en un solo recorrido:
+
+| Trabajo previo | Qué aporta aquí | Sección |
+|---|---|---|
+| Distancia de Mahalanobis y gráfico Q-Q | Elección de la escala de trabajo y detección de clientes atípicos | 3 y 5 |
+| PCA de las variables numéricas | Mapa de perfiles, número de componentes y zonas de revisión | 4 y 6 |
+| PCA con codificaciones (one-hot, una columna, mixta) | Decisión de cómo codificar las categorías | 4.1 |
+
+**Regla de unificación.** `default payment next month` es el resultado que el banco quiere anticipar, así que **no participa en ninguna parte del perfilamiento**: ni en la escala, ni en las componentes, ni en las distancias, ni en las zonas.
+Se aparta al cargar los datos y se reincorpora solo en la sección 8, donde se contrasta con los perfiles que construyeron las herramientas.
+Allí se comparan ambas miradas, se sacan conclusiones adicionales y se valida la regla de revisión en clientes que no se usaron para construirla.
+
+El recorrido es: datos (2), escala y atípicos (3 y 5), mapa de perfiles con PCA (4), zonas de revisión (6), conclusiones del perfilamiento (7), contraste con el impago observado (8) y conclusiones finales (9).
+
+# Los datos
+
+```{r lectura}
+rutas_csv <- c(file.path("..", "DATASET", "datos_credit.csv"),
+               file.path("DATASET", "datos_credit.csv"), "datos_credit.csv")
+rutas_xls <- c(file.path("..", "DATASET", "credit.xls"),
+               file.path("DATASET", "credit.xls"))
+if (any(file.exists(rutas_csv))) {
+  datos <- read.csv(rutas_csv[file.exists(rutas_csv)][1], check.names = FALSE,
+                    stringsAsFactors = FALSE)
+} else if (any(file.exists(rutas_xls))) {
+  # En el .xls la primera fila trae etiquetas X1, X2...; los nombres están en la segunda.
+  datos <- as.data.frame(readxl::read_excel(rutas_xls[file.exists(rutas_xls)][1], skip = 1))
+} else stop("No se encontró DATASET/datos_credit.csv ni DATASET/credit.xls.")
+
+names(datos)[grepl("^default", names(datos), ignore.case = TRUE)] <- "impago"
+if (!"ID" %in% names(datos)) datos$ID <- seq_len(nrow(datos))
+
+facturas  <- paste0("BILL_AMT", 1:6)
+pagos     <- paste0("PAY_AMT", 1:6)
+estados   <- c("PAY_0", paste0("PAY_", 2:6))
+atrasos   <- paste0("ATRASO_", 1:6)
+continuas <- c("LIMIT_BAL", "AGE", facturas, pagos)
+necesarias <- c("ID", "LIMIT_BAL", "SEX", "EDUCATION", "MARRIAGE", "AGE",
+                estados, facturas, pagos, "impago")
+stopifnot(all(necesarias %in% names(datos)))
+
+n_original <- nrow(datos)
+datos <- datos[necesarias]
+validas <- complete.cases(datos) & apply(as.matrix(datos), 1, function(f) all(is.finite(f)))
+impago_obs <- datos$impago[validas]   # resultado observado: se aparta y no se usa hasta la sección 8
+datos <- datos[validas, ]
+stopifnot(all(impago_obs %in% c(0, 1)))
+datos$impago <- NULL
+```
+
+## Depuración y variables derivadas
+
+Se aplican las recodificaciones acordadas en el diccionario y en los talleres:
+
+- `EDUCATION`: los códigos 0, 5 y 6 (sin documentar) pasan a 4 = «Otros».
+- `MARRIAGE`: el código 0 pasa a 3 = «Otros».
+- Estados de pago `PAY_0`, `PAY_2`…`PAY_6`: se conservan para la descripción y se crean `ATRASO_1`…`ATRASO_6`, que agrupan −2, −1 y 0 en 0 («sin atraso codificado») y mantienen los meses de atraso positivos. Así no se impone un orden entre los tres códigos especiales.
+
+Además se construyen tres indicadores de lectura directa para el banco:
+
+- **Meses con atraso**: cuántos de los seis meses tuvieron un estado de pago de 1 o más.
+- **Uso del cupo**: factura de septiembre (`BILL_AMT1`) sobre el límite (`LIMIT_BAL`).
+- **Cobertura del pago**: pago de septiembre (`PAY_AMT1`) sobre la factura de agosto (`BILL_AMT2`), porque el pago de un mes cubre la factura del mes anterior. Solo se calcula cuando hay factura positiva.
+
+```{r depuracion}
+datos$EDUCATION[datos$EDUCATION %in% c(0, 5, 6)] <- 4
+datos$MARRIAGE[datos$MARRIAGE == 0] <- 3
+for (i in 1:6) datos[[atrasos[i]]] <- pmax(datos[[estados[i]]], 0)
+
+datos <- datos |>
+  mutate(sexo         = factor(SEX, 1:2, c("Hombre", "Mujer")),
+         educacion    = factor(EDUCATION, 1:4, c("Posgrado", "Universidad", "Secundaria", "Otros")),
+         estado_civil = factor(MARRIAGE, 1:3, c("Casado", "Soltero", "Otros")),
+         meses_con_atraso = rowSums(across(all_of(estados), ~ .x >= 1)),
+         uso_cupo     = BILL_AMT1 / LIMIT_BAL,
+         cobertura_pago = ifelse(BILL_AMT2 > 0, PAY_AMT1 / BILL_AMT2, NA_real_))
+
+n <- nrow(datos)
+tabla(data.frame(registros_originales = n_original, filas_excluidas = sum(!validas),
+                 clientes_analizados = n))
+```
+
+Se analizan `r fmt(n, 0)` clientes.
+El resultado de pago queda guardado aparte (`impago_obs`) y no se toca hasta la sección 8.
+
+# Escala de trabajo: ¿los datos se parecen a una campana multivariante?
+
+La distancia de Mahalanobis y el PCA estandarizado funcionan mejor cuando las variables no tienen colas extremas.
+Esta sección, que viene del trabajo de Mahalanobis, decide en qué escala se trabajan los montos en el resto del documento.
+
+## Las variables continuas en escala original
+
+```{r resumen-continuas}
+M <- as.matrix(datos[continuas])
+p <- ncol(M)
+asimetria <- function(X) apply(X, 2, function(x) mean((x - mean(x))^3) / sd(x)^3)
+
+tabla(data.frame(variable = continuas,
+                 minimo = apply(M, 2, min), mediana = apply(M, 2, median),
+                 media = apply(M, 2, mean), maximo = apply(M, 2, max),
+                 desviacion = apply(M, 2, sd), asimetria = asimetria(M)), digits = 1)
+```
+
+Las escalas difieren en varios órdenes de magnitud y casi todos los montos tienen la media por encima de la mediana y máximos muy lejos del resto: son variables con cola larga a la derecha.
+Las facturas tienen mínimos negativos (saldos a favor) y los pagos tienen muchos ceros.
+
+## Euclidiana frente a Mahalanobis: ¿quién es raro de verdad?
+
+Revisar variable por variable no basta: un cliente puede tener cada cifra dentro de lo normal y, aun así, una **combinación** rara (por ejemplo, una factura alta en un mes y casi cero en el siguiente, cuando las facturas consecutivas suelen parecerse).
+Para medir qué tan lejos está un cliente del centro considerando todas las variables a la vez hay dos opciones:
+
+- **Euclidiana**: suma las diferencias al cuadrado frente al promedio, en unidades originales. Cada variable pesa según su escala y no se tiene en cuenta que las variables van juntas.
+- **Mahalanobis**: corrige por la escala de cada variable y por sus correlaciones. Un cliente queda lejos cuando se aparta del patrón conjunto de la base, no solo cuando sus montos son grandes.
+
+Ambas se calculan aquí sobre las 14 variables continuas en escala original, para ver qué decide cada una y elegir.
+
+```{r euclid-vs-maha}
+mahal2 <- function(X, centro = colMeans(X), cov_m = cov(X)) mahalanobis(X, centro, cov_m)
+mu <- colMeans(M); S <- cov(M); S_inv <- solve(S); sdv <- sqrt(diag(S))
+dev <- sweep(M, 2, mu)
+d2_crudo <- mahal2(M)
+euclid   <- sqrt(rowSums(dev^2))
+k_99     <- sum(d2_crudo > qchisq(0.99, df = p))
+coinciden <- length(intersect(head(order(euclid, decreasing = TRUE), k_99),
+                              head(order(d2_crudo, decreasing = TRUE), k_99)))
+
+# Nivel general de los montos: ¿cada distancia mide rareza o simplemente montos grandes?
+nivel <- rowMeans(abs(M[, c(facturas, pagos)]))
+mayor_var <- names(sort(diag(S), decreasing = TRUE))[1:2]
+top_eu <- head(order(euclid, decreasing = TRUE), max(k_99, 1))
+cuota_2_mayores <- mean(rowSums(dev[top_eu, mayor_var, drop = FALSE]^2) / euclid[top_eu]^2)
+
+tabla(data.frame(
+  indicador = c("Correlación entre las dos distancias",
+                paste0("Clientes sobre el corte del 99 % de Mahalanobis (k)"),
+                "De los k más lejanos, cuántos coinciden en ambas",
+                "Correlación de la euclidiana con el nivel de los montos",
+                "Correlación de Mahalanobis con el nivel de los montos",
+                paste0("Parte de la euclidiana² de los k más lejanos debida a ",
+                       paste(mayor_var, collapse = " y "), " (%)")),
+  valor = c(fmt(cor(euclid, sqrt(d2_crudo)), 3), fmt(k_99, 0), fmt(coinciden, 0),
+            fmt(cor(euclid, nivel), 3), fmt(cor(sqrt(d2_crudo), nivel), 3), fmt(100 * cuota_2_mayores, 1))))
+```
+
+### Cuatro clientes para comparar
+
+Se eligen el cliente más lejano según cada distancia y los dos casos en que más discrepan: el que sube más puestos al pasar de euclidiana a Mahalanobis y el que más baja.
+
+```{r cuatro-casos}
+rango_eu <- rank(-euclid, ties.method = "first")
+rango_ma <- rank(-d2_crudo, ties.method = "first")
+casos <- c("Más lejano en euclidiana"                  = which.max(euclid),
+           "Más lejano en Mahalanobis"                 = which.max(d2_crudo),
+           "Cerca en euclidiana, lejos en Mahalanobis" = which.max(rango_eu - rango_ma),
+           "Lejos en euclidiana, cerca en Mahalanobis" = which.min(rango_eu - rango_ma))
+names(casos) <- sub("\\.[^.]*$", "", names(casos))   # quita el sufijo que agrega c()
+if (casos[1] == casos[2]) names(casos)[1:2] <- c("Más lejano en ambas", "Más lejano en ambas (repetido)")
+casos <- casos[!duplicated(casos)]
+
+# Valores originales por cliente (variables en filas, clientes en columnas).
+valores <- data.frame(variable = c("ID", continuas, "puesto en euclidiana", "puesto en Mahalanobis",
+                                   "euclidiana", "Mahalanobis (d²)"),
+                      sapply(casos, function(i) c(datos$ID[i], M[i, ], rango_eu[i], rango_ma[i],
+                                                 euclid[i], d2_crudo[i])),
+                      check.names = FALSE, row.names = NULL)
+tabla(valores, digits = 1, caption = paste0("Los casos elegidos (valores en escala original; ",
+                                            fmt(n, 0), " clientes en total)"))
+
+# Aportes: euclidiana² = suma de dev_j²; Mahalanobis d² = suma de dev_j · (S⁻¹ dev)_j.
+aportes <- function(i) {
+  a_eu <- dev[i, ]^2 / sum(dev[i, ]^2)
+  a_ma <- dev[i, ] * as.vector(S_inv %*% dev[i, ]) / d2_crudo[i]
+  list(eu = sort(a_eu, decreasing = TRUE), ma = sort(a_ma, decreasing = TRUE),
+       z = dev[i, ] / sdv)
+}
+resumen_aportes <- bind_rows(lapply(names(casos), function(nom) {
+  a <- aportes(casos[[nom]])
+  data.frame(caso = nom,
+             euclidiana_la_explican = paste0(names(a$eu)[1:3], " (", fmt(100 * a$eu[1:3], 0), " %)", collapse = "; "),
+             mahalanobis_la_explican = paste0(names(a$ma)[1:3], " (", fmt(100 * a$ma[1:3], 0), " %)", collapse = "; "))
+}))
+tabla(resumen_aportes, caption = "Qué variables explican cada distancia (porcentaje del cuadrado de la distancia)")
+```
+
+En la euclidiana, el aporte de una variable es su diferencia al cuadrado frente al promedio, en unidades originales.
+En Mahalanobis, el aporte de la variable $j$ es $(x_j-\bar x_j)\,[S^{-1}(x-\bar x)]_j$: suma la distancia completa y **puede ser negativo** cuando esa variable se mueve como se espera dado el resto, es decir, cuando reduce la rareza del cliente.
+
+```{r lectura-casos, results='asis'}
+R_M <- cor(M)
+describir <- function(nom) {
+  i <- casos[[nom]]; a <- aportes(i)
+  v1 <- names(a$ma)[1]; v2 <- names(a$ma)[2]
+  rel <- R_M[v1, v2]
+  # Residuo de v1 dado v2: cuánto se aparta de lo que la correlación haría esperar.
+  residuo <- (a$z[v1] - rel * a$z[v2]) / sqrt(max(1 - rel^2, 1e-6))
+  z_max <- max(abs(a$z)); v_zmax <- names(which.max(abs(a$z)))
+  rompe <- abs(rel) >= 0.5 && abs(residuo) > 3
+  escala_pequena <- rank(-diag(S))[v1] > p / 2
+  bajo <- sum(dev[i, c(facturas, pagos)] < 0)
+  cat("- **", nom, "** (ID ", datos$ID[i], "): puesto ", fmt(rango_eu[i], 0), " en euclidiana y ",
+      fmt(rango_ma[i], 0), " en Mahalanobis (d² = ", fmt(d2_crudo[i], 1), "; corte del 99 %: ",
+      fmt(qchisq(0.99, p), 1), "). ", sep = "")
+  cat("Su euclidiana la explican sobre todo `", names(a$eu)[1], "` y `", names(a$eu)[2], "` (",
+      fmt(100 * sum(a$eu[1:2]), 0), " % entre las dos). ", sep = "")
+  cat("En Mahalanobis pesan más `", v1, "` (", fmt(M[i, v1], 0), ", z = ", fmt(a$z[v1], 1), ") y `", v2,
+      "` (", fmt(M[i, v2], 0), ", z = ", fmt(a$z[v2], 1), "), que en la base tienen correlación ",
+      fmt(rel, 2), ". ", sep = "")
+  if (z_max > 3) {
+    ambas <- max(rango_eu[i], rango_ma[i]) <= 0.05 * n
+    cat("Tiene al menos una cifra extrema por sí sola (la mayor, `", v_zmax, "`, a ", fmt(z_max, 1),
+        " desviaciones de la media)", if (ambas) ", así que ambas distancias lo ven lejos. " else ". ", sep = "")
+    if (rompe) cat("Además rompe la relación entre esas dos variables: dado `", v2, "`, su `", v1,
+                   "` se aparta ", fmt(abs(residuo), 1), " desviaciones de lo esperado. ", sep = "")
+  } else if (rompe) {
+    cat("Ninguna cifra es extrema (la mayor está a ", fmt(z_max, 1), " desviaciones), pero **rompe la relación** ",
+        "entre esas dos variables: dado `", v2, "`, su `", v1, "` se aparta ", fmt(abs(residuo), 1),
+        " desviaciones de lo esperado. Lo raro es la combinación. ", sep = "")
+  }
+  if (escala_pequena && rango_ma[i] < rango_eu[i])
+    cat("`", v1, "` tiene una escala pequeña frente a los montos (desviación de ", fmt(sdv[v1], 1),
+        "), así que en la euclidiana casi no cuenta; Mahalanobis la mide en desviaciones y sí la ve. ", sep = "")
+  if (bajo >= 10) cat("Además, ", bajo, " de sus 12 montos están por debajo del promedio y se mueven juntos, ",
+                      "que es la dirección en la que más varía la base; por eso Mahalanobis no lo considera raro. ", sep = "")
+  cat("\n")
+}
+for (nom in names(casos)) describir(nom)
+```
+
+```{r grafico-distancias, fig.height=6}
+dist_df <- data.frame(euclid = euclid, d2 = d2_crudo)
+marcas <- data.frame(euclid = euclid[casos], d2 = d2_crudo[casos], caso = names(casos))
+ggplot(dist_df, aes(euclid, d2)) +
+  geom_point(alpha = 0.15, size = 0.6, color = "grey40") +
+  geom_hline(yintercept = qchisq(0.99, p), linetype = "dashed", color = col_no_paga) +
+  geom_point(data = marcas, aes(color = caso), size = 3.5) +
+  scale_x_log10() + scale_y_log10() +
+  labs(title = "Cada cliente según las dos distancias",
+       subtitle = "Ejes logarítmicos; línea roja: corte del 99 % de la chi-cuadrado para Mahalanobis",
+       x = "Distancia euclidiana", y = "Distancia de Mahalanobis (d²)", color = NULL) +
+  theme(legend.position = "bottom") + guides(color = guide_legend(nrow = 2))
+```
+
+**Lectura.** Las dos distancias tienen una correlación de `r fmt(cor(euclid, sqrt(d2_crudo)), 3)` y, entre los `r fmt(k_99, 0)` clientes más lejanos según cada una, coinciden `r fmt(coinciden, 0)`.
+La correlación con el nivel general de los montos es de `r fmt(cor(euclid, nivel), 2)` para la euclidiana y de `r fmt(cor(sqrt(d2_crudo), nivel), 2)` para Mahalanobis`r if (cor(euclid, nivel) > cor(sqrt(d2_crudo), nivel)) ": la euclidiana sigue más de cerca el tamaño de los montos" else "; en esta base, los clientes con montos muy altos también son raros en conjunto, así que el nivel no basta para distinguirlas"`.
+En los clientes más lejanos según la euclidiana, `r paste(mayor_var, collapse = " y ")` (las dos variables de mayor varianza) explican en promedio el `r fmt(100 * cuota_2_mayores, 0)` % de la distancia al cuadrado, aunque son solo 2 de 14 variables`r if (cuota_2_mayores > 0.5) ": la euclidiana es casi un ranking de esas dos cifras" else ""`.
+
+Los casos en que más discrepan muestran las dos fallas de la euclidiana:
+
+- **Deja cerca a clientes raros** cuando lo que los aleja es una variable de escala pequeña, como la edad, o una combinación que rompe la relación entre variables que normalmente van juntas.
+- **Deja lejos a clientes comunes** cuando todos sus montos se desplazan juntos, que es la dirección en que más varía la base.
+
+**Decisión.** La euclidiana **confunde el tamaño de los montos con rareza**, así que para buscar clientes raros se usa **Mahalanobis**.
+Queda pendiente el supuesto que necesita su corte (que las distancias sigan una chi-cuadrado), que se revisa a continuación con el gráfico Q-Q.
+
+## Gráfico Q-Q y transformación de los montos
+
+Si las 14 variables fueran normales multivariantes, las distancias de Mahalanobis al cuadrado seguirían una chi-cuadrado con 14 grados de libertad, y en el gráfico Q-Q los puntos caerían sobre la diagonal.
+
+Se compara la escala original con una escala transformada:
+
+- `LIMIT_BAL`: logaritmo, porque es positiva.
+- Pagos: `log(1 + x)`, porque tienen ceros.
+- Facturas: logaritmo con signo, `signo(x) · log(1 + |x|)`, porque tienen negativos.
+- `AGE`: sin cambio, porque su asimetría es leve.
+
+```{r transformacion}
+slog <- function(x) sign(x) * log1p(abs(x))
+transformar <- function(d) {
+  m <- as.matrix(d[continuas])
+  m[, "LIMIT_BAL"] <- log(m[, "LIMIT_BAL"])
+  m[, facturas]    <- slog(m[, facturas])
+  m[, pagos]       <- log1p(m[, pagos])
+  m
+}
+Mt <- transformar(datos)
+d2_log <- mahal2(Mt)
+
+tabla(data.frame(variable = continuas, asimetria_original = asimetria(M),
+                 asimetria_transformada = asimetria(Mt),
+                 clientes_en_cero = colSums(M == 0)))
+```
+
+```{r qq, fig.height=5.5}
+qq <- bind_rows(
+  data.frame(escala = "Escala original", teorica = qchisq(ppoints(n), p), observada = sort(d2_crudo)),
+  data.frame(escala = "Escala transformada", teorica = qchisq(ppoints(n), p), observada = sort(d2_log)))
+ggplot(qq, aes(teorica, observada)) +
+  geom_point(alpha = 0.25, size = 0.6, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, color = "firebrick", linewidth = 0.9) +
+  geom_vline(xintercept = qchisq(0.99, p), linetype = "dashed") +
+  scale_x_log10() + scale_y_log10() +
+  facet_wrap(~ escala) +
+  labs(title = "Q-Q de las distancias de Mahalanobis contra la chi-cuadrado (14 g. l.)",
+       subtitle = "Ejes logarítmicos; línea punteada: corte del 99 %",
+       x = "Distancia que debería tener", y = "Distancia que tiene")
+```
+
+```{r tablas-qq}
+pr <- c(0.50, 0.75, 0.90, 0.95, 0.99, 0.999)
+tabla(data.frame(percentil = paste0(100 * pr, " %"), teorica = qchisq(pr, p),
+                 original = quantile(d2_crudo, pr, names = FALSE),
+                 transformada = quantile(d2_log, pr, names = FALSE)),
+      caption = "Percentiles de la distancia: teórica frente a observada")
+
+cortes <- qchisq(c(0.95, 0.99, 0.999), p)
+tabla(data.frame(corte = c("95 %", "99 %", "99,9 %"), valor = cortes,
+                 esperados = round(c(0.05, 0.01, 0.001) * n),
+                 sobre_el_corte_original = sapply(cortes, function(q) sum(d2_crudo > q)),
+                 sobre_el_corte_transformada = sapply(cortes, function(q) sum(d2_log > q))),
+      caption = "Clientes por encima de cada corte de la chi-cuadrado")
+```
+
+```{r mardia}
+mardia <- function(X) {
+  X  <- as.matrix(X); nn <- nrow(X); k <- ncol(X)
+  Xc <- sweep(X, 2, colMeans(X))
+  D  <- Xc %*% solve(crossprod(Xc) / nn) %*% t(Xc)
+  b1 <- sum(D^3) / nn^2; b2 <- mean(diag(D)^2)
+  est_asim <- nn * b1 / 6
+  z_curt   <- (b2 - k * (k + 2)) / sqrt(8 * k * (k + 2) / nn)
+  c(asimetria = est_asim, curtosis_z = z_curt,
+    p_asimetria = pchisq(est_asim, k * (k + 1) * (k + 2) / 6, lower.tail = FALSE),
+    p_curtosis = 2 * pnorm(-abs(z_curt)))
+}
+set.seed(1)
+idx_mardia <- sample(n, min(2000, n))   # la matriz n x n de toda la base pesaría unos 7 GB
+tabla(data.frame(escala = c("Original", "Transformada"),
+                 rbind(mardia(M[idx_mardia, ]), mardia(Mt[idx_mardia, ]))), digits = 3,
+      caption = "Prueba de Mardia sobre una muestra de 2.000 clientes")
+```
+
+**Decisión.** En escala original el Q-Q se curva desde el centro: la mediana observada (`r fmt(median(d2_crudo))`) queda por debajo de la teórica (`r fmt(qchisq(0.5, p))`) y la cola se dispara hasta `r fmt(max(d2_crudo), 0)`.
+Esa doble desviación es la firma de variables torcidas, no de unos pocos casos raros.
+Con la transformación el máximo baja a `r fmt(max(d2_log), 0)` y el cuerpo se acerca a la diagonal, aunque no del todo: los pagos en cero forman un **piso** (`log1p(0) = 0`) que ninguna transformación de una sola variable separa, porque mezcla clientes que pagan con clientes que no pagan nada.
+Mardia rechaza en ambas escalas, como es de esperar con estos tamaños; el Q-Q dice más que el p-valor porque muestra cuánto y dónde se desvían los datos.
+
+**Decisión: la escala transformada se usa para la distancia de Mahalanobis**, porque su corte depende de que las distancias se parezcan a una chi-cuadrado.
+El PCA (sección 4) se hace con los valores originales estandarizados, como en los talleres: no supone normalidad, y la estandarización evita que las unidades dominen.
+
+# Mapa de perfiles con PCA
+
+El PCA se hace en dos pasos, como en los talleres: primero con las 14 variables numéricas y después con la codificación mixta, que agrega las variables categóricas.
+En ambos casos **cada columna se estandariza (Z-score)** y se trabaja con los valores originales, sin logaritmos.
+El PCA no supone normalidad, así que no necesita la transformación de la sección 3; la estandarización basta para que las unidades no dominen el resultado.
+Ninguno de los dos incluye `default payment next month`.
+
+## PCA de las 14 variables numéricas
+
+### ¿Qué es una componente y por qué estandarizar?
+
+Cada variable se transforma en $z_{ij}=(x_{ij}-\bar{x}_j)/s_j$.
+Una componente es $C_{ik}=\sum_{j=1}^{p}w_{jk}z_{ij}$, con $\sum_j w_{jk}^2=1$.
+La primera maximiza la varianza de esa combinación; las siguientes maximizan la varianza restante y son ortogonales a las anteriores.
+Aquí «información» significa **varianza**, no capacidad de predecir incumplimiento.
+
+```{r pca-numerico}
+X_num <- datos[continuas]
+p_num <- ncol(X_num)
+pca_num <- prcomp(X_num, center = TRUE, scale. = TRUE)
+pca_num_sin_estandarizar <- prcomp(X_num, center = TRUE, scale. = FALSE)
+# Orientación reproducible: C1 crece con facturas, C2 con pagos, C3 con edad;
+# desde C4, el mayor peso absoluto se orienta positivo. Se cambian juntos pesos y puntuaciones.
+anclas_num <- c("BILL_AMT1", "PAY_AMT1", "AGE")
+for (k in seq_len(ncol(pca_num$rotation))) {
+  ancla <- if (k <= 3) anclas_num[k] else
+    rownames(pca_num$rotation)[which.max(abs(pca_num$rotation[, k]))]
+  signo <- ifelse(pca_num$rotation[ancla, k] < 0, -1, 1)
+  pca_num$rotation[, k] <- signo * pca_num$rotation[, k]
+  pca_num$x[, k] <- signo * pca_num$x[, k]
+}
+Z_num <- scale(X_num, center = pca_num$center, scale = pca_num$scale)
+lambda_num <- pca_num$sdev^2
+pct_num <- 100 * lambda_num / sum(lambda_num)
+acum_num <- cumsum(pct_num)
+k80_num <- which(acum_num > 80)[1]
+comparacion_num <- data.frame(
+  metodo = c("Sin estandarizar", "Estandarizado"),
+  porcentaje_C1 = c(100 * pca_num_sin_estandarizar$sdev[1]^2 /
+                      sum(pca_num_sin_estandarizar$sdev^2), pct_num[1]))
+tabla(comparacion_num, digits = 3)
+# Comprobaciones de conservación de varianza, ortogonalidad y reconstrucción.
+stopifnot(abs(sum(lambda_num) - sum(apply(Z_num, 2, var))) < 1e-8,
+          max(abs(crossprod(pca_num$rotation) - diag(p_num))) < 1e-8,
+          max(abs(Z_num - pca_num$x %*% t(pca_num$rotation))) < 1e-8)
+tabla(data.frame(varianza_original = sum(vapply(X_num, var, numeric(1))),
+                 varianza_PCA_sin_escalar = sum(pca_num_sin_estandarizar$sdev^2),
+                 varianza_estandarizada = sum(apply(Z_num, 2, var)),
+                 varianza_PCA_estandarizado = sum(lambda_num)), digits = 0)
+```
+
+**Análisis.** Sin estandarizar, C1 concentra el `r fmt(comparacion_num$porcentaje_C1[1])` % de la varianza en unidades originales; estandarizando conserva el `r fmt(pct_num[1])` %.
+La diferencia refleja el efecto de las escalas, no que el primer método sea mejor: sin estandarizar, las variables con montos más grandes acaparan la varianza.
+El PCA elegido trabaja sobre la matriz de correlaciones y reparte `r p_num` unidades de varianza total, una por variable.
+No se aplican logaritmos ni recortes: se mantiene la base original y se reconoce que los extremos pueden influir en el resultado.
+
+### ¿Cuánta información guarda y cuántas componentes conservar?
+
+```{r reparto-numerico}
+reparto_num <- data.frame(componente = seq_len(p_num), autovalor = lambda_num,
+                          porcentaje = pct_num, acumulado = acum_num)
+tabla(reparto_num, digits = 3)
+
+ggplot(reparto_num, aes(componente, porcentaje)) +
+  geom_col(fill = "#2166AC") +
+  geom_line(aes(y = acumulado), color = "#B35806", linewidth = 0.8) +
+  geom_point(aes(y = acumulado), color = "#B35806") +
+  geom_hline(yintercept = 80, linetype = "dashed") +
+  scale_x_continuous(breaks = seq_len(p_num)) +
+  labs(title = "Varianza individual y acumulada (14 variables numéricas)", x = "Componente",
+       y = "Porcentaje", subtitle = "Barras: porcentaje individual; línea: porcentaje acumulado")
+
+ggplot(reparto_num, aes(componente, autovalor)) +
+  geom_line() + geom_point(color = "#2166AC") +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  scale_x_continuous(breaks = seq_len(p_num)) +
+  labs(title = "Gráfico de sedimentación (14 variables numéricas)", x = "Componente", y = "Autovalor")
+
+tabla(data.frame(variable = rownames(pca_num$rotation), pca_num$rotation[, 1:3]), digits = 3,
+      caption = "Pesos de las tres primeras componentes numéricas")
+```
+
+C1 conserva el `r fmt(pct_num[1])` %, las dos primeras el `r fmt(acum_num[2])` % y las tres primeras el `r fmt(acum_num[3])` %.
+Se necesitan **`r k80_num` componentes** para superar el 80 % (`r fmt(acum_num[k80_num])` %).
+El criterio de autovalor mayor que uno conservaría `r sum(lambda_num > 1)`.
+Por la orientación elegida, C1 crece con las facturas, C2 con los pagos y C3 con la edad; los pesos de la tabla muestran qué tanto participa cada variable.
+Con solo las variables numéricas no aparece el historial de atraso, que es categórico: por eso se pasa a la codificación mixta.
+
+## PCA con codificación mixta (modelo del mapa)
+
+Se usa la codificación mixta del trabajo «PCA con más cosas», con una diferencia: **la respuesta binaria no se incluye**, porque es el resultado que se quiere contrastar al final.
+
+- **Variables cuantitativas**: las 14, en escala original.
+- **One-hot completo para `SEX` y `MARRIAGE`**: `SEX_Hombre`, `SEX_Mujer`, `MARRIAGE_Casado`, `MARRIAGE_Soltero` y `MARRIAGE_Otros` (el código 0 de estado civil ya se agrupó en «Otros»). No tienen orden natural, así que no se les imponen distancias numéricas.
+- **Escolaridad ordinal**: Otros = 0, Secundaria = 1, Universidad = 2, Posgrado = 3.
+- **Historial de pagos** (`PAY_0`, `PAY_2`…`PAY_6`): −2, −1 y 0 agrupados en 0; los positivos conservan los meses de atraso.
+
+```{r pca-mixto-config}
+educ_ordinal <- function(e) unname(c("1" = 3, "2" = 2, "3" = 1, "4" = 0)[as.character(e)])
+construir_X <- function(d) {
+  historial <- as.matrix(d[atrasos]); colnames(historial) <- estados
+  cbind(as.matrix(d[continuas]),
+        EDUCATION = educ_ordinal(d$EDUCATION),
+        historial,
+        SEX_Hombre = as.numeric(d$SEX == 1), SEX_Mujer = as.numeric(d$SEX == 2),
+        MARRIAGE_Casado = as.numeric(d$MARRIAGE == 1),
+        MARRIAGE_Soltero = as.numeric(d$MARRIAGE == 2),
+        MARRIAGE_Otros = as.numeric(d$MARRIAGE == 3))
+}
+X_pca <- construir_X(datos)
+constantes <- colnames(X_pca)[apply(X_pca, 2, sd) == 0]
+X_pca <- X_pca[, setdiff(colnames(X_pca), constantes)]
+
+tabla(data.frame(
+  Caracteristica = c("Clientes analizados", "Filas excluidas", "Variables cuantitativas",
+                     "Variables con one-hot", "Escolaridad", "Historial de pagos",
+                     "Respuesta binaria", "Columnas finales", "Columnas constantes excluidas",
+                     "Centrado y estandarización"),
+  Resultado = c(fmt(n, 0), fmt(sum(!validas), 0), length(continuas), "SEX y MARRIAGE",
+                "Otros = 0; Secundaria = 1; Universidad = 2; Posgrado = 3",
+                "-2, -1 y 0 agrupados en 0; positivos sin cambios",
+                "Excluida (solo se usa en la sección 8)", ncol(X_pca), length(constantes),
+                "Sí: media cero y desviación estándar uno por columna")),
+  caption = "PCA con codificación mixta")
+```
+
+```{r pca}
+ajustar_pca <- function(X) {
+  m <- prcomp(X, center = TRUE, scale. = TRUE)
+  bloque <- function(v) colSums(m$rotation[v, , drop = FALSE]^2)[1:4]
+  k_fact <- which.max(bloque(facturas))
+  orden_atr <- order(bloque(estados), decreasing = TRUE)
+  k_atr <- if (orden_atr[1] != k_fact) orden_atr[1] else orden_atr[2]
+  # Orientación: la componente de facturas crece con las facturas, la de atraso con el historial
+  # de atraso; en las demás, el peso de mayor magnitud queda positivo. Se cambian juntos pesos y puntuaciones.
+  for (k in seq_len(ncol(m$rotation))) {
+    ancla <- if (k == k_fact) sum(m$rotation[facturas, k]) else
+      if (k == k_atr) sum(m$rotation[estados, k]) else
+        m$rotation[which.max(abs(m$rotation[, k])), k]
+    if (ancla < 0) { m$rotation[, k] <- -m$rotation[, k]; m$x[, k] <- -m$x[, k] }
+  }
+  m$k_fact <- unname(k_fact); m$k_atr <- unname(k_atr)
+  m
+}
+pca <- ajustar_pca(X_pca)
+k_fact <- pca$k_fact; k_atr <- pca$k_atr
+lambda <- pca$sdev^2
+pct <- 100 * lambda / sum(lambda); acum <- cumsum(pct)
+k80 <- which(acum > 80)[1]
+stopifnot(abs(sum(lambda) - ncol(X_pca)) < 1e-8)
+reparto <- data.frame(componente = seq_along(lambda), autovalor = lambda,
+                      porcentaje = pct, acumulado = acum)
+tabla(reparto, digits = 4, caption = "Varianza explicada por componente (codificación mixta)")
+
+ggplot(reparto, aes(componente, porcentaje)) +
+  geom_col(fill = col_paga) +
+  geom_line(aes(y = acumulado), color = col_acento) + geom_point(aes(y = acumulado), color = col_acento) +
+  geom_hline(yintercept = 80, linetype = "dashed") +
+  scale_x_continuous(breaks = seq_along(lambda)) +
+  labs(title = "Varianza individual (barras) y acumulada (línea), codificación mixta",
+       x = "Componente", y = "%")
+
+tabla(data.frame(analisis = c("14 variables numéricas", "Codificación mixta (sin respuesta)"),
+                 columnas = c(p_num, ncol(X_pca)), C1_pct = c(pct_num[1], pct[1]),
+                 plano_pct = c(acum_num[2], acum[2]), componentes_80 = c(k80_num, k80)),
+      caption = "Comparación de los dos PCA (los porcentajes se refieren a totales de varianza distintos)")
+```
+
+Con la codificación mixta, C1 conserva el `r fmt(pct[1])` %, el plano de las dos primeras el `r fmt(acum[2])` % y se necesitan **`r k80` componentes** para superar el 80 % (`r fmt(acum[k80])` %).
+El criterio de autovalor mayor que uno conservaría `r sum(lambda > 1)`.
+
+Hay dos advertencias que ya se habían señalado en el trabajo de codificaciones.
+La estandarización iguala la varianza **por columna, no por variable original**: sexo aporta dos columnas y estado civil tres, así que pesan más que si fueran una sola.
+Además, las indicadoras de una misma variable suman 1, lo que produce componentes finales con varianza prácticamente cero.
+Frente al trabajo original (27 columnas), aquí hay `r ncol(X_pca)` porque se retiró la respuesta.
+
+**Un solo número no describe bien a cada cliente**: el mapa de dos ejes es una vista parcial.
+
+## Correlaciones: qué se repite
+
+```{r correlaciones, fig.width=10, fig.height=9}
+R <- cor(X_pca)
+as.data.frame(as.table(R)) |>
+  ggplot(aes(Var1, Var2, fill = Freq)) + geom_tile() +
+  scale_fill_gradient2(low = col_acento, mid = "white", high = col_paga, limits = c(-1, 1)) +
+  labs(title = "Correlaciones entre las columnas del PCA mixto", x = NULL, y = NULL, fill = "r") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Se ven tres bloques: las seis facturas, muy correlacionadas entre sí; los seis estados del historial de pago; y, más débil, los seis pagos.
+Las indicadoras de una misma variable aparecen con correlación negativa entre sí, porque son excluyentes.
+Edad, sexo, educación y estado civil van casi solos frente a los montos.
+
+## Qué mide cada componente
+
+Se interpretan **todas las componentes que se conservan** para superar el 80 % de la varianza (`r k80` en este ajuste).
+El mapa usa solo dos de ellas, las de facturación y atraso, porque son las que responden la pregunta del banco y porque un mapa tiene dos ejes; las demás siguen describiendo diferencias entre clientes.
+
+```{r pesos, fig.height=4 * ceiling(k80 / 4) + 1}
+k_mostrar <- k80   # todas las componentes que se conservan para superar el 80 %
+pesos <- pca$rotation[, 1:k_mostrar]
+tabla(data.frame(variable = rownames(pesos), pesos), digits = 3,
+      caption = paste0("Pesos de las ", k_mostrar, " componentes conservadas (superan el 80 %)"))
+
+data.frame(variable = rownames(pesos), pesos) |>
+  pivot_longer(-variable, names_to = "componente", values_to = "peso") |>
+  mutate(variable = factor(variable, levels = rev(rownames(pesos))),
+         componente = factor(componente, levels = colnames(pesos),
+                             labels = paste0(colnames(pesos), " (", fmt(pct[1:k_mostrar], 1), " %)"))) |>
+  ggplot(aes(peso, variable, fill = peso > 0)) + geom_col(show.legend = FALSE) +
+  geom_vline(xintercept = 0, color = "grey50") + facet_wrap(~ componente, ncol = 4) +
+  scale_fill_manual(values = c(`TRUE` = col_paga, `FALSE` = col_acento)) +
+  labs(title = "Pesos sobre las variables estandarizadas", x = "Peso", y = NULL)
+```
+
+```{r lectura-componentes, results='asis'}
+for (k in 1:k_mostrar) {
+  top <- head(order(abs(pesos[, k]), decreasing = TRUE), 4)
+  evidencia <- paste0("`", rownames(pesos)[top], "` (", fmt(pesos[top, k], 3), ")", collapse = "; ")
+  nombre <- if (k == k_fact) "**componente de facturación**" else
+    if (k == k_atr) "**componente de atraso**" else "componente secundaria"
+  cat("- **C", k, "** (", fmt(pct[k]), " %), ", nombre, ". Pesos de mayor magnitud: ",
+      evidencia, ".\n", sep = "")
+}
+```
+
+La componente **C`r k_fact`** resume el **volumen de facturación** (las seis facturas con pesos del mismo signo) y la **C`r k_atr`** resume el **historial de atraso** (los seis estados del historial de pago, agrupados).
+Son los dos ejes que interesan al banco y con ellos se dibuja el mapa.
+Las variables sociodemográficas aparecen sobre todo en componentes posteriores: el PCA confirma que van casi solas.
+
+## Mapa de clientes y biplot
+
+```{r mapa, fig.height=7}
+mapa <- data.frame(ID = datos$ID, Cf = pca$x[, k_fact], Ca = pca$x[, k_atr])
+etq_x <- paste0("C", k_fact, ": facturación (", fmt(pct[k_fact], 1), " %)")
+etq_y <- paste0("C", k_atr, ": atraso (", fmt(pct[k_atr], 1), " %)")
+set.seed(19)
+muestra <- sample(n, min(3000, n))
+
+flechas <- data.frame(variable = rownames(pca$rotation),
+                      x = pca$rotation[, k_fact] * pca$sdev[k_fact],
+                      y = pca$rotation[, k_atr] * pca$sdev[k_atr])
+flechas$calidad_plano <- flechas$x^2 + flechas$y^2
+esc <- 3
+# Acercamiento central: los extremos siguen en el ajuste y en los conteos.
+lim_x <- quantile(mapa$Cf, c(0.005, 0.995)); lim_y <- quantile(mapa$Ca, c(0.005, 0.995))
+
+ggplot(mapa[muestra, ], aes(Cf, Ca)) +
+  geom_point(alpha = 0.3, size = 0.8, color = "grey40") +
+  geom_segment(data = flechas, inherit.aes = FALSE,
+               aes(x = 0, y = 0, xend = esc * x, yend = esc * y),
+               arrow = grid::arrow(length = grid::unit(0.15, "cm")), color = "grey20") +
+  geom_text(data = flechas, inherit.aes = FALSE, aes(esc * x * 1.1, esc * y * 1.1, label = variable),
+            size = 2.8, check_overlap = TRUE) +
+  coord_equal(xlim = lim_x, ylim = lim_y) +
+  labs(title = "Mapa de perfiles: facturación frente a atraso",
+       subtitle = "Muestra de 3.000 clientes; acercamiento al 99 % central; flechas × 3",
+       x = etq_x, y = etq_y)
+
+tabla(flechas[order(-flechas$calidad_plano), ], digits = 3,
+      caption = "Coordenadas de las flechas (correlación con cada eje) y calidad en el plano")
+```
+
+Las facturas apuntan juntas hacia la derecha y los atrasos hacia arriba.
+La nube es continua: no se ven grupos separados, sino una concentración central con una prolongación hacia arriba (clientes con mucho atraso).
+Las variables con flecha corta (edad, sexo, estado civil, educación) están mal representadas en este plano; eso no significa que no importen, sino que su variación está en otras componentes.
+
+# Clientes atípicos
+
+Con la escala ya decidida, la distancia de Mahalanobis sobre las 14 variables continuas transformadas identifica a los clientes cuya **combinación** de valores es rara, aunque ninguna cifra por separado lo sea.
+
+```{r atipicos}
+corte_99 <- qchisq(0.99, p)
+datos$d2 <- d2_log
+datos$atipico <- d2_log > corte_99
+
+tabla(datos |> group_by(atipico = ifelse(atipico, "Atípico (sobre el 99 %)", "No atípico")) |>
+        summarise(clientes = n(), pct_clientes = 100 * n() / nrow(datos),
+                  cupo_mediano = median(LIMIT_BAL), pagos_en_cero_promedio = mean(rowSums(across(all_of(pagos), ~ .x == 0))),
+                  facturas_negativas_promedio = mean(rowSums(across(all_of(facturas), ~ .x < 0))),
+                  .groups = "drop"),
+      caption = "Atípicos de Mahalanobis frente al resto")
+
+top5 <- order(datos$d2, decreasing = TRUE)[1:5]
+tabla(data.frame(datos[top5, c("ID", continuas)],
+                 uso_cupo = datos$uso_cupo[top5], mahalanobis = datos$d2[top5]), digits = 2,
+      caption = "Los cinco clientes más lejanos (valores en escala original)")
+```
+
+`r fmt(sum(datos$atipico), 0)` clientes (`r fmt(100 * mean(datos$atipico))` %) superan el corte del 99 %, muy por encima del 1 % esperado: la cola que queda viene en buena parte del piso de ceros en los pagos y de las facturas negativas, que hacen combinaciones poco comunes.
+
+Ser atípico **no es lo mismo que ser un cliente de riesgo**: la lista mezcla clientes reales de perfil poco común (saldos a favor, meses sin uso, pagos que adelantan la deuda) con posibles errores de registro (facturas muy por encima del cupo, valores repetidos entre variables).
+Es una lista para **revisar la calidad del dato**, no para borrar ni para decidir sobre riesgo: un atípico se estudia, un error se corrige.
+
+## Raros variable por variable frente a raros en conjunto
+
+La pregunta inicial del trabajo de Mahalanobis era si hay clientes raros por la combinación de sus valores aunque ninguna cifra por separado sea extrema.
+Se compara la revisión variable por variable (alguna variable a más de 3 desviaciones de su media, en la misma escala transformada) con la de Mahalanobis.
+
+```{r univariado-vs-multivariado}
+z_t <- scale(Mt)
+datos$extremo_uni <- apply(abs(z_t) > 3, 1, any)
+cruce_uni <- datos |>
+  mutate(variable_por_variable = ifelse(extremo_uni, "Alguna variable extrema", "Ninguna variable extrema"),
+         mahalanobis = ifelse(atipico, "Atípico", "No atípico")) |>
+  count(variable_por_variable, mahalanobis) |>
+  pivot_wider(names_from = mahalanobis, values_from = n, values_fill = 0)
+tabla(cruce_uni, digits = 0, caption = "Revisión variable por variable frente a Mahalanobis")
+
+solo_comb <- which(datos$atipico & !datos$extremo_uni)
+solo_uni  <- which(!datos$atipico & datos$extremo_uni)
+if (length(solo_comb)) {
+  ej <- solo_comb[which.max(datos$d2[solo_comb])]
+  aporte_ej <- (z_t[ej, ] * as.vector(solve(cor(Mt)) %*% z_t[ej, ])) / datos$d2[ej]
+  top_ej <- names(sort(aporte_ej, decreasing = TRUE))[1:3]
+  tabla(data.frame(variable = continuas, valor_original = M[ej, ], z_transformado = z_t[ej, ],
+                   aporte_a_mahalanobis_pct = 100 * aporte_ej, row.names = NULL), digits = 2,
+        caption = paste0("Ejemplo: cliente ", datos$ID[ej], ", raro solo en conjunto"))
+}
+frase_ej <- if (length(solo_comb)) paste0(
+  "El más lejano de ellos, el cliente ", datos$ID[ej], ", tiene todas sus cifras a menos de 3 desviaciones ",
+  "(la mayor, ", fmt(max(abs(z_t[ej, ])), 1), "), pero d² = ", fmt(datos$d2[ej], 1),
+  "; lo que más aporta es la combinación de ", paste(top_ej, collapse = ", "), ".") else ""
+```
+
+`r fmt(length(solo_comb), 0)` clientes son atípicos para Mahalanobis **sin tener ninguna variable extrema**: la revisión variable por variable no los encontraría.
+`r frase_ej`
+En sentido contrario, `r fmt(length(solo_uni), 0)` clientes tienen alguna variable extrema pero no son atípicos en conjunto: su valor alto va acompañado de los valores que la base espera en las demás variables.
+Mirar variable por variable produce falsas alarmas y, a la vez, deja pasar los casos raros por combinación.
+
+En la sección 8 se comprueba si estos clientes pagan peor o mejor que el resto.
+
+# Perfiles de clientes
+
+Con los dos ejes del mapa se definen zonas que describen perfiles de comportamiento. Todo se construye solo con la información de los clientes.
+
+
+## Zonas de revisión en el mapa
+
+Siguiendo los talleres de PCA, se definen zonas con un corte de una desviación estándar sobre cada eje.
+Los cortes los fija el analista para organizar revisiones; no son grupos descubiertos por el PCA.
+
+```{r zonas}
+orden_zonas <- c("Atraso y facturación alta", "Solo atraso alto", "Solo facturación alta", "Sin señal")
+mapa$zona <- factor(case_when(
+  mapa$Cf > sd(mapa$Cf) & mapa$Ca > sd(mapa$Ca) ~ orden_zonas[1],
+  mapa$Ca > sd(mapa$Ca) ~ orden_zonas[2],
+  mapa$Cf > sd(mapa$Cf) ~ orden_zonas[3],
+  TRUE ~ orden_zonas[4]), levels = orden_zonas)
+datos$zona <- mapa$zona
+
+zonas <- datos |> group_by(zona, .drop = FALSE) |>
+  summarise(clientes = n(), pct_clientes = 100 * n() / nrow(datos),
+            atraso_sep_pct = 100 * mean(PAY_0 >= 1),
+            sin_pago_sep_pct = 100 * mean(PAY_AMT1 == 0),
+            cupo_mediano = median(LIMIT_BAL),
+            uso_cupo_mediano_pct = 100 * median(uso_cupo),
+            meses_con_atraso = mean(meses_con_atraso),
+            edad_mediana = median(AGE),
+            atipicos_pct = 100 * mean(atipico), .groups = "drop")
+tabla(zonas, digits = 1, caption = "Perfil de cada zona del mapa")
+
+ggplot(mapa[muestra, ], aes(Cf, Ca, color = zona)) +
+  geom_point(alpha = 0.5, size = 0.9) +
+  geom_vline(xintercept = sd(mapa$Cf), linetype = "dashed") +
+  geom_hline(yintercept = sd(mapa$Ca), linetype = "dashed") +
+  scale_color_manual(values = c("#9B2C2C", col_no_paga, col_paga, "grey70"), drop = FALSE) +
+  coord_equal(xlim = lim_x, ylim = lim_y) +
+  labs(title = "Zonas de revisión",
+       subtitle = "Cortes: una desviación estándar sobre cada eje; acercamiento al 99 % central",
+       x = etq_x, y = etq_y, color = NULL) +
+  theme(legend.position = "bottom")
+
+z <- function(nombre, col) zonas[[col]][zonas$zona == nombre]
+atraso_total <- zonas |> filter(zona %in% orden_zonas[1:2])
+```
+
+**Lectura de las zonas** (descriptiva; el resultado de pago todavía no interviene):
+
+- **Solo atraso alto** (`r fmt(z(orden_zonas[2], "pct_clientes"), 1)` % de la base): `r fmt(z(orden_zonas[2], "meses_con_atraso"), 1)` meses con atraso de seis en promedio y el `r fmt(z(orden_zonas[2], "atraso_sep_pct"), 1)` % con atraso en septiembre. Es el perfil de comportamiento de pago deteriorado.
+- **Atraso y facturación alta** (`r fmt(z(orden_zonas[1], "pct_clientes"), 1)` %): el mismo atraso, con facturas altas (uso de cupo mediano del `r fmt(z(orden_zonas[1], "uso_cupo_mediano_pct"), 1)` %).
+- **Solo facturación alta** (`r fmt(z(orden_zonas[3], "pct_clientes"), 1)` %): grandes usuarios de la tarjeta, con `r fmt(z(orden_zonas[3], "meses_con_atraso"), 1)` meses con atraso en promedio.
+- **Sin señal** (`r fmt(z(orden_zonas[4], "pct_clientes"), 1)` %): la mayoría de la base. No activar los cortes no significa ausencia de riesgo.
+
+## Zonas del mapa y atípicos de Mahalanobis
+
+El mapa del PCA y la distancia de Mahalanobis miran cosas distintas.
+El mapa ubica a cada cliente según **cuánto factura y cuánto se atrasa**; Mahalanobis señala a los clientes cuya **combinación** de montos, límite y edad es rara.
+Al cruzarlos, cada cliente queda descrito por su zona y por si es atípico o no.
+
+```{r zonas-atipicos, fig.height=7}
+cruce_za <- datos |>
+  mutate(condicion = ifelse(atipico, "Atípico", "No atípico")) |>
+  count(zona, condicion, .drop = FALSE) |>
+  pivot_wider(names_from = condicion, values_from = n, values_fill = 0) |>
+  mutate(total = Atípico + `No atípico`, atipicos_pct_de_la_zona = 100 * Atípico / total,
+         pct_de_todos_los_atipicos = 100 * Atípico / sum(Atípico))
+tabla(cruce_za, digits = 1, caption = "Clientes por zona del mapa y condición de atípico")
+
+atip_idx <- which(datos$atipico)
+ggplot(mapa[muestra, ], aes(Cf, Ca)) +
+  geom_point(alpha = 0.25, size = 0.7, color = "grey60") +
+  geom_point(data = mapa[atip_idx, ], color = col_acento, alpha = 0.6, size = 1) +
+  geom_vline(xintercept = sd(mapa$Cf), linetype = "dashed") +
+  geom_hline(yintercept = sd(mapa$Ca), linetype = "dashed") +
+  coord_equal(xlim = lim_x, ylim = lim_y) +
+  labs(title = "Atípicos de Mahalanobis sobre el mapa de perfiles",
+       subtitle = "Gris: muestra de 3.000 clientes; naranja: todos los atípicos; acercamiento al 99 % central",
+       x = etq_x, y = etq_y)
+za <- function(nombre, col) cruce_za[[col]][cruce_za$zona == nombre]
+```
+
+El `r fmt(za(orden_zonas[4], "pct_de_todos_los_atipicos"), 1)` % de los atípicos está en la zona «Sin señal»: son clientes que el mapa ubica en la parte común (facturación y atraso moderados), pero cuya combinación de valores es rara.
+Por eso las dos herramientas **se complementan**: el mapa organiza la revisión por comportamiento de pago y Mahalanobis agrega una lista de casos que revisar por coherencia del dato.
+Dentro de cada zona, la proporción de atípicos va del `r fmt(min(cruce_za$atipicos_pct_de_la_zona), 1)` % al `r fmt(max(cruce_za$atipicos_pct_de_la_zona), 1)` %.
+
+# Conclusiones del perfilamiento
+
+Esta síntesis usa solo la información de los clientes; el resultado de pago todavía no se ha mirado.
+
+**1. Dos dimensiones organizan la base.** Con solo las 14 variables numéricas hacen falta `r k80_num` componentes para superar el 80 %, y el historial de atraso no aparece. Con la codificación mixta, el PCA separa un eje de **facturación** (C`r k_fact`, `r fmt(pct[k_fact], 1)` % de la varianza) y un eje de **atraso** (C`r k_atr`, `r fmt(pct[k_atr], 1)` %).
+Por construcción no están correlacionados: cuánto factura un cliente no dice cuánto se atrasa.
+Edad, sexo, educación y estado civil van casi solos, en componentes posteriores.
+
+**2. Los perfiles no son grupos separados.** Los clientes forman una nube continua.
+El plano conserva el `r fmt(acum[2], 1)` % de la variación y hacen falta `r k80` componentes para superar el 80 %, así que los indicadores originales deben conservarse para revisiones específicas.
+
+**3. Zonas de revisión.** `r fmt(z(orden_zonas[2], "pct_clientes"), 1)` % de los clientes tiene solo atraso alto, `r fmt(z(orden_zonas[1], "pct_clientes"), 1)` % atraso y facturación altas, `r fmt(z(orden_zonas[3], "pct_clientes"), 1)` % solo facturación alta y `r fmt(z(orden_zonas[4], "pct_clientes"), 1)` % no activa ningún corte.
+Los cortes los fija el analista; no son grupos descubiertos.
+
+**4. Atípicos.** `r fmt(sum(datos$atipico), 0)` clientes (`r fmt(100 * mean(datos$atipico))` %) superan el corte de Mahalanobis, y el `r fmt(za(orden_zonas[4], "pct_de_todos_los_atipicos"), 1)` % de ellos cae en la zona «Sin señal» del mapa. Mapa y distancia se complementan: el primero ordena por comportamiento y la segunda señala combinaciones raras que conviene auditar. Son una lista para revisar, no para borrar.
+
+**5. Alcance.** Es un perfilamiento descriptivo con datos de 2005. La pregunta que queda es si estos perfiles tienen relación con el incumplimiento: se responde en la sección siguiente.
+
+
+# Contraste con el impago observado
+
+Hasta aquí los perfiles se construyeron sin saber quién pagó.
+Ahora se reincorpora `default payment next month` para responder dos preguntas: **¿los perfiles que encontraron las herramientas coinciden con quienes no pagan?** y **¿qué aprendemos de las diferencias?**
+
+La columna la entrega el banco ya codificada (1 = no pagó el mes siguiente, 0 = pagó); aquí no se define ni se recalcula.
+Como es 0/1, su promedio es la proporción de clientes que no pagan: la **tasa de impago**.
+La tasa de un grupo es ese promedio calculado solo entre sus clientes; la comparación con la **tasa global** indica qué tan por encima o por debajo del promedio está el grupo.
+
+```{r reincorporar}
+datos$impago  <- impago_obs
+datos$cliente <- factor(impago_obs, 0:1, c("Paga", "No paga"))
+tasa_global   <- mean(datos$impago)
+tabla(data.frame(clientes = n, clientes_que_no_pagan = sum(datos$impago),
+                 tasa_global_pct = 100 * tasa_global))
+```
+
+
+## Qué dice el impago, variable por variable
+
+Antes de combinar variables conviene ver qué tanto cambia la tasa de impago según cada característica por separado.
+
+```{r tasas-univariadas, fig.height=11}
+tasa_por <- function(grupo, nombre) {
+  d <- data.frame(grupo = grupo, impago = datos$impago)
+  d <- d[!is.na(d$grupo), ]
+  r <- d |> group_by(grupo) |>
+    summarise(clientes = n(), tasa_impago = 100 * mean(impago), .groups = "drop")
+  data.frame(variable = nombre, grupo = as.character(r$grupo), clientes = r$clientes,
+             pct_clientes = 100 * r$clientes / sum(r$clientes),
+             tasa_impago = r$tasa_impago,
+             veces_la_tasa_global = r$tasa_impago / (100 * tasa_global))
+}
+
+estado_sep <- cut(datos$PAY_0, c(-Inf, -2, -1, 0, 1, 2, Inf),
+                  labels = c("-2", "-1 (pago puntual)", "0", "1 mes de atraso",
+                             "2 meses de atraso", "3 o más meses"))
+perfil_univariado <- bind_rows(
+  tasa_por(estado_sep, "Estado de pago en septiembre"),
+  tasa_por(cut(datos$meses_con_atraso, c(-Inf, 0, 1, 2, 3, Inf),
+               labels = c("Ninguno", "1", "2", "3", "4 a 6")), "Meses con atraso (de 6)"),
+  tasa_por(paste0("Q", ntile(datos$LIMIT_BAL, 5),
+                  c(" (cupo más bajo)", "", "", "", " (cupo más alto)")[ntile(datos$LIMIT_BAL, 5)]),
+           "Quintil del límite de crédito"),
+  tasa_por(cut(datos$uso_cupo, c(-Inf, 0, 0.25, 0.5, 0.75, 1, Inf),
+               labels = c("Cero o saldo a favor", "Hasta 25 %", "25 a 50 %",
+                          "50 a 75 %", "75 a 100 %", "Más del 100 %")), "Uso del cupo en septiembre"),
+  tasa_por(cut(datos$cobertura_pago, c(-Inf, 0, 0.05, 0.25, 1, Inf),
+               labels = c("No pagó nada", "Hasta 5 %", "5 a 25 %", "25 a 100 %", "Más del 100 %")),
+           "Pago de sept. sobre factura de agosto"),
+  tasa_por(cut(datos$AGE, c(-Inf, 25, 30, 35, 40, 50, Inf), right = FALSE,
+               labels = c("Menos de 25", "25 a 29", "30 a 34", "35 a 39", "40 a 49", "50 o más")),
+           "Edad"),
+  tasa_por(datos$educacion, "Educación"),
+  tasa_por(datos$estado_civil, "Estado civil"),
+  tasa_por(datos$sexo, "Sexo"))
+
+perfil_univariado$grupo <- factor(perfil_univariado$grupo, levels = rev(unique(perfil_univariado$grupo)))
+perfil_univariado$variable <- factor(perfil_univariado$variable, levels = unique(perfil_univariado$variable))
+
+ggplot(perfil_univariado, aes(tasa_impago, grupo,
+                              fill = tasa_impago > 120 * tasa_global)) +
+  geom_col(show.legend = FALSE) +
+  geom_vline(xintercept = 100 * tasa_global, linetype = "dashed") +
+  geom_text(aes(label = fmt(tasa_impago, 1)), hjust = -0.15, size = 3) +
+  facet_wrap(~ variable, scales = "free_y", ncol = 2) +
+  scale_fill_manual(values = c(`TRUE` = col_no_paga, `FALSE` = "grey65")) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Tasa de impago por característica del cliente",
+       subtitle = "Línea punteada: tasa global; en rojo, grupos con al menos 1,2 veces esa tasa",
+       x = "Clientes que no pagan (%)", y = NULL)
+```
+
+```{r tabla-univariada}
+tabla(perfil_univariado, caption = "Tasa de impago por grupo")
+
+discrimina <- perfil_univariado |>
+  filter(clientes >= 100) |>
+  group_by(variable) |>
+  summarise(tasa_minima = min(tasa_impago), tasa_maxima = max(tasa_impago),
+            diferencia_puntos = max(tasa_impago) - min(tasa_impago), .groups = "drop") |>
+  arrange(desc(diferencia_puntos))
+tabla(discrimina, caption = "¿Qué tanto separa cada variable? (grupos de al menos 100 clientes)")
+
+t_atraso    <- mean(datos$impago[datos$PAY_0 >= 1])
+t_sin_atr   <- mean(datos$impago[datos$PAY_0 <= 0])
+t_atraso2   <- mean(datos$impago[datos$PAY_0 >= 2])
+t_cupo_bajo <- mean(datos$impago[ntile(datos$LIMIT_BAL, 5) == 1])
+t_cupo_alto <- mean(datos$impago[ntile(datos$LIMIT_BAL, 5) == 5])
+t_no_pago   <- mean(datos$impago[!is.na(datos$cobertura_pago) & datos$cobertura_pago == 0])
+pct_atraso  <- mean(datos$PAY_0 >= 1)
+socio <- discrimina |> filter(variable %in% c("Sexo", "Estado civil", "Educación", "Edad"))
+```
+
+**Lectura.** La variable que más separa a quienes pagan de quienes no es **`r discrimina$variable[1]`** (`r fmt(discrimina$diferencia_puntos[1], 1)` puntos entre su grupo con menos y su grupo con más impago).
+Los clientes con al menos un mes de atraso en septiembre son el `r fmt(100 * pct_atraso, 1)` % de la base, pero su tasa de impago es del `r fmt(100 * t_atraso, 1)` %, frente al `r fmt(100 * t_sin_atr, 1)` % de los que no tenían atraso; con dos meses o más de atraso sube al `r fmt(100 * t_atraso2, 1)` %.
+
+El límite de crédito también separa: en el quintil de cupo más bajo la tasa es del `r fmt(100 * t_cupo_bajo, 1)` % y en el más alto del `r fmt(100 * t_cupo_alto, 1)` %.
+Quienes tenían factura en agosto y no pagaron nada en septiembre incumplen en un `r fmt(100 * t_no_pago, 1)` %.
+
+En cambio, las variables sociodemográficas separan poco: la mayor diferencia entre sus grupos es de `r fmt(max(socio$diferencia_puntos), 1)` puntos.
+Esto anticipa la conclusión principal: **el impago se explica sobre todo por el comportamiento de pago, no por quién es el cliente**.
+
+Cada una de estas lecturas mira una variable a la vez; los perfiles de las secciones anteriores las combinan.
+
+## Quién no paga frente a quién paga
+
+```{r retrato}
+retrato <- datos |> group_by(cliente) |>
+  summarise(Clientes = n(),
+            `Con atraso en septiembre (%)` = 100 * mean(PAY_0 >= 1),
+            `Meses con atraso (promedio de 6)` = mean(meses_con_atraso),
+            `Límite de crédito (mediana)` = median(LIMIT_BAL),
+            `Uso del cupo en septiembre (mediana, %)` = 100 * median(uso_cupo),
+            `No pagó nada en septiembre (%)` = 100 * mean(PAY_AMT1 == 0),
+            `Pago sobre factura anterior (mediana, %)` = 100 * median(cobertura_pago, na.rm = TRUE),
+            `Edad (mediana)` = median(AGE),
+            `Mujeres (%)` = 100 * mean(SEX == 2),
+            `Universidad o posgrado (%)` = 100 * mean(EDUCATION %in% 1:2),
+            `Casados (%)` = 100 * mean(MARRIAGE == 1),
+            `Atípicos de Mahalanobis (%)` = 100 * mean(atipico),
+            .groups = "drop")
+claves <- c("clientes", "atraso_sep", "meses_atraso", "cupo", "uso_cupo", "sin_pago",
+            "cobertura", "edad", "mujeres", "universidad", "casados", "atipicos")
+retrato_t <- data.frame(indicador = names(retrato)[-1],
+                        Paga = unlist(retrato[retrato$cliente == "Paga", -1]),
+                        No_paga = unlist(retrato[retrato$cliente == "No paga", -1]), row.names = NULL)
+tabla(retrato_t, digits = 1, caption = "Perfil promedio de quienes pagan y quienes no pagan")
+# Acceso por clave (no por el nombre con tildes, que depende de la configuración regional).
+r <- function(clave, col) retrato_t[[col]][match(clave, claves)]
+compara <- function(clave, mayor, menor) if (r(clave, "No_paga") >= r(clave, "Paga")) mayor else menor
+```
+
+## ¿Coinciden los perfiles con el impago?
+
+Se mide el impago dentro de cada perfil construido sin él: los ejes del PCA, las zonas del mapa y los atípicos de Mahalanobis.
+
+
+### El impago a lo largo de las componentes
+
+El impago no entró al PCA. Se observa cómo se reparte a lo largo de cada componente: si la tasa de impago sube a lo largo de un eje, ese eje describe un perfil de riesgo aunque no se haya construido para eso.
+
+```{r impago-por-decil, fig.height=2.5 * ceiling(k80 / 4) + 1}
+k_sup <- k80   # todas las componentes conservadas
+por_decil <- bind_rows(lapply(1:k_sup, function(k) {
+  data.frame(componente = paste0("C", k), decil = ntile(pca$x[, k], 10), impago = datos$impago) |>
+    group_by(componente, decil) |> summarise(tasa = 100 * mean(impago), .groups = "drop")
+}))
+ggplot(por_decil, aes(decil, tasa)) +
+  geom_col(fill = col_no_paga, alpha = 0.85) +
+  geom_hline(yintercept = 100 * tasa_global, linetype = "dashed") +
+  facet_wrap(~ componente, ncol = 4) + scale_x_continuous(breaks = c(1, 5, 10)) +
+  labs(title = "Tasa de impago por decil de cada componente",
+       subtitle = "Decil 1: puntuaciones más bajas; decil 10: más altas. Línea: tasa global",
+       x = "Decil", y = "Clientes que no pagan (%)")
+
+sup <- bind_rows(lapply(1:k_sup, function(k) {
+  x <- pca$x[, k]
+  data.frame(componente = paste0("C", k),
+             diferencia_medias_en_sd = (mean(x[datos$impago == 1]) - mean(x[datos$impago == 0])) / sd(x),
+             tasa_decil_inferior = 100 * mean(datos$impago[ntile(x, 10) == 1]),
+             tasa_decil_superior = 100 * mean(datos$impago[ntile(x, 10) == 10]))
+}))
+tabla(sup, caption = "Separación del impago en cada componente")
+```
+
+La componente que más separa a quienes no pagan es la de atraso: en su decil superior la tasa de impago es del `r fmt(sup$tasa_decil_superior[k_atr], 1)` % y en el inferior del `r fmt(sup$tasa_decil_inferior[k_atr], 1)` %.
+En la de facturación la diferencia es `r if (abs(sup$diferencia_medias_en_sd[k_fact]) < abs(sup$diferencia_medias_en_sd[k_atr])) "mucho menor" else "comparable"` (`r fmt(sup$diferencia_medias_en_sd[k_fact])` desviaciones entre las medias, frente a `r fmt(sup$diferencia_medias_en_sd[k_atr])` en la de atraso).
+Facturar mucho no es lo mismo que no pagar.
+
+### Impago en las zonas del mapa
+
+```{r contraste-zonas, fig.height=4.5}
+tz <- datos |> group_by(zona, .drop = FALSE) |>
+  summarise(clientes = n(), pct_clientes = 100 * n() / nrow(datos),
+            tasa_impago = 100 * mean(impago),
+            veces_la_tasa_global = mean(impago) / tasa_global,
+            pct_de_todos_los_impagos = 100 * sum(impago) / sum(datos$impago), .groups = "drop")
+tabla(tz, digits = 1, caption = "Impago observado en cada zona del perfilamiento")
+tzf <- function(nombre, col) tz[[col]][tz$zona == nombre]
+atraso_zonas <- tz |> filter(zona %in% orden_zonas[1:2])
+
+ggplot(tz, aes(zona, tasa_impago, fill = zona)) +
+  geom_col(show.legend = FALSE) +
+  geom_hline(yintercept = 100 * tasa_global, linetype = "dashed") +
+  geom_text(aes(label = fmt(tasa_impago, 1)), vjust = -0.4) +
+  scale_fill_manual(values = c("#9B2C2C", col_no_paga, col_paga, "grey70")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(title = "Tasa de impago por zona de revisión",
+       subtitle = "Línea punteada: tasa global", x = NULL, y = "Clientes que no pagan (%)")
+```
+
+Las dos zonas con atraso alto reúnen el `r fmt(sum(atraso_zonas$pct_clientes), 1)` % de los clientes y el `r fmt(sum(atraso_zonas$pct_de_todos_los_impagos), 1)` % de los impagos.
+La zona «Solo facturación alta» tiene una tasa del `r fmt(tzf(orden_zonas[3], "tasa_impago"), 1)` % (`r fmt(tzf(orden_zonas[3], "veces_la_tasa_global"), 2)` veces la global): usar mucho la tarjeta no es lo mismo que no pagar.
+
+**Lo que el perfil deja pasar.** La zona «Sin señal» concentra el `r fmt(tzf(orden_zonas[4], "pct_clientes"), 1)` % de los clientes y todavía contiene el `r fmt(tzf(orden_zonas[4], "pct_de_todos_los_impagos"), 1)` % de los impagos.
+Se compara quién no paga con quién paga dentro de esa zona:
+
+```{r impagos-sin-senal}
+s <- datos |> filter(zona == orden_zonas[4]) |> group_by(cliente) |>
+  summarise(clientes = n(), atraso_sep_pct = 100 * mean(PAY_0 >= 1),
+            meses_con_atraso = mean(meses_con_atraso), cupo_mediano = median(LIMIT_BAL),
+            uso_cupo_mediano_pct = 100 * median(uso_cupo),
+            sin_pago_sep_pct = 100 * mean(PAY_AMT1 == 0), edad_mediana = median(AGE), .groups = "drop")
+tabla(s, digits = 1, caption = "Dentro de «Sin señal»: quienes pagan frente a quienes no pagan")
+sn <- function(col) s[[col]][s$cliente == "No paga"]; sp <- function(col) s[[col]][s$cliente == "Paga"]
+```
+
+Dentro de «Sin señal», quienes no pagan tienen atraso en septiembre en el `r fmt(sn("atraso_sep_pct"), 1)` % de los casos (frente al `r fmt(sp("atraso_sep_pct"), 1)` % de quienes sí pagan), `r fmt(sn("meses_con_atraso"), 1)` meses con atraso en promedio (frente a `r fmt(sp("meses_con_atraso"), 1)`) y un cupo mediano de `r fmt(sn("cupo_mediano"), 0)` (frente a `r fmt(sp("cupo_mediano"), 0)`).
+Esto indica qué señales débiles escapan a los cortes de una desviación estándar y qué variables conviene vigilar en esa zona.
+
+
+### Impago en los atípicos
+
+```{r contraste-atipicos}
+t_atip <- mean(datos$impago[datos$atipico]); t_no_atip <- mean(datos$impago[!datos$atipico])
+tabla(datos |> group_by(zona, atipico = ifelse(atipico, "Atípico", "No atípico")) |>
+        summarise(clientes = n(), tasa_impago = 100 * mean(impago), .groups = "drop") |>
+        pivot_wider(names_from = atipico, values_from = c(clientes, tasa_impago)),
+      digits = 1, caption = "Tasa de impago por zona y condición de atípico")
+```
+
+Los atípicos de Mahalanobis tienen una tasa de impago del `r fmt(100 * t_atip, 1)` %, frente al `r fmt(100 * t_no_atip, 1)` % del resto.
+Ser raro por la combinación de valores no equivale a pagar peor: la distancia sirve para auditar la calidad del dato, no para priorizar cobranza.
+
+
+## ¿Sirve para decidir a quién revisar? Validación en clientes nuevos
+
+Como el impago no intervino en la construcción de los perfiles, los contrastes anteriores no son circulares.
+Aun así, el banco aplicaría la regla a clientes nuevos, así que se repite el procedimiento con el 70 % de los clientes (entrenamiento) y se aplica, sin cambiar nada, al 30 % restante (prueba).
+En el entrenamiento se ajustan el PCA, sus cortes y la media y covarianza de Mahalanobis; en la prueba solo se proyecta.
+
+```{r validacion}
+set.seed(2026)
+ent <- sample(n, round(0.7 * n)); prueba <- setdiff(seq_len(n), ent)
+pca_ent <- ajustar_pca(X_pca[ent, ])
+sc_ent  <- pca_ent$x
+sc_pru  <- predict(pca_ent, X_pca[prueba, ])
+ka <- pca_ent$k_atr; kf <- pca_ent$k_fact
+y   <- datos$impago[prueba]
+d2_pru <- mahalanobis(Mt[prueba, ], colMeans(Mt[ent, ]), cov(Mt[ent, ]))
+
+evaluar <- function(revisar, nombre) data.frame(
+  regla = nombre, revisados_pct = 100 * mean(revisar),
+  tasa_impago_revisados = 100 * mean(y[revisar]),
+  tasa_impago_no_revisados = 100 * mean(y[!revisar]),
+  impagos_capturados_pct = 100 * sum(y[revisar]) / sum(y),
+  veces_la_tasa_global = mean(y[revisar]) / mean(y))
+
+set.seed(7)
+reglas <- bind_rows(
+  evaluar(sc_pru[, ka] >= quantile(sc_ent[, ka], 0.8), "20 % más alto en el eje de atraso"),
+  evaluar(sc_pru[, kf] >= quantile(sc_ent[, kf], 0.8), "20 % más alto en el eje de facturación"),
+  evaluar(sc_pru[, ka] > sd(sc_ent[, ka]), "Zona de atraso (eje de atraso > 1 DE)"),
+  evaluar(datos$PAY_0[prueba] >= 1, "Atraso en septiembre (PAY_0 ≥ 1)"),
+  evaluar(d2_pru > corte_99, "Atípico de Mahalanobis"),
+  evaluar(runif(length(prueba)) < 0.2, "Al azar (20 %)"))
+tabla(reglas, digits = 1, caption = "Desempeño de cada regla de revisión en el 30 % de prueba")
+```
+
+```{r curva-captura, fig.height=5}
+captura <- function(puntaje, nombre) {
+  o <- order(puntaje, decreasing = TRUE)
+  data.frame(regla = nombre, revisados_pct = 100 * seq_along(o) / length(o),
+             capturados_pct = 100 * cumsum(y[o]) / sum(y))
+}
+curvas <- bind_rows(captura(sc_pru[, ka], "Eje de atraso (PCA)"),
+                    captura(sc_pru[, kf], "Eje de facturación (PCA)"),
+                    captura(d2_pru, "Distancia de Mahalanobis"))
+ggplot(curvas, aes(revisados_pct, capturados_pct, color = regla)) +
+  geom_line(linewidth = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+  geom_vline(xintercept = 20, linetype = "dotted") +
+  scale_color_manual(values = c(col_no_paga, col_paga, col_acento)) +
+  labs(title = "¿Qué parte de los impagos se encuentra revisando a una fracción de clientes?",
+       subtitle = "Clientes de prueba ordenados por cada puntaje; diagonal: revisar al azar",
+       x = "Clientes revisados (%)", y = "Impagos encontrados (%)", color = NULL) +
+  theme(legend.position = "bottom")
+
+v <- function(nombre, col) reglas[[col]][reglas$regla == nombre]
+r_atr <- "20 % más alto en el eje de atraso"; r_fac <- "20 % más alto en el eje de facturación"
+r_pay <- "Atraso en septiembre (PAY_0 ≥ 1)"
+```
+
+**Resultado.** Revisando el 20 % de clientes con mayor puntaje en el eje de atraso se encuentra el `r fmt(v(r_atr, "impagos_capturados_pct"), 1)` % de los impagos de la prueba, con una tasa de impago entre los revisados del `r fmt(v(r_atr, "tasa_impago_revisados"), 1)` % (`r fmt(v(r_atr, "veces_la_tasa_global"), 1)` veces la tasa general).
+Revisar al azar el mismo 20 % encontraría alrededor del 20 % de los impagos.
+En cambio, el 20 % más alto en facturación encuentra el `r fmt(v(r_fac, "impagos_capturados_pct"), 1)` %: **ordenar por facturación no sirve para encontrar a quien no paga**.
+
+La regla simple «atraso en septiembre» revisa al `r fmt(v(r_pay, "revisados_pct"), 1)` % y encuentra el `r fmt(v(r_pay, "impagos_capturados_pct"), 1)` % con una tasa del `r fmt(v(r_pay, "tasa_impago_revisados"), 1)` %.
+El eje de atraso del PCA tiene la ventaja de resumir los seis meses en un solo puntaje continuo, de modo que el banco puede ordenar a todos los clientes y cortar según su capacidad de revisión.
+La distancia de Mahalanobis, en cambio, no ordena por riesgo: sirve para revisar calidad del dato, no para priorizar cobranza.
+
+# Conclusiones finales: perfiles frente a impago
+
+**1. Lo que las herramientas encontraron solas, el impago lo confirma.** Sin usar el resultado, el PCA separó un eje de atraso.
+Al mirar el impago, la tasa pasa del `r fmt(sup$tasa_decil_inferior[k_atr], 1)` % en el decil inferior de ese eje al `r fmt(sup$tasa_decil_superior[k_atr], 1)` % en el superior, y las dos zonas con atraso alto reúnen el `r fmt(sum(atraso_zonas$pct_clientes), 1)` % de los clientes y el `r fmt(sum(atraso_zonas$pct_de_todos_los_impagos), 1)` % de los impagos.
+
+**2. Lo que el perfil describe pero no mide riesgo.** El eje de facturación va del `r fmt(sup$tasa_decil_inferior[k_fact], 1)` % al `r fmt(sup$tasa_decil_superior[k_fact], 1)` % entre su decil inferior y superior, y la zona «Solo facturación alta» tiene una tasa del `r fmt(tzf(orden_zonas[3], "tasa_impago"), 1)` % (global: `r fmt(100 * tasa_global, 1)` %).
+Los atípicos de Mahalanobis tienen una tasa del `r fmt(100 * t_atip, 1)` % frente al `r fmt(100 * t_no_atip, 1)` % del resto.
+Facturar mucho o ser raro en la combinación de valores no es lo mismo que no pagar.
+
+**3. Lo que el perfil deja pasar.** La zona «Sin señal» contiene el `r fmt(tzf(orden_zonas[4], "pct_de_todos_los_impagos"), 1)` % de los impagos: un perfil no supervisado con cortes de una desviación estándar no los detecta todos.
+
+**4. Retrato de quien no paga.** Frente a quien paga, quien no paga:
+
+- tiene atraso en septiembre con `r compara("atraso_sep", "más", "menos")` frecuencia (`r fmt(r("atraso_sep", "No_paga"), 1)` % frente a `r fmt(r("atraso_sep", "Paga"), 1)` %) y acumula `r compara("meses_atraso", "más", "menos")` meses con atraso (`r fmt(r("meses_atraso", "No_paga"), 1)` frente a `r fmt(r("meses_atraso", "Paga"), 1)` de seis);
+- tiene un límite de crédito `r compara("cupo", "más alto", "más bajo")` (mediana de `r fmt(r("cupo", "No_paga"), 0)` frente a `r fmt(r("cupo", "Paga"), 0)`) y usa una parte `r compara("uso_cupo", "mayor", "menor")` de él;
+- cubre una parte `r compara("cobertura", "mayor", "menor")` de su factura anterior.
+
+Edad, sexo, educación y estado civil cambian poco entre ambos grupos y no deben usarse como criterio para decidir sobre un cliente individual.
+
+**5. A quién revisar.** En clientes que no se usaron para construir la regla, revisar el 20 % con mayor puntaje en el eje de atraso encuentra el `r fmt(v(r_atr, "impagos_capturados_pct"), 1)` % de los impagos; con el eje de facturación, solo el `r fmt(v(r_fac, "impagos_capturados_pct"), 1)` %.
+
+**6. Alcance y siguiente paso.** El perfilamiento es descriptivo y retrospectivo, con datos de 2005; la regla se validó en una partición de la misma base, no en otro periodo.
+Para pasar a una decisión de intervención conviene un modelo supervisado (por ejemplo, una regresión logística sobre los indicadores de atraso, cupo y pago) evaluado en un periodo posterior, fijando el corte según la capacidad de revisión del banco.
