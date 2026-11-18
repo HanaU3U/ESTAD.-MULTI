@@ -69,17 +69,28 @@ El recorrido es: datos (2), escala y atípicos (3 y 5), mapa de perfiles con PCA
 # Los datos
 
 ```{r lectura}
-rutas_csv <- c(file.path("..", "DATASET", "datos_credit.csv"),
-               file.path("DATASET", "datos_credit.csv"), "datos_credit.csv")
-rutas_xls <- c(file.path("..", "DATASET", "credit.xls"),
-               file.path("DATASET", "credit.xls"))
-if (any(file.exists(rutas_csv))) {
-  datos <- read.csv(rutas_csv[file.exists(rutas_csv)][1], check.names = FALSE,
-                    stringsAsFactors = FALSE)
-} else if (any(file.exists(rutas_xls))) {
+# Busca la carpeta DATASET subiendo desde la carpeta del .Rmd hasta la raíz del proyecto.
+# Estructura esperada: ESTAD. MULTI/DATASET/datos_credit.csv y
+#                      ESTAD. MULTI/Entregables/Segundo Corte/Perfilamiento_Multivariado.Rmd
+buscar_dataset <- function(archivo, desde = getwd(), niveles = 6) {
+  carpeta <- normalizePath(desde, winslash = "/", mustWork = FALSE)
+  for (i in 0:niveles) {
+    candidato <- file.path(carpeta, "DATASET", archivo)
+    if (file.exists(candidato)) return(candidato)
+    padre <- dirname(carpeta)
+    if (padre == carpeta) break
+    carpeta <- padre
+  }
+  NA_character_
+}
+ruta_csv <- buscar_dataset("datos_credit.csv")
+ruta_xls <- buscar_dataset("credit.xls")
+if (!is.na(ruta_csv)) {
+  datos <- read.csv(ruta_csv, check.names = FALSE, stringsAsFactors = FALSE)
+} else if (!is.na(ruta_xls)) {
   # En el .xls la primera fila trae etiquetas X1, X2...; los nombres están en la segunda.
-  datos <- as.data.frame(readxl::read_excel(rutas_xls[file.exists(rutas_xls)][1], skip = 1))
-} else stop("No se encontró DATASET/datos_credit.csv ni DATASET/credit.xls.")
+  datos <- as.data.frame(readxl::read_excel(ruta_xls, skip = 1))
+} else stop("No se encontró DATASET/datos_credit.csv ni DATASET/credit.xls en la carpeta del .Rmd ni en las superiores.")
 
 names(datos)[grepl("^default", names(datos), ignore.case = TRUE)] <- "impago"
 if (!"ID" %in% names(datos)) datos$ID <- seq_len(nrow(datos))

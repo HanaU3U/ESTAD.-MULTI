@@ -3009,37 +3009,48 @@ finales (9).</p>
 </div>
 <div id="los-datos" class="section level1" number="2">
 <h1><span class="header-section-number">2</span> Los datos</h1>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>rutas_csv <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">file.path</span>(<span class="st">&quot;..&quot;</span>, <span class="st">&quot;DATASET&quot;</span>, <span class="st">&quot;datos_credit.csv&quot;</span>),</span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>               <span class="fu">file.path</span>(<span class="st">&quot;DATASET&quot;</span>, <span class="st">&quot;datos_credit.csv&quot;</span>), <span class="st">&quot;datos_credit.csv&quot;</span>)</span>
-<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>rutas_xls <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">file.path</span>(<span class="st">&quot;..&quot;</span>, <span class="st">&quot;DATASET&quot;</span>, <span class="st">&quot;credit.xls&quot;</span>),</span>
-<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>               <span class="fu">file.path</span>(<span class="st">&quot;DATASET&quot;</span>, <span class="st">&quot;credit.xls&quot;</span>))</span>
-<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">any</span>(<span class="fu">file.exists</span>(rutas_csv))) {</span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  datos <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(rutas_csv[<span class="fu">file.exists</span>(rutas_csv)][<span class="dv">1</span>], <span class="at">check.names =</span> <span class="cn">FALSE</span>,</span>
-<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>                    <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>} <span class="cf">else</span> <span class="cf">if</span> (<span class="fu">any</span>(<span class="fu">file.exists</span>(rutas_xls))) {</span>
-<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  <span class="co"># En el .xls la primera fila trae etiquetas X1, X2...; los nombres están en la segunda.</span></span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  datos <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(readxl<span class="sc">::</span><span class="fu">read_excel</span>(rutas_xls[<span class="fu">file.exists</span>(rutas_xls)][<span class="dv">1</span>], <span class="at">skip =</span> <span class="dv">1</span>))</span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>} <span class="cf">else</span> <span class="fu">stop</span>(<span class="st">&quot;No se encontró DATASET/datos_credit.csv ni DATASET/credit.xls.&quot;</span>)</span>
-<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
-<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="fu">names</span>(datos)[<span class="fu">grepl</span>(<span class="st">&quot;^default&quot;</span>, <span class="fu">names</span>(datos), <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)] <span class="ot">&lt;-</span> <span class="st">&quot;impago&quot;</span></span>
-<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="st">&quot;ID&quot;</span> <span class="sc">%in%</span> <span class="fu">names</span>(datos)) datos<span class="sc">$</span>ID <span class="ot">&lt;-</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(datos))</span>
-<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a></span>
-<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>facturas  <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;BILL_AMT&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>)</span>
-<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>pagos     <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;PAY_AMT&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>)</span>
-<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>estados   <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;PAY_0&quot;</span>, <span class="fu">paste0</span>(<span class="st">&quot;PAY_&quot;</span>, <span class="dv">2</span><span class="sc">:</span><span class="dv">6</span>))</span>
-<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>atrasos   <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;ATRASO_&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>)</span>
-<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>continuas <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;LIMIT_BAL&quot;</span>, <span class="st">&quot;AGE&quot;</span>, facturas, pagos)</span>
-<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>necesarias <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;ID&quot;</span>, <span class="st">&quot;LIMIT_BAL&quot;</span>, <span class="st">&quot;SEX&quot;</span>, <span class="st">&quot;EDUCATION&quot;</span>, <span class="st">&quot;MARRIAGE&quot;</span>, <span class="st">&quot;AGE&quot;</span>,</span>
-<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>                estados, facturas, pagos, <span class="st">&quot;impago&quot;</span>)</span>
-<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(necesarias <span class="sc">%in%</span> <span class="fu">names</span>(datos)))</span>
-<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a></span>
-<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a>n_original <span class="ot">&lt;-</span> <span class="fu">nrow</span>(datos)</span>
-<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a>datos <span class="ot">&lt;-</span> datos[necesarias]</span>
-<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a>validas <span class="ot">&lt;-</span> <span class="fu">complete.cases</span>(datos) <span class="sc">&amp;</span> <span class="fu">apply</span>(<span class="fu">as.matrix</span>(datos), <span class="dv">1</span>, <span class="cf">function</span>(f) <span class="fu">all</span>(<span class="fu">is.finite</span>(f)))</span>
-<span id="cb1-28"><a href="#cb1-28" tabindex="-1"></a>impago_obs <span class="ot">&lt;-</span> datos<span class="sc">$</span>impago[validas]   <span class="co"># resultado observado: se aparta y no se usa hasta la sección 8</span></span>
-<span id="cb1-29"><a href="#cb1-29" tabindex="-1"></a>datos <span class="ot">&lt;-</span> datos[validas, ]</span>
-<span id="cb1-30"><a href="#cb1-30" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(impago_obs <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)))</span>
-<span id="cb1-31"><a href="#cb1-31" tabindex="-1"></a>datos<span class="sc">$</span>impago <span class="ot">&lt;-</span> <span class="cn">NULL</span></span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># Busca la carpeta DATASET subiendo desde la carpeta del .Rmd hasta la raíz del proyecto.</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co"># Estructura esperada: ESTAD. MULTI/DATASET/datos_credit.csv y</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co">#                      ESTAD. MULTI/Entregables/Segundo Corte/Perfilamiento_Multivariado.Rmd</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>buscar_dataset <span class="ot">&lt;-</span> <span class="cf">function</span>(archivo, <span class="at">desde =</span> <span class="fu">getwd</span>(), <span class="at">niveles =</span> <span class="dv">6</span>) {</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  carpeta <span class="ot">&lt;-</span> <span class="fu">normalizePath</span>(desde, <span class="at">winslash =</span> <span class="st">&quot;/&quot;</span>, <span class="at">mustWork =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  <span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">0</span><span class="sc">:</span>niveles) {</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>    candidato <span class="ot">&lt;-</span> <span class="fu">file.path</span>(carpeta, <span class="st">&quot;DATASET&quot;</span>, archivo)</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">file.exists</span>(candidato)) <span class="fu">return</span>(candidato)</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>    padre <span class="ot">&lt;-</span> <span class="fu">dirname</span>(carpeta)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>    <span class="cf">if</span> (padre <span class="sc">==</span> carpeta) <span class="cf">break</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>    carpeta <span class="ot">&lt;-</span> padre</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  }</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>  <span class="cn">NA_character_</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>}</span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>ruta_csv <span class="ot">&lt;-</span> <span class="fu">buscar_dataset</span>(<span class="st">&quot;datos_credit.csv&quot;</span>)</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>ruta_xls <span class="ot">&lt;-</span> <span class="fu">buscar_dataset</span>(<span class="st">&quot;credit.xls&quot;</span>)</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.na</span>(ruta_csv)) {</span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>  datos <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(ruta_csv, <span class="at">check.names =</span> <span class="cn">FALSE</span>, <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>} <span class="cf">else</span> <span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.na</span>(ruta_xls)) {</span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>  <span class="co"># En el .xls la primera fila trae etiquetas X1, X2...; los nombres están en la segunda.</span></span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>  datos <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(readxl<span class="sc">::</span><span class="fu">read_excel</span>(ruta_xls, <span class="at">skip =</span> <span class="dv">1</span>))</span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>} <span class="cf">else</span> <span class="fu">stop</span>(<span class="st">&quot;No se encontró DATASET/datos_credit.csv ni DATASET/credit.xls en la carpeta del .Rmd ni en las superiores.&quot;</span>)</span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a><span class="fu">names</span>(datos)[<span class="fu">grepl</span>(<span class="st">&quot;^default&quot;</span>, <span class="fu">names</span>(datos), <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)] <span class="ot">&lt;-</span> <span class="st">&quot;impago&quot;</span></span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="st">&quot;ID&quot;</span> <span class="sc">%in%</span> <span class="fu">names</span>(datos)) datos<span class="sc">$</span>ID <span class="ot">&lt;-</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(datos))</span>
+<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a></span>
+<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a>facturas  <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;BILL_AMT&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>)</span>
+<span id="cb1-28"><a href="#cb1-28" tabindex="-1"></a>pagos     <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;PAY_AMT&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>)</span>
+<span id="cb1-29"><a href="#cb1-29" tabindex="-1"></a>estados   <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;PAY_0&quot;</span>, <span class="fu">paste0</span>(<span class="st">&quot;PAY_&quot;</span>, <span class="dv">2</span><span class="sc">:</span><span class="dv">6</span>))</span>
+<span id="cb1-30"><a href="#cb1-30" tabindex="-1"></a>atrasos   <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;ATRASO_&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>)</span>
+<span id="cb1-31"><a href="#cb1-31" tabindex="-1"></a>continuas <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;LIMIT_BAL&quot;</span>, <span class="st">&quot;AGE&quot;</span>, facturas, pagos)</span>
+<span id="cb1-32"><a href="#cb1-32" tabindex="-1"></a>necesarias <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;ID&quot;</span>, <span class="st">&quot;LIMIT_BAL&quot;</span>, <span class="st">&quot;SEX&quot;</span>, <span class="st">&quot;EDUCATION&quot;</span>, <span class="st">&quot;MARRIAGE&quot;</span>, <span class="st">&quot;AGE&quot;</span>,</span>
+<span id="cb1-33"><a href="#cb1-33" tabindex="-1"></a>                estados, facturas, pagos, <span class="st">&quot;impago&quot;</span>)</span>
+<span id="cb1-34"><a href="#cb1-34" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(necesarias <span class="sc">%in%</span> <span class="fu">names</span>(datos)))</span>
+<span id="cb1-35"><a href="#cb1-35" tabindex="-1"></a></span>
+<span id="cb1-36"><a href="#cb1-36" tabindex="-1"></a>n_original <span class="ot">&lt;-</span> <span class="fu">nrow</span>(datos)</span>
+<span id="cb1-37"><a href="#cb1-37" tabindex="-1"></a>datos <span class="ot">&lt;-</span> datos[necesarias]</span>
+<span id="cb1-38"><a href="#cb1-38" tabindex="-1"></a>validas <span class="ot">&lt;-</span> <span class="fu">complete.cases</span>(datos) <span class="sc">&amp;</span> <span class="fu">apply</span>(<span class="fu">as.matrix</span>(datos), <span class="dv">1</span>, <span class="cf">function</span>(f) <span class="fu">all</span>(<span class="fu">is.finite</span>(f)))</span>
+<span id="cb1-39"><a href="#cb1-39" tabindex="-1"></a>impago_obs <span class="ot">&lt;-</span> datos<span class="sc">$</span>impago[validas]   <span class="co"># resultado observado: se aparta y no se usa hasta la sección 8</span></span>
+<span id="cb1-40"><a href="#cb1-40" tabindex="-1"></a>datos <span class="ot">&lt;-</span> datos[validas, ]</span>
+<span id="cb1-41"><a href="#cb1-41" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(impago_obs <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)))</span>
+<span id="cb1-42"><a href="#cb1-42" tabindex="-1"></a>datos<span class="sc">$</span>impago <span class="ot">&lt;-</span> <span class="cn">NULL</span></span></code></pre></div>
 <div id="depuración-y-variables-derivadas" class="section level2" number="2.1">
 <h2><span class="header-section-number">2.1</span> Depuración y
 variables derivadas</h2>
