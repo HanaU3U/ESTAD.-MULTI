@@ -29,7 +29,7 @@ if (.Platform$OS.type == "windows" && !l10n_info()[["UTF-8"]]) {
 }
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
                       fig.align = "center", fig.width = 10, fig.height = 6)
-paquetes <- c("ggplot2", "dplyr", "tidyr", "knitr", "kableExtra")
+paquetes <- c("ggplot2", "dplyr", "tidyr", "knitr", "kableExtra", "FactoMineR", "ggrepel")
 faltan <- paquetes[!vapply(paquetes, requireNamespace, logical(1), quietly = TRUE)]
 if (length(faltan)) stop("Instale los paquetes necesarios: ", paste(faltan, collapse = ", "))
 library(ggplot2)
@@ -117,19 +117,20 @@ El encargo es de **perfilamiento**:
 
 > **¿Qué perfiles de cliente hay en la base y cuáles conviene revisar? Y, al compararlos con el resultado de pago, ¿coinciden esos perfiles con quienes realmente no pagaron?**
 
-Este documento unifica tres trabajos previos del curso en un solo recorrido:
+Este documento unifica cuatro trabajos previos del curso en un solo recorrido:
 
 | Trabajo previo | Qué aporta aquí | Sección |
 |---|---|---|
-| Distancia de Mahalanobis y gráfico Q-Q | Elección de la escala de trabajo y detección de clientes atípicos | 3 y 5 |
-| PCA de las variables numéricas | Mapa de perfiles, número de componentes y zonas de revisión | 4 y 6 |
-| PCA con codificaciones (one-hot, una columna, mixta) | Decisión de cómo codificar las categorías | 4.1 |
+| Distancia de Mahalanobis y gráfico Q-Q | Elección de la escala de trabajo y detección de clientes atípicos | 3 y 6 |
+| PCA de las variables numéricas | Mapa de perfiles, número de componentes y zonas de revisión | 4 y 7 |
+| PCA con codificaciones (one-hot, una columna, mixta) | Decisión de cómo codificar las categorías | 4.2 |
+| Análisis de correspondencias simple y múltiples | Relación entre límite y estado de pago, y perfil sociodemográfico completo | 5 |
 
-**Regla de unificación.** `default payment next month` es el resultado que el banco quiere anticipar, así que **no participa en ninguna parte del perfilamiento**: ni en la escala, ni en las componentes, ni en las distancias, ni en las zonas.
-Se aparta al cargar los datos y se reincorpora solo en la sección 8, donde se contrasta con los perfiles que construyeron las herramientas.
+**Regla de unificación.** `default payment next month` es el resultado que el banco quiere anticipar, así que **no participa en ninguna parte del perfilamiento**: ni en la escala, ni en las componentes, ni en las correspondencias, ni en las distancias, ni en las zonas.
+Se aparta al cargar los datos y se reincorpora solo en la sección 9, donde se contrasta con los perfiles que construyeron las herramientas.
 Allí se comparan ambas miradas, se sacan conclusiones adicionales y se valida la regla de revisión en clientes que no se usaron para construirla.
 
-El recorrido es: datos (2), escala y atípicos (3 y 5), mapa de perfiles con PCA (4), zonas de revisión (6), conclusiones del perfilamiento (7), contraste con el impago observado (8) y conclusiones finales (9).
+El recorrido es: datos (2), escala y atípicos (3 y 6), mapa de perfiles con PCA (4), análisis de correspondencias (5), zonas de revisión (7), conclusiones del perfilamiento (8), contraste con el impago observado (9) y conclusiones finales (10).
 
 # Los datos
 
@@ -182,7 +183,7 @@ codigo_no_paga <- 1
 codigo_original <- datos$impago[validas]
 stopifnot(all(codigo_original %in% c(0, 1)), codigo_no_paga %in% c(0, 1))
 # En todo el documento, impago_obs = 1 significa «no paga» y 0 «paga», sin importar el código original.
-impago_obs <- as.integer(codigo_original == codigo_no_paga)   # se aparta y no se usa hasta la sección 8
+impago_obs <- as.integer(codigo_original == codigo_no_paga)   # se aparta y no se usa hasta la sección 9
 datos <- datos[validas, ]
 datos$impago <- NULL
 ```
@@ -190,7 +191,7 @@ datos$impago <- NULL
 ## Variables originales: un vistazo a la base
 
 El archivo trae `r fmt(n_original, 0)` registros y `r n_columnas_archivo` columnas: un identificador (`ID`), **23 variables explicativas** y la respuesta `default payment next month`.
-La respuesta se describe en el diccionario, pero sus valores no se miran aquí: se apartan hasta la sección 8.
+La respuesta se describe en el diccionario, pero sus valores no se miran aquí: se apartan hasta la sección 9.
 
 ```{r diccionario}
 diccionario <- data.frame(
@@ -332,7 +333,7 @@ tabla(data.frame(registros_originales = n_original, filas_excluidas = sum(!valid
 ```
 
 Se analizan `r fmt(n, 0)` clientes.
-El resultado de pago queda guardado aparte (`impago_obs`) y no se toca hasta la sección 8.
+El resultado de pago queda guardado aparte (`impago_obs`) y no se toca hasta la sección 9.
 
 # Escala de trabajo: ¿los datos se parecen a una campana multivariante?
 
@@ -709,7 +710,7 @@ tabla(data.frame(
   Resultado = c(fmt(n, 0), fmt(sum(!validas), 0), length(continuas), "SEX y MARRIAGE",
                 "Otros = 0; Secundaria = 1; Universidad = 2; Posgrado = 3",
                 "-2, -1 y 0 agrupados en 0; positivos sin cambios",
-                "Excluida (solo se usa en la sección 8)", ncol(X_pca), length(constantes),
+                "Excluida (solo se usa en la sección 9)", ncol(X_pca), length(constantes),
                 "Sí: media cero y desviación estándar uno por columna")),
   caption = "PCA con codificación mixta")
 ```
@@ -855,6 +856,242 @@ Las facturas apuntan juntas hacia la derecha y los atrasos hacia arriba.
 La nube es continua: no se ven grupos separados, sino una concentración central con una prolongación hacia arriba (clientes con mucho atraso).
 Las variables con flecha corta (edad, sexo, estado civil, educación) están mal representadas en este plano; eso no significa que no importen, sino que su variación está en otras componentes.
 
+# Análisis de correspondencias: perfiles por categorías
+
+El PCA trabaja con montos y códigos tratados como números.
+El análisis de correspondencias, que viene del trabajo de correspondencias del curso y es el mismo del tablero de Power BI, mira la base desde otro ángulo: agrupa las variables en **categorías** y estudia qué categorías aparecen juntas en los mismos clientes.
+Esto da contexto a las conclusiones del PCA en dos puntos que el PCA representó mal:
+
+- La relación entre el **límite de crédito** y el **comportamiento de pago**, que en el PCA quedaron repartidos entre varios ejes.
+- Las variables **sociodemográficas** (educación, estado civil, sexo y edad), que en el PCA tenían flechas cortas y quedaban en componentes posteriores.
+
+Como en el resto del perfilamiento, el impago **no construye** estos mapas: se proyecta sobre ellos solo en la sección 9.
+
+## Categorías de trabajo
+
+Se usan las mismas categorías del trabajo de correspondencias, todas ellas:
+
+- **Educación:** Posgrado, Universitaria, Bachillerato y Otro/desconocido (códigos 0, 4, 5 y 6).
+- **Estado civil:** Casado, Soltero y Otro (códigos 0 y 3).
+- **Sexo:** Hombre y Mujer.
+- **Edad:** 21-29, 30-39, 40-49 y 50+.
+- **Límite:** cuartiles del límite de crédito, de `Limite_1_bajo` a `Limite_4_alto`.
+- **Estado de pago de septiembre (`PAY_0`):** −2 = Sin consumo, −1 = Pago total, 0 = Credito rotativo, 1 = Retraso 1 mes y 2 o más = Retraso 2+ meses. Los códigos −2 y 0 no están documentados en el diccionario, así que esa lectura es una interpretación.
+
+```{r ca-categorias}
+cat_df <- data.frame(
+  Educacion   = factor(c("Posgrado", "Universitaria", "Bachillerato", "Otro/desconocido")[datos$EDUCATION],
+                       levels = c("Posgrado", "Universitaria", "Bachillerato", "Otro/desconocido")),
+  EstadoCivil = factor(c("Casado", "Soltero", "Otro")[datos$MARRIAGE], levels = c("Casado", "Soltero", "Otro")),
+  Sexo        = factor(ifelse(datos$SEX == 1, "Hombre", "Mujer"), levels = c("Hombre", "Mujer")),
+  Edad        = cut(datos$AGE, breaks = c(0, 29, 39, 49, Inf), labels = c("21-29", "30-39", "40-49", "50+")),
+  Limite      = cut(datos$LIMIT_BAL, breaks = quantile(datos$LIMIT_BAL, probs = 0:4 / 4),
+                    include.lowest = TRUE,
+                    labels = c("Limite_1_bajo", "Limite_2", "Limite_3", "Limite_4_alto")),
+  EstadoPago  = cut(datos$PAY_0, c(-Inf, -2, -1, 0, 1, Inf),
+                    labels = c("Sin consumo", "Pago total", "Credito rotativo",
+                               "Retraso 1 mes", "Retraso 2+ meses")))
+stopifnot(!anyNA(cat_df))
+nombres_var <- c(Educacion = "Educación", EstadoCivil = "Estado civil", Sexo = "Sexo", Edad = "Edad",
+                 Limite = "Límite", EstadoPago = "Estado de pago")
+
+tabla(data.frame(variable = rep(nombres_var[names(cat_df)], vapply(cat_df, nlevels, numeric(1))),
+                 categoria = unlist(lapply(cat_df, levels), use.names = FALSE),
+                 clientes = unlist(lapply(cat_df, function(f) as.numeric(table(f))), use.names = FALSE),
+                 pct_clientes = unlist(lapply(cat_df, function(f) 100 * as.numeric(prop.table(table(f)))),
+                                       use.names = FALSE)),
+      digits = 1, caption = "Categorías usadas en el análisis de correspondencias", agrupar = "variable")
+
+# Etiquetas con ggrepel (evita que se encimen los nombres de las categorías).
+etiquetar <- function(...) ggrepel::geom_text_repel(..., size = 3.2, max.overlaps = 40, seed = 19)
+```
+
+## Correspondencias simple: límite de crédito y estado de pago
+
+**Pregunta:** ¿qué comportamiento de pago acompaña a cada nivel de límite?
+
+### ¿Hay relación?
+
+```{r ca-chi}
+tab_lp <- table(cat_df$Limite, cat_df$EstadoPago)
+prueba_lp <- chisq.test(tab_lp)
+v_cramer <- sqrt(unname(prueba_lp$statistic) / (sum(tab_lp) * (min(dim(tab_lp)) - 1)))
+tabla(data.frame(chi_cuadrado = unname(prueba_lp$statistic), gl = unname(prueba_lp$parameter),
+                 p_valor = format.pval(prueba_lp$p.value, eps = 0.001, digits = 3),
+                 V_de_Cramer = v_cramer, minimo_esperado = min(prueba_lp$expected)),
+      digits = 3, caption = "Prueba de independencia entre límite y estado de pago")
+
+residuos <- prueba_lp$stdres
+tabla(data.frame(limite = rownames(residuos), unclass(residuos), check.names = FALSE, row.names = NULL),
+      digits = 1, resaltar = character(0),
+      caption = "Residuos estandarizados (mayor que 2: más clientes de lo esperado; menor que -2: menos)")
+
+frase_residuos <- function(fila) {
+  r <- residuos[fila, ]
+  paste0("**", fila, "** aparece más de lo esperado en «", names(which.max(r)), "» (",
+         fmt(max(r), 1), ") y menos en «", names(which.min(r)), "» (", fmt(min(r), 1), ")")
+}
+fuerza <- if (v_cramer < 0.1) "débil" else if (v_cramer < 0.3) "débil a moderada" else "moderada o fuerte"
+p_txt <- if (prueba_lp$p.value < 0.001) "menor que 0,001" else paste0("= ", fmt(prueba_lp$p.value, 3))
+# ¿El límite bajo va con los retrasos y el alto casi no los tiene?
+lim_bajo <- "Limite_1_bajo"; lim_alto <- "Limite_4_alto"
+limite_con_atraso <- prueba_lp$p.value < 0.05 && v_cramer >= 0.05 &&
+  residuos[lim_bajo, "Retraso 2+ meses"] > 2 && residuos[lim_alto, "Retraso 2+ meses"] < -2
+```
+
+La prueba `r if (prueba_lp$p.value < 0.05) "rechaza" else "no rechaza"` la independencia (p `r p_txt`), y el menor valor esperado (`r fmt(min(prueba_lp$expected), 1)`) muestra que la prueba es confiable.
+La fuerza de la relación es `r fuerza` (V de Cramér = `r fmt(v_cramer, 3)`)`r if (prueba_lp$p.value < 0.05) ": el límite orienta, pero no determina el comportamiento de pago" else ": no hay evidencia de que el límite se relacione con el estado de pago"`.
+
+- `r frase_residuos(lim_bajo)`.
+- `r frase_residuos(lim_alto)`.
+
+### Mapa de correspondencias simple
+
+```{r ca-simple, fig.height=6}
+ca_lp <- FactoMineR::CA(as.matrix(unclass(tab_lp)), graph = FALSE)
+# Orientación del tablero: el eje 1 crece hacia «Limite_4_alto» (izquierda = más riesgo).
+signo_ca <- if (ca_lp$row$coord[lim_alto, 1] < 0) -1 else 1
+inercia_ca <- ca_lp$eig[, 2]
+
+tabla(data.frame(eje = seq_along(inercia_ca), autovalor = ca_lp$eig[, 1],
+                 inercia_pct = inercia_ca, acumulada_pct = cumsum(inercia_ca)),
+      digits = 3, caption = "Inercia de cada eje")
+
+puntos_ca <- rbind(
+  data.frame(categoria = rownames(ca_lp$row$coord), tipo = "Límite",
+             D1 = signo_ca * ca_lp$row$coord[, 1], D2 = ca_lp$row$coord[, 2]),
+  data.frame(categoria = rownames(ca_lp$col$coord), tipo = "Estado de pago",
+             D1 = signo_ca * ca_lp$col$coord[, 1], D2 = ca_lp$col$coord[, 2]))
+ggplot(puntos_ca, aes(D1, D2, color = tipo, label = categoria)) +
+  geom_hline(yintercept = 0, color = "grey80") + geom_vline(xintercept = 0, color = "grey80") +
+  geom_point(size = 3) + etiquetar(show.legend = FALSE) +
+  scale_color_manual(values = c(`Límite` = col_acento, `Estado de pago` = col_paga)) +
+  labs(title = "Límite de crédito y estado de pago de septiembre",
+       subtitle = "Eje 1 orientado hacia «Limite_4_alto»", color = NULL,
+       x = paste0("Eje 1 (", fmt(inercia_ca[1], 1), " %)"),
+       y = paste0("Eje 2 (", fmt(inercia_ca[2], 1), " %)")) +
+  theme(legend.position = "bottom")
+
+extremo <- function(tipo_, f) puntos_ca$categoria[puntos_ca$tipo == tipo_][f(puntos_ca$D1[puntos_ca$tipo == tipo_])]
+```
+
+El eje 1 guarda el `r fmt(inercia_ca[1], 1)` % de la inercia`r if (inercia_ca[1] > 80) ", así que basta leer el eje horizontal" else ""`.
+A la izquierda quedan «`r extremo("Límite", which.min)`» y «`r extremo("Estado de pago", which.min)`»; a la derecha, «`r extremo("Límite", which.max)`» y «`r extremo("Estado de pago", which.max)`».
+
+**Qué agrega al PCA.** En el PCA, el límite y el historial de atraso quedaron en ejes distintos y sin correlación por construcción.
+`r if (limite_con_atraso) "Las correspondencias muestran que, como categorías, **sí van juntos**: los cupos más bajos se concentran en los retrasos y los más altos casi no los tienen. Esto explica por qué el límite bajo aparece en el retrato de quien se atrasa aunque no defina el eje de atraso del PCA." else "Las correspondencias confirman que, también como categorías, el límite y el estado de pago se asocian poco: conocer el cupo de un cliente dice poco sobre si viene atrasado."`
+
+## Correspondencias múltiples: el perfil completo
+
+**Pregunta:** ¿cómo se combinan todas las características de un cliente?
+Variables activas: educación, estado civil, sexo, edad, límite y estado de pago, con todas sus categorías.
+
+```{r mca}
+mca <- FactoMineR::MCA(cat_df, graph = FALSE)
+Q <- ncol(cat_df)
+lambda_mca <- mca$eig[, 1]
+pct_bruta <- mca$eig[, 2]
+# Corrección de Benzécri: la inercia bruta del ACM subestima lo que guarda cada eje.
+lambda_aj <- ifelse(lambda_mca > 1 / Q, (Q / (Q - 1) * (lambda_mca - 1 / Q))^2, 0)
+pct_aj <- 100 * lambda_aj / sum(lambda_aj)
+# Orientación del tablero: eje 1 hacia «Limite_4_alto» y eje 2 hacia «50+».
+signo_m1 <- if (mca$var$coord["Limite_4_alto", 1] < 0) -1 else 1
+signo_m2 <- if (mca$var$coord["50+", 2] < 0) -1 else 1
+plano_bruta <- sum(pct_bruta[1:2]); plano_aj <- sum(pct_aj[1:2])
+
+tabla(head(data.frame(eje = seq_along(lambda_mca), autovalor = lambda_mca,
+                      inercia_bruta_pct = pct_bruta, bruta_acumulada_pct = cumsum(pct_bruta),
+                      inercia_ajustada_pct = pct_aj, ajustada_acumulada_pct = cumsum(pct_aj)), 5),
+      digits = 3, caption = "Inercia de los primeros ejes (bruta y con la corrección de Benzécri)")
+```
+
+**El plano de dos ejes** (el mismo del tablero de Power BI) guarda el **`r fmt(plano_bruta, 1)` % de la inercia bruta** (`r fmt(pct_bruta[1], 1)` % + `r fmt(pct_bruta[2], 1)` %).
+La cifra parece baja, pero es lo normal en un ACM: cada variable se codifica con varias indicadoras, lo que infla la inercia total con variación que ningún eje puede resumir.
+Con la corrección de Benzécri, ese mismo plano guarda el `r fmt(plano_aj, 1)` % de la inercia ajustada (`r fmt(pct_aj[1], 1)` % y `r fmt(pct_aj[2], 1)` %), y los ejes siguientes aportan `r fmt(pct_aj[3], 1)` % o menos.
+Por eso se interpretan solo los dos primeros ejes.
+
+### Qué define cada eje
+
+```{r mca-eta}
+eta2 <- mca$var$eta2[, 1:2]
+tabla(data.frame(variable = nombres_var[rownames(eta2)], eje_1 = eta2[, 1], eje_2 = eta2[, 2], row.names = NULL),
+      digits = 3, caption = "Peso de cada variable en cada eje (razón de correlación η², de 0 a 1)")
+
+orden_e1 <- names(sort(eta2[, 1], decreasing = TRUE)); orden_e2 <- names(sort(eta2[, 2], decreasing = TRUE))
+lista_eta <- function(orden, k) paste0(tolower(nombres_var[orden[1:3]]), " (", fmt(eta2[orden[1:3], k], 2), ")", collapse = ", ")
+```
+
+- **Eje 1:** lo definen sobre todo `r lista_eta(orden_e1, 1)`.
+- **Eje 2:** lo definen sobre todo `r lista_eta(orden_e2, 2)`.
+- El sexo pesa `r fmt(eta2["Sexo", 1], 2)` y `r fmt(eta2["Sexo", 2], 2)` en los dos ejes: `r if (max(eta2["Sexo", ]) < 0.05) "prácticamente no ayuda a distinguir perfiles" else "tiene algún peso, aunque menor que el de las demás variables"`.
+
+### Mapa de perfiles
+
+Se dibujan todas las categorías.
+Como en el tablero, se resaltan las de **cupo** y **estado de pago**, que son las que definen el riesgo; las sociodemográficas quedan en gris.
+
+```{r mca-mapa, fig.height=7.5}
+puntos_mca <- data.frame(categoria = rownames(mca$var$coord),
+                         variable = rep(names(cat_df), vapply(cat_df, nlevels, numeric(1))),
+                         D1 = signo_m1 * mca$var$coord[, 1], D2 = signo_m2 * mca$var$coord[, 2])
+puntos_mca$grupo <- ifelse(puntos_mca$variable == "Limite", "Cupo",
+                           ifelse(puntos_mca$variable == "EstadoPago", "Estado de pago", "Otras categorías"))
+titulo_acm <- paste0("Categorías de cupo y pago · ", fmt(plano_bruta, 1), " % bruta (",
+                     fmt(plano_aj, 1), " % ajustada)")
+ggplot(puntos_mca, aes(D1, D2, color = grupo, label = categoria)) +
+  geom_hline(yintercept = 0, color = "grey80") + geom_vline(xintercept = 0, color = "grey80") +
+  geom_point(aes(size = grupo == "Otras categorías")) +
+  etiquetar(aes(fontface = ifelse(grupo == "Otras categorías", "plain", "bold")), show.legend = FALSE) +
+  scale_size_manual(values = c(`TRUE` = 2, `FALSE` = 3.2), guide = "none") +
+  scale_color_manual(values = c(Cupo = col_acento, `Estado de pago` = col_paga, `Otras categorías` = "grey55")) +
+  labs(title = titulo_acm,
+       subtitle = "Ejes orientados como en el tablero: derecha, hacia «Limite_4_alto»; arriba, hacia «50+»",
+       x = paste0("Eje 1 (", fmt(pct_bruta[1], 1), " % bruta)"),
+       y = paste0("Eje 2 (", fmt(pct_bruta[2], 1), " % bruta)"), color = NULL) +
+  theme(legend.position = "bottom")
+
+contrib <- mca$var$contrib[, 1:2]
+tabla(data.frame(variable = nombres_var[puntos_mca$variable], categoria = rownames(contrib),
+                 coordenada_eje_1 = puntos_mca$D1, contribucion_eje_1 = contrib[, 1],
+                 coordenada_eje_2 = puntos_mca$D2, contribucion_eje_2 = contrib[, 2], row.names = NULL),
+      digits = 2, agrupar = "variable",
+      caption = "Coordenadas y contribución (%) de todas las categorías a los ejes 1 y 2")
+lado <- function(eje, f, k = 3) {
+  o <- order(f * puntos_mca[[eje]], decreasing = TRUE)[1:k]
+  paste0("«", puntos_mca$categoria[o], "»", collapse = ", ")
+}
+top_contrib <- function(k, n = 4) {
+  o <- order(contrib[, k], decreasing = TRUE)[1:n]
+  paste0("«", rownames(contrib)[o], "» (", fmt(contrib[o, k], 1), " %)", collapse = ", ")
+}
+```
+
+- **Eje 1 (horizontal).** A la izquierda quedan `r lado("D1", -1)`; a la derecha, `r lado("D1", 1)`. Lo construyen sobre todo `r top_contrib(1)`.
+- **Eje 2 (vertical).** Arriba quedan `r lado("D2", 1)`; abajo, `r lado("D2", -1)`. Lo construyen sobre todo `r top_contrib(2)`.
+
+## Correspondencias frente al PCA
+
+Las coordenadas de cada cliente en los dos ejes del ACM se comparan con sus puntuaciones en los ejes de facturación y atraso del PCA.
+
+```{r mca-vs-pca}
+ind_mca <- cbind(signo_m1 * mca$ind$coord[, 1], signo_m2 * mca$ind$coord[, 2])
+cor_mp <- cor(ind_mca, cbind(pca$x[, k_fact], pca$x[, k_atr], datos$AGE, datos$LIMIT_BAL))
+dimnames(cor_mp) <- list(c("Eje 1 del ACM", "Eje 2 del ACM"),
+                         c("Eje de facturación (PCA)", "Eje de atraso (PCA)", "Edad", "Límite"))
+tabla(data.frame(eje = rownames(cor_mp), cor_mp, check.names = FALSE, row.names = NULL),
+      digits = 3, resaltar = character(0), caption = "Correlación entre los ejes del ACM y los del PCA")
+```
+
+El eje 1 del ACM correlaciona `r fmt(cor_mp[1, 2], 2)` con el eje de atraso del PCA, `r fmt(cor_mp[1, 1], 2)` con el de facturación, `r fmt(cor_mp[1, 4], 2)` con el límite y `r fmt(cor_mp[1, 3], 2)` con la edad.
+`r if (abs(cor_mp[1, 4]) > abs(cor_mp[1, 2])) "Es decir, el eje principal del ACM ordena a los clientes sobre todo por cupo y edad, y solo en parte por atraso" else "Es decir, el eje principal del ACM recoge sobre todo la dimensión de atraso, mezclada con el cupo y la edad"`.
+El eje 2 correlaciona `r fmt(cor_mp[2, 3], 2)` con la edad y lo definen sobre todo `r lista_eta(orden_e2, 2)`: recoge información que el PCA dejó fuera del plano.
+
+**Lo que el ACM agrega a las conclusiones del PCA:**
+
+1. `r if (abs(cor_mp[1, 2]) >= 0.4) "**Confirma el eje de atraso** desde otro método y con otra codificación. Que dos técnicas distintas lleguen a una dimensión parecida la hace más confiable." else "**Matiza el eje de atraso:** el eje principal del ACM se relaciona solo en parte con él, porque mezcla el atraso con el cupo y la edad. El PCA aísla mejor el atraso; el ACM muestra con qué perfiles convive."`
+2. `r if (limite_con_atraso) "**Une el límite con el comportamiento de pago:** los perfiles de cupo bajo van con los retrasos y los de cupo alto casi no los tienen. En el PCA ambos aparecían en ejes separados." else "**Separa el límite del comportamiento de pago:** como categorías, el cupo y el estado de pago se asocian poco, igual que en el PCA."`
+3. **Ordena las variables sociodemográficas** que el PCA representó mal: el eje 2 lo definen sobre todo `r lista_eta(orden_e2, 2)`. `r if (max(eta2["Sexo", ]) < 0.05) "El sexo casi no pesa en ninguno de los dos ejes." else paste0("El sexo pesa ", fmt(max(eta2["Sexo", ]), 2), " en el eje donde más aporta.")`
+
 # Clientes atípicos
 
 Con la escala ya decidida, la distancia de Mahalanobis sobre las 14 variables continuas transformadas identifica a los clientes cuya **combinación** de valores es rara, aunque ninguna cifra por separado lo sea.
@@ -922,7 +1159,7 @@ frase_ej <- if (length(solo_comb)) paste0(
 En sentido contrario, `r fmt(length(solo_uni), 0)` clientes tienen alguna variable extrema pero no son atípicos en conjunto: su valor alto va acompañado de los valores que la base espera en las demás variables.
 Mirar variable por variable produce falsas alarmas y, a la vez, deja pasar los casos raros por combinación.
 
-En la sección 8 se comprueba si estos clientes pagan peor o mejor que el resto.
+En la sección 9 se comprueba si estos clientes pagan peor o mejor que el resto.
 
 # Perfiles de clientes
 
@@ -1024,7 +1261,9 @@ Los cortes los fija el analista; no son grupos descubiertos.
 
 **4. Atípicos.** `r fmt(sum(datos$atipico), 0)` clientes (`r fmt(100 * mean(datos$atipico))` %) superan el corte de Mahalanobis, y el `r fmt(za(orden_zonas[4], "pct_de_todos_los_atipicos"), 1)` % de ellos cae en la zona «Sin señal» del mapa. Mapa y distancia se complementan: el primero ordena por comportamiento y la segunda señala combinaciones raras que conviene auditar. Son una lista para revisar, no para borrar.
 
-**5. Alcance.** Es un perfilamiento descriptivo con datos de 2005. La pregunta que queda es si estos perfiles tienen relación con el incumplimiento: se responde en la sección siguiente.
+**5. Correspondencias.** El eje 1 del análisis por categorías correlaciona `r fmt(cor_mp[1, 2], 2)` con el eje de atraso del PCA. `r if (limite_con_atraso) paste0("Además muestra que el límite bajo va con los retrasos y el alto casi no los tiene (V de Cramér = ", fmt(v_cramer, 2), ").") else paste0("El límite y el estado de pago se asocian poco (V de Cramér = ", fmt(v_cramer, 2), ").")` Su eje 2 ordena variables que el PCA representó mal: `r lista_eta(orden_e2, 2)`.
+
+**6. Alcance.** Es un perfilamiento descriptivo con datos de 2005. La pregunta que queda es si estos perfiles tienen relación con el incumplimiento: se responde en la sección siguiente.
 
 
 # Contraste con el impago observado
@@ -1261,6 +1500,71 @@ Los atípicos de Mahalanobis tienen una tasa de impago del `r fmt(100 * t_atip, 
 Ser raro por la combinación de valores no equivale a pagar peor: la distancia sirve para auditar la calidad del dato, no para priorizar cobranza.
 
 
+### Impago en los mapas de correspondencias
+
+El impago se proyecta como **categoría suplementaria** («Incumple» y «No incumple», como en el trabajo de correspondencias y en el tablero): se ubica en los mapas de la sección 5 sin cambiar los ejes, que se construyeron sin él.
+
+```{r contraste-ca, fig.height=7.5}
+incumplimiento <- factor(ifelse(datos$impago == 1, "Incumple", "No incumple"), levels = c("Incumple", "No incumple"))
+
+# Tasa de incumplimiento en cada una de las categorías del ACM.
+tasas_cat <- bind_rows(lapply(names(cat_df), function(v) {
+  data.frame(variable = nombres_var[[v]], categoria = cat_df[[v]], impago = datos$impago) |>
+    group_by(variable, categoria) |>
+    summarise(clientes = n(), incumplimientos = sum(impago), tasa_impago = 100 * mean(impago), .groups = "drop") |>
+    mutate(veces_la_tasa_global = tasa_impago / (100 * tasa_global), categoria = as.character(categoria))
+}))
+tabla(tasas_cat, digits = 1, agrupar = "variable",
+      caption = "Tasa de incumplimiento en cada categoría del análisis de correspondencias")
+
+# Correspondencias simple con el incumplimiento como columnas suplementarias.
+tab_sup <- cbind(as.matrix(unclass(tab_lp)), as.matrix(unclass(table(cat_df$Limite, incumplimiento))))
+ca_sup <- FactoMineR::CA(tab_sup, col.sup = (ncol(tab_lp) + 1):ncol(tab_sup), graph = FALSE)
+s_ca <- if (ca_sup$row$coord[lim_alto, 1] < 0) -1 else 1
+imp_ca <- s_ca * ca_sup$col.sup$coord[, 1]
+retraso_ca <- s_ca * ca_sup$col$coord["Retraso 2+ meses", 1]
+
+# Correspondencias múltiples con el incumplimiento como variable suplementaria.
+mca_sup <- FactoMineR::MCA(data.frame(cat_df, Incumplimiento = incumplimiento),
+                           quali.sup = ncol(cat_df) + 1, graph = FALSE)
+s1 <- if (mca_sup$var$coord["Limite_4_alto", 1] < 0) -1 else 1
+s2 <- if (mca_sup$var$coord["50+", 2] < 0) -1 else 1
+imp_mca <- data.frame(categoria = rownames(mca_sup$quali.sup$coord),
+                      D1 = s1 * mca_sup$quali.sup$coord[, 1], D2 = s2 * mca_sup$quali.sup$coord[, 2],
+                      v_test_eje_1 = s1 * mca_sup$quali.sup$v.test[, 1],
+                      v_test_eje_2 = s2 * mca_sup$quali.sup$v.test[, 2])
+
+tabla(data.frame(categoria = imp_mca$categoria, eje_1_correspondencia_simple = imp_ca[imp_mca$categoria],
+                 imp_mca[, -1], row.names = NULL),
+      digits = 3, resaltar = character(0),
+      caption = "Posición del incumplimiento proyectado (coordenadas y valores test)")
+
+ggplot(puntos_mca, aes(D1, D2, label = categoria)) +
+  geom_hline(yintercept = 0, color = "grey80") + geom_vline(xintercept = 0, color = "grey80") +
+  geom_point(aes(color = grupo), size = 2.4) +
+  etiquetar(aes(color = grupo), show.legend = FALSE) +
+  geom_point(data = imp_mca, color = col_no_paga, size = 4, shape = 17) +
+  ggrepel::geom_label_repel(data = imp_mca, color = col_no_paga, fontface = "bold", size = 3.6, seed = 3) +
+  scale_color_manual(values = c(Cupo = col_acento, `Estado de pago` = col_paga, `Otras categorías` = "grey65")) +
+  labs(title = paste0(titulo_acm, ", con el incumplimiento proyectado"),
+       subtitle = "Rojo: categorías suplementarias (no construyen los ejes)",
+       x = paste0("Eje 1 (", fmt(pct_bruta[1], 1), " % bruta)"),
+       y = paste0("Eje 2 (", fmt(pct_bruta[2], 1), " % bruta)"), color = NULL) +
+  theme(legend.position = "bottom")
+
+ip <- function(cat, col) imp_mca[[col]][imp_mca$categoria == cat]
+tc <- function(cat) tasas_cat$tasa_impago[tasas_cat$categoria == cat]
+```
+
+En la correspondencia simple, «Incumple» queda en `r fmt(imp_ca["Incumple"], 2)` sobre el eje 1 y «No incumple» en `r fmt(imp_ca["No incumple"], 2)`: quien incumple se ubica `r if ((imp_ca["Incumple"] - imp_ca["No incumple"]) * retraso_ca > 0) "más hacia el lado de «Retraso 2+ meses» y de los cupos bajos" else "hacia el lado opuesto a «Retraso 2+ meses»"` que quien cumple.
+En el mapa múltiple, «Incumple» tiene un valor test de `r fmt(ip("Incumple", "v_test_eje_1"), 1)` en el eje 1 y de `r fmt(ip("Incumple", "v_test_eje_2"), 1)` en el eje 2.
+Un valor test mayor que 2 en valor absoluto indica que la posición no se debe al azar.
+
+Los dos puntos suplementarios quedan poco separados (`r fmt(ip("Incumple", "D1"), 2)` frente a `r fmt(ip("No incumple", "D1"), 2)` en el eje 1), porque cada uno resume a miles de clientes muy distintos.
+El mapa muestra **hacia dónde se inclina** el incumplimiento; la medida real de riesgo es la tasa de cada categoría.
+En la tabla, «Retraso 2+ meses» incumple en un `r fmt(tc("Retraso 2+ meses"), 1)` % y «Retraso 1 mes» en un `r fmt(tc("Retraso 1 mes"), 1)` %, frente al `r fmt(100 * tasa_global, 1)` % global.
+«Credito rotativo» queda en el mapa `r if (abs(puntos_mca$D1[puntos_mca$categoria == "Credito rotativo"] - ip("Incumple", "D1")) < abs(puntos_mca$D1[puntos_mca$categoria == "Credito rotativo"] - ip("No incumple", "D1"))) "más cerca de «Incumple» que de «No incumple»" else "más cerca de «No incumple»"`, pero su tasa es del `r fmt(tc("Credito rotativo"), 1)` %: estar cerca en el mapa no equivale a tener una tasa alta.
+
 ## ¿Sirve para decidir a quién revisar? Validación en clientes nuevos
 
 Como el impago no intervino en la construcción de los perfiles, los contrastes anteriores no son circulares.
@@ -1336,9 +1640,11 @@ Al mirar el impago, la tasa pasa del `r fmt(sup$tasa_decil_inferior[k_atr], 1)` 
 Los atípicos de Mahalanobis tienen una tasa del `r fmt(100 * t_atip, 1)` % frente al `r fmt(100 * t_no_atip, 1)` % del resto.
 Facturar mucho o ser raro en la combinación de valores no es lo mismo que no pagar.
 
-**3. Lo que el perfil deja pasar.** La zona «Sin señal» contiene el `r fmt(tzf(orden_zonas[4], "pct_de_todos_los_impagos"), 1)` % de los impagos: un perfil no supervisado con cortes de una desviación estándar no los detecta todos.
+**3. Las correspondencias apuntan al mismo lado.** En el plano del ACM (`r fmt(plano_bruta, 1)` % de inercia bruta, `r fmt(plano_aj, 1)` % ajustada), «Incumple» tiene un valor test de `r fmt(ip("Incumple", "v_test_eje_1"), 1)` en el eje 1 y de `r fmt(ip("Incumple", "v_test_eje_2"), 1)` en el eje 2, y en la correspondencia simple se ubica `r if ((imp_ca["Incumple"] - imp_ca["No incumple"]) * retraso_ca > 0) "del lado de los retrasos y los cupos bajos" else "lejos de los retrasos"`. Queda poco separado de «No incumple», así que el mapa describe hacia dónde se inclina el incumplimiento, pero no aísla a quien no paga: la tasa de «Retraso 2+ meses» (`r fmt(tc("Retraso 2+ meses"), 1)` %) dice más que cualquier posición en el mapa.
 
-**4. Retrato de quien no paga.** Frente a quien paga, quien no paga:
+**4. Lo que el perfil deja pasar.** La zona «Sin señal» contiene el `r fmt(tzf(orden_zonas[4], "pct_de_todos_los_impagos"), 1)` % de los impagos: un perfil no supervisado con cortes de una desviación estándar no los detecta todos.
+
+**5. Retrato de quien no paga.** Frente a quien paga, quien no paga:
 
 - tiene atraso en septiembre con `r compara("atraso_sep", "más", "menos")` frecuencia (`r fmt(r("atraso_sep", "No_paga"), 1)` % frente a `r fmt(r("atraso_sep", "Paga"), 1)` %) y acumula `r compara("meses_atraso", "más", "menos")` meses con atraso (`r fmt(r("meses_atraso", "No_paga"), 1)` frente a `r fmt(r("meses_atraso", "Paga"), 1)` de seis);
 - tiene un límite de crédito `r compara("cupo", "más alto", "más bajo")` (mediana de `r fmt(r("cupo", "No_paga"), 0)` frente a `r fmt(r("cupo", "Paga"), 0)`) y usa una parte `r compara("uso_cupo", "mayor", "menor")` de él;
@@ -1346,7 +1652,7 @@ Facturar mucho o ser raro en la combinación de valores no es lo mismo que no pa
 
 Edad, sexo, educación y estado civil cambian poco entre ambos grupos y no deben usarse como criterio para decidir sobre un cliente individual.
 
-**5. A quién revisar.** En clientes que no se usaron para construir la regla, revisar el 20 % con mayor puntaje en el eje de atraso encuentra el `r fmt(v(r_atr, "impagos_capturados_pct"), 1)` % de los impagos; con el eje de facturación, solo el `r fmt(v(r_fac, "impagos_capturados_pct"), 1)` %.
+**6. A quién revisar.** En clientes que no se usaron para construir la regla, revisar el 20 % con mayor puntaje en el eje de atraso encuentra el `r fmt(v(r_atr, "impagos_capturados_pct"), 1)` % de los impagos; con el eje de facturación, solo el `r fmt(v(r_fac, "impagos_capturados_pct"), 1)` %.
 
-**6. Alcance y siguiente paso.** El perfilamiento es descriptivo y retrospectivo, con datos de 2005; la regla se validó en una partición de la misma base, no en otro periodo.
+**7. Alcance y siguiente paso.** El perfilamiento es descriptivo y retrospectivo, con datos de 2005; la regla se validó en una partición de la misma base, no en otro periodo.
 Para pasar a una decisión de intervención conviene un modelo supervisado (por ejemplo, una regresión logística sobre los indicadores de atraso, cupo y pago) evaluado en un periodo posterior, fijando el corte según la capacidad de revisión del banco.
