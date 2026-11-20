@@ -29,7 +29,7 @@ if (.Platform$OS.type == "windows" && !l10n_info()[["UTF-8"]]) {
 }
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
                       fig.align = "center", fig.width = 10, fig.height = 6)
-paquetes <- c("ggplot2", "dplyr", "tidyr", "knitr")
+paquetes <- c("ggplot2", "dplyr", "tidyr", "knitr", "kableExtra")
 faltan <- paquetes[!vapply(paquetes, requireNamespace, logical(1), quietly = TRUE)]
 if (length(faltan)) stop("Instale los paquetes necesarios: ", paste(faltan, collapse = ", "))
 library(ggplot2)
@@ -39,11 +39,76 @@ theme_set(theme_minimal(base_size = 12))
 
 fmt <- function(x, d = 2) formatC(x, format = "f", digits = d,
                                  decimal.mark = ",", big.mark = ".")
-tabla <- function(x, digits = 2, caption = NULL)
-  knitr::kable(x, digits = digits, caption = caption, row.names = FALSE,
-               format.args = list(decimal.mark = ",", big.mark = "."))
 col_paga <- "#2166AC"; col_no_paga <- "#B2182B"; col_acento <- "#B35806"
+
+# Tablas: encabezado oscuro, filas alternadas, ancho ajustado a la página y letra más
+# pequeña cuando hay muchas columnas. Las columnas de tasas de impago se sombrean de
+# blanco (tasa baja) a rojo (tasa alta) para leerlas de un vistazo.
+paleta_tasa <- colorRampPalette(c("#FFFFFF", "#FDDBC7", "#F4A582", "#D6604D", "#B2182B"))(100)
+tabla <- function(x, digits = 2, caption = NULL, resaltar = NULL, agrupar = NULL, por_celda = FALSE) {
+  x <- as.data.frame(x, check.names = FALSE)
+  # agrupar: columna cuyos valores se usan como bloques de filas (en vez de repetirse en cada fila).
+  grupos <- NULL
+  if (!is.null(agrupar)) { grupos <- rle(as.character(x[[agrupar]])); x[[agrupar]] <- NULL }
+  num <- vapply(x, is.numeric, logical(1))
+  if (is.null(resaltar))
+    resaltar <- grep("tasa_impago|tasa_decil|veces_la_tasa|impagos_capturados", names(x), value = TRUE)
+  xf <- x
+  for (j in which(num)) {
+    v <- x[[j]]
+    entero <- is.na(v) | v == round(v)
+    xf[[j]] <- if (por_celda) ifelse(is.na(v), "", ifelse(entero, fmt(v, 0), fmt(v, digits))) else
+      ifelse(is.na(v), "", fmt(v, if (all(entero)) 0 else digits))
+  }
+  encabezados <- gsub("_", " ", names(x))
+  tildes <- c(minimo = "mínimo", maximo = "máximo", codigo = "código", descripcion = "descripción",
+              analisis = "análisis", desviacion = "desviación", asimetria = "asimetría",
+              teorica = "teórica", caracteristica = "característica", codificacion = "codificación",
+              decil = "decil", atipicos = "atípicos", atipico = "atípico", unidad = "unidad")
+  for (w in names(tildes)) encabezados <- gsub(paste0("\\b", w, "\\b"), tildes[[w]], encabezados, ignore.case = TRUE)
+  encabezados <- sub("^pct ", "% ", encabezados)
+  encabezados <- gsub("\\bpct\\b", "(%)", encabezados)
+  encabezados <- paste0(toupper(substr(encabezados, 1, 1)), substring(encabezados, 2))
+  fuente <- if (ncol(x) > 12) 10 else if (ncol(x) > 10) 11 else if (ncol(x) > 6) 12 else 13.5
+  k <- knitr::kable(xf, format = "html", caption = caption, row.names = FALSE,
+                    col.names = encabezados, align = ifelse(num, "r", "l"), escape = TRUE) |>
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                              full_width = TRUE, font_size = fuente) |>
+    kableExtra::row_spec(0, bold = TRUE, color = "white", background = "#243447") |>
+    kableExtra::column_spec(1, bold = TRUE, color = "#243447")
+  if (!is.null(grupos)) {
+    indice <- setNames(grupos$lengths, grupos$values)
+    k <- kableExtra::pack_rows(k, index = indice, label_row_css = "background-color: #DCE5ED; color: #243447;")
+  }
+  for (nombre in intersect(resaltar, names(x)[num])) {
+    v <- x[[nombre]]; j <- match(nombre, names(x))
+    r <- range(v, na.rm = TRUE)
+    pos <- if (diff(r) > 0) 1 + round(99 * (v - r[1]) / diff(r)) else rep(1, length(v))
+    k <- kableExtra::column_spec(k, j, bold = TRUE,
+                                 background = ifelse(is.na(v), "#FFFFFF", paleta_tasa[pos]),
+                                 color = ifelse(!is.na(pos) & pos > 70, "white", "#1A1A1A"))
+  }
+  # Respaldo: una tabla con muchas columnas se desliza dentro de su propio espacio
+  # en pantallas angostas, en lugar de salirse de la página.
+  if (ncol(x) > 10)
+    k <- kableExtra::scroll_box(k, width = "100%", box_css = "border: 0; padding: 0; margin-bottom: 1.4em;")
+  # El signo $ se escribe como entidad HTML al final (kableExtra la deshace si se pone antes):
+  # si no, pandoc toma lo que está entre dos $ como una fórmula y desarma la tabla (p. ej., «NT$»).
+  k[] <- gsub("$", "&#36;", k, fixed = TRUE)
+  k
+}
 ```
+
+<style>
+.main-container { max-width: 1400px; }
+.table { width: 100% !important; margin: 1em 0 1.6em; font-variant-numeric: tabular-nums; }
+.table th { white-space: normal !important; word-break: normal; overflow-wrap: normal; vertical-align: bottom !important;
+            line-height: 1.25; padding: 7px 6px !important; }
+.table td { padding: 5px 6px !important; vertical-align: middle !important; }
+.table td[style*="text-align: right"], .table td[style*="text-align:right"] { white-space: nowrap; }
+.table caption { color: #243447; font-weight: 600; font-size: 1.05em; text-align: left;
+                 padding-bottom: 8px; caption-side: top; }
+</style>
 
 # El encargo
 
@@ -92,6 +157,7 @@ if (!is.na(ruta_csv)) {
   datos <- as.data.frame(readxl::read_excel(ruta_xls, skip = 1))
 } else stop("No se encontró DATASET/datos_credit.csv ni DATASET/credit.xls en la carpeta del .Rmd ni en las superiores.")
 
+n_columnas_archivo <- ncol(datos)   # columnas tal como vienen en el archivo
 names(datos)[grepl("^default", names(datos), ignore.case = TRUE)] <- "impago"
 if (!"ID" %in% names(datos)) datos$ID <- seq_len(nrow(datos))
 
@@ -106,12 +172,132 @@ stopifnot(all(necesarias %in% names(datos)))
 
 n_original <- nrow(datos)
 datos <- datos[necesarias]
+faltantes_por_variable <- colSums(is.na(datos))
+filas_duplicadas <- sum(duplicated(datos[setdiff(necesarias, c("ID", "impago"))]))
 validas <- complete.cases(datos) & apply(as.matrix(datos), 1, function(f) all(is.finite(f)))
-impago_obs <- datos$impago[validas]   # resultado observado: se aparta y no se usa hasta la sección 8
+# CODIFICACIÓN DE LA RESPUESTA: cuál código de `default payment next month` significa «no paga».
+# Diccionario de la base (UCI): 1 = sí incumple el pago del mes siguiente (no paga), 0 = no incumple (paga).
+# Si su diccionario dice lo contrario, cambie solo esta línea a 0.
+codigo_no_paga <- 1
+codigo_original <- datos$impago[validas]
+stopifnot(all(codigo_original %in% c(0, 1)), codigo_no_paga %in% c(0, 1))
+# En todo el documento, impago_obs = 1 significa «no paga» y 0 «paga», sin importar el código original.
+impago_obs <- as.integer(codigo_original == codigo_no_paga)   # se aparta y no se usa hasta la sección 8
 datos <- datos[validas, ]
-stopifnot(all(impago_obs %in% c(0, 1)))
 datos$impago <- NULL
 ```
+
+## Variables originales: un vistazo a la base
+
+El archivo trae `r fmt(n_original, 0)` registros y `r n_columnas_archivo` columnas: un identificador (`ID`), **23 variables explicativas** y la respuesta `default payment next month`.
+La respuesta se describe en el diccionario, pero sus valores no se miran aquí: se apartan hasta la sección 8.
+
+```{r diccionario}
+diccionario <- data.frame(
+  variable = c("ID", "LIMIT_BAL", "SEX", "EDUCATION", "MARRIAGE", "AGE",
+               "PAY_0, PAY_2 … PAY_6", "BILL_AMT1 … BILL_AMT6", "PAY_AMT1 … PAY_AMT6",
+               "default payment next month"),
+  descripcion = c("Identificador del cliente",
+                  "Monto del crédito otorgado (incluye el crédito del titular y el de su familia o tarjetas adicionales)",
+                  "Sexo", "Nivel educativo", "Estado civil", "Edad",
+                  "Estado de pago de septiembre (PAY_0) a abril (PAY_6) de 2005",
+                  "Monto del estado de cuenta (factura) de septiembre (1) a abril (6)",
+                  "Monto pagado de septiembre (1) a abril (6)",
+                  "Incumplimiento del pago del mes siguiente (octubre de 2005)"),
+  tipo = c("Identificador", "Cuantitativa", "Categórica nominal", "Categórica ordinal",
+           "Categórica nominal", "Cuantitativa", "Categórica ordinal (6 columnas)",
+           "Cuantitativa (6 columnas)", "Cuantitativa (6 columnas)", "Binaria (respuesta)"),
+  valores_o_unidad = c("Entero", "Dólares taiwaneses (NT$)", "1 = hombre; 2 = mujer",
+                       "1 = posgrado; 2 = universidad; 3 = secundaria; 4 = otros; 0, 5, 6 sin documentar",
+                       "1 = casado; 2 = soltero; 3 = otros; 0 sin documentar", "Años",
+                       "-1 = pago puntual; 1 a 9 = meses de atraso; -2 y 0 sin documentar en el diccionario",
+                       "NT$; puede ser negativo (saldo a favor)", "NT$; cero si no pagó",
+                       "1 = sí incumple (no paga); 0 = no incumple (paga)"))
+tabla(diccionario, caption = "Diccionario de las variables originales")
+```
+
+El historial de pagos salta de `PAY_0` a `PAY_2` (no existe `PAY_1`): es un detalle de nombres del archivo original, no una columna faltante.
+Las series mensuales van de la más reciente (1 = septiembre) a la más antigua (6 = abril).
+
+```{r eda-resumen}
+tipo_var <- c(LIMIT_BAL = "Cuantitativa", AGE = "Cuantitativa",
+              SEX = "Nominal", EDUCATION = "Ordinal", MARRIAGE = "Nominal",
+              setNames(rep("Ordinal", 6), estados),
+              setNames(rep("Cuantitativa", 6), facturas), setNames(rep("Cuantitativa", 6), pagos))
+explicativas <- names(tipo_var)
+resumen_eda <- data.frame(
+  variable = explicativas, tipo = unname(tipo_var),
+  distintos = vapply(datos[explicativas], function(v) length(unique(v)), numeric(1)),
+  faltantes = unname(faltantes_por_variable[explicativas]),
+  minimo  = vapply(datos[explicativas], min, numeric(1)),
+  mediana = vapply(datos[explicativas], median, numeric(1)),
+  media   = vapply(datos[explicativas], mean, numeric(1)),
+  maximo  = vapply(datos[explicativas], max, numeric(1)),
+  ceros_pct = 100 * vapply(datos[explicativas], function(v) mean(v == 0), numeric(1)),
+  negativos_pct = 100 * vapply(datos[explicativas], function(v) mean(v < 0), numeric(1)),
+  row.names = NULL)
+tabla(resumen_eda, digits = 1, caption = "Resumen de las 23 variables explicativas (valores originales)")
+```
+
+```{r eda-codigos}
+etiquetas <- list(
+  SEX = c("1" = "Hombre", "2" = "Mujer"),
+  EDUCATION = c("0" = "Sin documentar", "1" = "Posgrado", "2" = "Universidad", "3" = "Secundaria",
+                "4" = "Otros", "5" = "Sin documentar", "6" = "Sin documentar"),
+  MARRIAGE = c("0" = "Sin documentar", "1" = "Casado", "2" = "Soltero", "3" = "Otros"))
+codigos <- bind_rows(lapply(names(etiquetas), function(v) {
+  f <- table(datos[[v]])
+  data.frame(variable = v, codigo = names(f),
+             significado = unname(etiquetas[[v]][names(f)]),
+             clientes = as.numeric(f), pct_clientes = 100 * as.numeric(f) / nrow(datos))
+}))
+codigos$significado[is.na(codigos$significado)] <- "Código no previsto"
+tabla(codigos, digits = 2, caption = "Códigos de las variables categóricas (antes de recodificar)",
+      agrupar = "variable")
+
+meses <- c("Septiembre", "Agosto", "Julio", "Junio", "Mayo", "Abril")
+niveles_pay <- sort(unique(unlist(datos[estados])))
+historial <- data.frame(codigo = niveles_pay,
+                        significado = ifelse(niveles_pay == -1, "Pago puntual",
+                                      ifelse(niveles_pay > 0, paste(niveles_pay, "mes(es) de atraso"),
+                                             "Sin documentar")))
+for (i in seq_along(estados))
+  historial[[paste0(meses[i], " (", estados[i], ")")]] <-
+    100 * vapply(niveles_pay, function(cod) mean(datos[[estados[i]]] == cod), numeric(1))
+tabla(historial, digits = 1, caption = "Historial de pagos: porcentaje de clientes con cada código, por mes")
+
+sin_doc_edu <- sum(datos$EDUCATION %in% c(0, 5, 6))
+sin_doc_mar <- sum(datos$MARRIAGE == 0)
+pct_pay_especial <- 100 * mean(unlist(datos[estados]) %in% c(-2, 0))
+pct_bill_neg <- 100 * mean(apply(datos[facturas] < 0, 1, any))
+pct_pago_cero <- 100 * mean(apply(datos[pagos] == 0, 1, any))
+```
+
+```{r eda-montos, fig.height=9, fig.width=11}
+datos[c("LIMIT_BAL", facturas, pagos)] |>
+  pivot_longer(everything(), names_to = "variable", values_to = "valor") |>
+  mutate(variable = factor(variable, levels = c("LIMIT_BAL", facturas, pagos))) |>
+  ggplot(aes(valor)) +
+  geom_histogram(bins = 40, fill = col_paga, color = "white", linewidth = 0.1) +
+  facet_wrap(~ variable, ncol = 3, scales = "free_y") +
+  scale_x_continuous(trans = scales::pseudo_log_trans(sigma = 1, base = 10),
+                     breaks = c(-1e4, 0, 1e3, 1e5),
+                     labels = c("-10 mil", "0", "1 mil", "100 mil")) +
+  labs(title = "Distribución de los montos (límite, facturas y pagos)",
+       subtitle = "Eje horizontal en escala logarítmica con signo para poder ver ceros y negativos",
+       x = "NT$", y = "Clientes")
+
+ggplot(datos, aes(AGE)) +
+  geom_histogram(binwidth = 2, fill = col_paga, color = "white") +
+  labs(title = "Distribución de la edad", x = "Años", y = "Clientes")
+```
+
+**Lo que muestra el vistazo inicial.**
+
+- **Faltantes y duplicados:** hay `r sum(faltantes_por_variable)` celdas faltantes y `r filas_duplicadas` filas idénticas en las 23 variables explicativas (sin contar el `ID`).`r if (filas_duplicadas > 0) ' Las filas idénticas se conservan, porque sin más información no puede afirmarse que sean errores.' else ''`
+- **Códigos sin documentar:** `r fmt(sin_doc_edu, 0)` clientes tienen códigos de educación 0, 5 o 6 y `r fmt(sin_doc_mar, 0)` tienen estado civil 0. En el historial, los códigos −2 y 0, que el diccionario no explica, son el `r fmt(pct_pay_especial, 1)` % de todos los registros mensuales. Por eso se recodifican en la depuración siguiente.
+- **Montos:** el límite, las facturas y los pagos tienen escalas muy distintas a la edad y colas largas a la derecha (la media supera a la mediana). El `r fmt(pct_bill_neg, 1)` % de los clientes tiene al menos una factura negativa (saldo a favor) y el `r fmt(pct_pago_cero, 1)` % tiene al menos un mes sin pago. Estas características condicionan la estandarización del PCA y la escala de Mahalanobis.
+- **Edad:** va de `r min(datos$AGE)` a `r max(datos$AGE)` años, con mediana de `r median(datos$AGE)`; su forma es mucho menos asimétrica que la de los montos.
 
 ## Depuración y variables derivadas
 
@@ -229,7 +415,7 @@ valores <- data.frame(variable = c("ID", continuas, "puesto en euclidiana", "pue
                                                  euclid[i], d2_crudo[i])),
                       check.names = FALSE, row.names = NULL)
 tabla(valores, digits = 1, caption = paste0("Los casos elegidos (valores en escala original; ",
-                                            fmt(n, 0), " clientes en total)"))
+                                            fmt(n, 0), " clientes en total)"), por_celda = TRUE)
 
 # Aportes: euclidiana² = suma de dev_j²; Mahalanobis d² = suma de dev_j · (S⁻¹ dev)_j.
 aportes <- function(i) {
@@ -686,8 +872,12 @@ tabla(datos |> group_by(atipico = ifelse(atipico, "Atípico (sobre el 99 %)", "N
       caption = "Atípicos de Mahalanobis frente al resto")
 
 top5 <- order(datos$d2, decreasing = TRUE)[1:5]
-tabla(data.frame(datos[top5, c("ID", continuas)],
-                 uso_cupo = datos$uso_cupo[top5], mahalanobis = datos$d2[top5]), digits = 2,
+# Variables en filas y clientes en columnas, para que la tabla quepa en el ancho de la página.
+lejanos <- data.frame(variable = c(continuas, "uso del cupo", "Mahalanobis (d²)"),
+                      sapply(top5, function(i) c(M[i, ], datos$uso_cupo[i], datos$d2[i])),
+                      check.names = FALSE, row.names = NULL)
+names(lejanos)[-1] <- paste0("Cliente ", datos$ID[top5])
+tabla(lejanos, digits = 2, por_celda = TRUE,
       caption = "Los cinco clientes más lejanos (valores en escala original)")
 ```
 
@@ -842,13 +1032,21 @@ Los cortes los fija el analista; no son grupos descubiertos.
 Hasta aquí los perfiles se construyeron sin saber quién pagó.
 Ahora se reincorpora `default payment next month` para responder dos preguntas: **¿los perfiles que encontraron las herramientas coinciden con quienes no pagan?** y **¿qué aprendemos de las diferencias?**
 
-La columna la entrega el banco ya codificada (1 = no pagó el mes siguiente, 0 = pagó); aquí no se define ni se recalcula.
+La columna la entrega el banco ya codificada; aquí no se define ni se recalcula.
+Según el diccionario de la base, el código `r codigo_no_paga` significa que el cliente **no pagó** el mes siguiente y el código `r 1 - codigo_no_paga` que **sí pagó**.
+Para no depender del código original, se crea la variable `impago`, que vale 1 cuando el cliente no paga y 0 cuando paga.
 Como es 0/1, su promedio es la proporción de clientes que no pagan: la **tasa de impago**.
 La tasa de un grupo es ese promedio calculado solo entre sus clientes; la comparación con la **tasa global** indica qué tan por encima o por debajo del promedio está el grupo.
 
 ```{r reincorporar}
-datos$impago  <- impago_obs
+datos$impago  <- impago_obs                     # 1 = no paga, 0 = paga
 datos$cliente <- factor(impago_obs, 0:1, c("Paga", "No paga"))
+# Comprobación: cómo quedó cada código original.
+tabla(data.frame(codigo_original = c(0, 1),
+                 significado = ifelse(c(0, 1) == codigo_no_paga, "No paga", "Paga"),
+                 clientes = c(sum(codigo_original == 0), sum(codigo_original == 1)),
+                 pct = 100 * c(mean(codigo_original == 0), mean(codigo_original == 1))),
+      digits = 1, caption = "Codificación de default payment next month")
 tasa_global   <- mean(datos$impago)
 tabla(data.frame(clientes = n, clientes_que_no_pagan = sum(datos$impago),
                  tasa_global_pct = 100 * tasa_global))
@@ -911,7 +1109,7 @@ ggplot(perfil_univariado, aes(tasa_impago, grupo,
 ```
 
 ```{r tabla-univariada}
-tabla(perfil_univariado, caption = "Tasa de impago por grupo")
+tabla(perfil_univariado, caption = "Tasa de impago por grupo", agrupar = "variable")
 
 discrimina <- perfil_univariado |>
   filter(clientes >= 100) |>
